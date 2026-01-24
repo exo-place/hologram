@@ -6,6 +6,7 @@ import {
 import { getRelationshipsFrom, getRelationshipsTo } from "../db/relationships";
 import { getWorldState, formatWorldStateForContext } from "../world/state";
 import { formatInventoryForContext } from "../world/inventory";
+import { assembleMemoryContext } from "../memory/tiers";
 
 export interface Message {
   role: "user" | "assistant" | "system";
@@ -20,6 +21,7 @@ export interface ContextConfig {
   includeCharacters?: boolean;
   includeInventory?: boolean;
   includeRelationships?: boolean;
+  includeMemory?: boolean; // RAG + tiered memory
   recentMessageCount?: number;
 }
 
@@ -29,6 +31,7 @@ const DEFAULT_CONFIG: Required<ContextConfig> = {
   includeCharacters: true,
   includeInventory: true,
   includeRelationships: true,
+  includeMemory: true,
   recentMessageCount: 20,
 };
 
@@ -43,12 +46,12 @@ export interface AssembledContext {
   tokenEstimate: number;
 }
 
-export function assembleContext(
+export async function assembleContext(
   channelId: string,
   recentMessages: Message[],
   activeCharacterId?: number,
   config: ContextConfig = {}
-): AssembledContext {
+): Promise<AssembledContext> {
   const cfg = { ...DEFAULT_CONFIG, ...config };
   const sections: string[] = [];
   let tokenBudget = cfg.maxTokens;
@@ -121,10 +124,34 @@ export function assembleContext(
     }
   }
 
+  // 6. Memory context (RAG + tiered memory)
+  if (cfg.includeMemory) {
+    // Use the last user message as the query for RAG
+    const lastUserMessage = [...recentMessages]
+      .reverse()
+      .find((m) => m.role === "user");
+    const query = lastUserMessage?.content || "";
+
+    if (query) {
+      const memorySection = await assembleMemoryContext(
+        channelId,
+        query,
+        activeCharacterId
+      );
+      if (memorySection) {
+        const tokens = estimateTokens(memorySection);
+        if (tokens < tokenBudget) {
+          sections.push(memorySection);
+          tokenBudget -= tokens;
+        }
+      }
+    }
+  }
+
   // Build system prompt
   const systemPrompt = sections.join("\n\n");
 
-  // 6. Recent messages (fit as many as budget allows)
+  // 7. Recent messages (fit as many as budget allows)
   const messages: Message[] = [];
   const truncatedMessages = recentMessages.slice(-cfg.recentMessageCount);
 

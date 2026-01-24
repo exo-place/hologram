@@ -5,6 +5,7 @@ import {
   formatMessagesForAI,
   type Message,
 } from "../../ai/context";
+import { processMessageForMemory } from "../../memory/tiers";
 
 // In-memory message history per channel
 const channelMessages = new Map<string, Message[]>();
@@ -84,9 +85,9 @@ export async function handleMessage(
   // Get active character for this channel
   const activeCharacterId = getActiveCharacter(channelId);
 
-  // Assemble context
+  // Assemble context (now async due to RAG)
   const history = getChannelHistory(channelId);
-  const context = assembleContext(channelId, history, activeCharacterId);
+  const context = await assembleContext(channelId, history, activeCharacterId);
 
   // Call LLM
   try {
@@ -106,6 +107,11 @@ export async function handleMessage(
       content: response,
       timestamp: Date.now(),
     });
+
+    // Process for memory extraction (fire and forget)
+    processMessageForMemory(channelId, content, response, activeCharacterId).catch(
+      (err) => console.error("Error processing message for memory:", err)
+    );
 
     return response;
   } catch (error) {
