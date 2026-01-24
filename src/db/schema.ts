@@ -129,6 +129,46 @@ export function initSchema(db: Database) {
     );
 
     CREATE INDEX IF NOT EXISTS idx_webhooks_channel ON character_webhooks(channel_id);
+
+    -- Character state (per-scene dynamic state)
+    CREATE TABLE IF NOT EXISTS character_state (
+      id INTEGER PRIMARY KEY,
+      character_id INTEGER REFERENCES entities(id) ON DELETE CASCADE,
+      scene_id INTEGER REFERENCES scenes(id) ON DELETE CASCADE,
+      attributes JSON,
+      body JSON,
+      updated_at INTEGER DEFAULT (unixepoch()),
+      UNIQUE(character_id, scene_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_char_state_char ON character_state(character_id);
+    CREATE INDEX IF NOT EXISTS idx_char_state_scene ON character_state(scene_id);
+
+    -- Active effects on characters
+    CREATE TABLE IF NOT EXISTS character_effects (
+      id INTEGER PRIMARY KEY,
+      character_id INTEGER REFERENCES entities(id) ON DELETE CASCADE,
+      scene_id INTEGER REFERENCES scenes(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL,
+      description TEXT,
+      duration TEXT DEFAULT 'permanent',
+      expires_at INTEGER,
+      turns_remaining INTEGER,
+      modifiers JSON,
+      body_changes JSON,
+      flags JSON,
+      stacks INTEGER DEFAULT 1,
+      max_stacks INTEGER,
+      source_type TEXT,
+      source_id INTEGER,
+      visibility TEXT DEFAULT 'visible',
+      visible_description TEXT,
+      created_at INTEGER DEFAULT (unixepoch())
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_effects_char ON character_effects(character_id);
+    CREATE INDEX IF NOT EXISTS idx_effects_scene ON character_effects(scene_id);
   `);
 }
 
