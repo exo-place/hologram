@@ -71,3 +71,8 @@ GOOGLE_API_KEY=      # For Gemini
 ANTHROPIC_API_KEY=   # For Claude (optional)
 OPENAI_API_KEY=      # For OpenAI (optional)
 ```
+
+## Development Rules
+
+- **Any problems, tech debt, or issues spotted MUST be immediately added to TODO.md backlog**
+- Don't leave workarounds or hacks undocumented

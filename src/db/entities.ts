@@ -25,9 +25,54 @@ export interface LocationData {
   [key: string]: unknown;
 }
 
+export type ItemType = "consumable" | "equipment" | "quest" | "currency" | "misc";
+
 export interface ItemData {
   description: string;
   stats?: Record<string, number>;
+
+  // Item type and properties
+  type?: ItemType;
+  weight?: number;
+  slots?: number;              // Inventory slots it takes
+
+  // Equipment properties
+  equipSlot?: string;          // Which slot it equips to
+  durability?: number;
+  maxDurability?: number;
+
+  // Consumable properties
+  uses?: number;
+  maxUses?: number;
+  effect?: string;             // Description of what it does
+
+  // Equipment requirements
+  requirements?: {
+    species?: string[];        // Must be one of these species
+    bodyType?: string[];       // Must have one of these body types
+    size?: string[];           // Must be one of these sizes
+    attributes?: Record<string, number>;  // Must have at least these attribute values
+    flags?: string[];          // Must have these flags
+    notFlags?: string[];       // Must NOT have these flags
+  };
+  incompatible?: "cannot_equip" | "reduced_stats" | "cosmetic_only" | "transforms";
+
+  // Transformation properties
+  transformation?: {
+    effects: Array<{
+      name: string;
+      type: string;
+      description?: string;
+      duration?: string;
+      modifiers?: Record<string, number>;
+      bodyChanges?: Record<string, unknown>;
+      flags?: string[];
+    }>;
+    target: "self" | "other" | "any";
+    reversible?: boolean;
+    reverseItem?: number;      // Item ID that reverses this
+  };
+
   [key: string]: unknown;
 }
 

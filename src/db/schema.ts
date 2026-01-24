@@ -169,6 +169,19 @@ export function initSchema(db: Database) {
 
     CREATE INDEX IF NOT EXISTS idx_effects_char ON character_effects(character_id);
     CREATE INDEX IF NOT EXISTS idx_effects_scene ON character_effects(scene_id);
+
+    -- Equipment slots (what's equipped where)
+    CREATE TABLE IF NOT EXISTS character_equipment (
+      id INTEGER PRIMARY KEY,
+      character_id INTEGER REFERENCES entities(id) ON DELETE CASCADE,
+      scene_id INTEGER REFERENCES scenes(id) ON DELETE CASCADE,
+      slot TEXT NOT NULL,
+      item_id INTEGER REFERENCES entities(id) ON DELETE CASCADE,
+      equipped_at INTEGER DEFAULT (unixepoch()),
+      UNIQUE(character_id, scene_id, slot)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_equipment_char ON character_equipment(character_id);
   `);
 }
 
