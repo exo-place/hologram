@@ -7,6 +7,9 @@ export function initSchema(db: Database) {
       id INTEGER PRIMARY KEY,
       name TEXT NOT NULL,
       description TEXT,
+      lore TEXT,
+      rules TEXT,
+      config JSON,
       data JSON,
       created_at INTEGER DEFAULT (unixepoch())
     );
@@ -66,4 +69,23 @@ export function initVectorTable(db: Database) {
     CREATE VIRTUAL TABLE IF NOT EXISTS fact_embeddings
     USING vec0(embedding float[384])
   `);
+}
+
+/** Run migrations for existing databases */
+export function runMigrations(db: Database) {
+  // Check if columns exist and add them if not
+  const worldsInfo = db.prepare("PRAGMA table_info(worlds)").all() as Array<{
+    name: string;
+  }>;
+  const columns = new Set(worldsInfo.map((c) => c.name));
+
+  if (!columns.has("config")) {
+    db.exec("ALTER TABLE worlds ADD COLUMN config JSON");
+  }
+  if (!columns.has("lore")) {
+    db.exec("ALTER TABLE worlds ADD COLUMN lore TEXT");
+  }
+  if (!columns.has("rules")) {
+    db.exec("ALTER TABLE worlds ADD COLUMN rules TEXT");
+  }
 }

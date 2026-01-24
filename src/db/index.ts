@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 import { load } from "sqlite-vec";
-import { initSchema, initVectorTable } from "./schema";
+import { initSchema, initVectorTable, runMigrations } from "./schema";
 
 let db: Database | null = null;
 
@@ -16,6 +16,7 @@ export function getDb(): Database {
     // Initialize schema
     initSchema(db);
     initVectorTable(db);
+    runMigrations(db);
   }
   return db;
 }
