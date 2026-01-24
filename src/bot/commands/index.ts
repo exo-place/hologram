@@ -37,6 +37,7 @@ import { sceneCommand, handleSceneCommand } from "./scene";
 import { chronicleCommand, handleChronicleCommand } from "./chronicle";
 import { statusCommand, handleStatusCommand } from "./status";
 import { locationCommand, handleLocationCommand } from "./location";
+import { timeCommand, handleTimeCommand } from "./time";
 
 // All slash commands
 export const commands: CreateApplicationCommand[] = [
@@ -49,6 +50,7 @@ export const commands: CreateApplicationCommand[] = [
   chronicleCommand,
   statusCommand,
   locationCommand,
+  timeCommand,
 ];
 
 // Register commands with Discord
@@ -131,6 +133,9 @@ export async function handleInteraction(
         break;
       case "location":
         await handleLocationCommand(bot, interaction);
+        break;
+      case "time":
+        await handleTimeCommand(bot, interaction);
         break;
       default:
         await bot.helpers.sendInteractionResponse(interaction.id, interaction.token, {

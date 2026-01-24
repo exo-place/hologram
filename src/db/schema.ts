@@ -182,6 +182,25 @@ export function initSchema(db: Database) {
     );
 
     CREATE INDEX IF NOT EXISTS idx_equipment_char ON character_equipment(character_id);
+
+    -- Scheduled events (time system)
+    CREATE TABLE IF NOT EXISTS scheduled_events (
+      id INTEGER PRIMARY KEY,
+      scene_id INTEGER REFERENCES scenes(id) ON DELETE CASCADE,
+      world_id INTEGER REFERENCES worlds(id),
+      trigger_day INTEGER NOT NULL,
+      trigger_hour INTEGER NOT NULL,
+      trigger_minute INTEGER NOT NULL DEFAULT 0,
+      type TEXT NOT NULL,
+      content TEXT NOT NULL,
+      recurring TEXT,
+      data JSON,
+      fired BOOLEAN DEFAULT 0,
+      created_at INTEGER DEFAULT (unixepoch())
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_events_scene ON scheduled_events(scene_id, fired);
+    CREATE INDEX IF NOT EXISTS idx_events_trigger ON scheduled_events(trigger_day, trigger_hour, trigger_minute);
   `);
 }
 
