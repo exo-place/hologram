@@ -38,6 +38,7 @@ import { chronicleCommand, handleChronicleCommand } from "./chronicle";
 import { statusCommand, handleStatusCommand } from "./status";
 import { locationCommand, handleLocationCommand } from "./location";
 import { timeCommand, handleTimeCommand } from "./time";
+import { rollCommand, rCommand, handleRollCommand, handleRCommand } from "./roll";
 
 // All slash commands
 export const commands: CreateApplicationCommand[] = [
@@ -51,6 +52,8 @@ export const commands: CreateApplicationCommand[] = [
   statusCommand,
   locationCommand,
   timeCommand,
+  rollCommand,
+  rCommand,
 ];
 
 // Register commands with Discord
@@ -136,6 +139,12 @@ export async function handleInteraction(
         break;
       case "time":
         await handleTimeCommand(bot, interaction);
+        break;
+      case "roll":
+        await handleRollCommand(bot, interaction);
+        break;
+      case "r":
+        await handleRCommand(bot, interaction);
         break;
       default:
         await bot.helpers.sendInteractionResponse(interaction.id, interaction.token, {
