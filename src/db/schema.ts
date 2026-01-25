@@ -292,6 +292,22 @@ export function initSchema(db: Database) {
     );
 
     CREATE INDEX IF NOT EXISTS idx_proxies_user ON user_proxies(user_id);
+
+    -- Wizard sessions (multi-step creation flows)
+    CREATE TABLE IF NOT EXISTS wizard_sessions (
+      id TEXT PRIMARY KEY,
+      type TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      channel_id TEXT NOT NULL,
+      world_id INTEGER,
+      step INTEGER DEFAULT 0,
+      data JSON DEFAULT '{}',
+      ai_suggestions JSON,
+      created_at INTEGER DEFAULT (unixepoch()),
+      expires_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_wizard_user ON wizard_sessions(user_id, channel_id);
   `);
 }
 
