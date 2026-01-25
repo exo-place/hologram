@@ -168,7 +168,7 @@ bun install          # Install dependencies
 bun run dev          # Development with watch
 bun run start        # Production
 bun run lint         # oxlint
-bun run check:types  # TypeScript check (tsc --noEmit)
+bun run check:types  # TypeScript check (tsgo --noEmit, ~10x faster)
 bun test             # Run tests (211 tests, 12 files)
 ```
 

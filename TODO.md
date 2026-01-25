@@ -8,10 +8,6 @@
   - Files affected: all command handlers in `src/bot/commands/`
   - Should use proper Bot and Interaction types from @discordeno/bot
 
-### Build Tooling
-- [ ] Consider using tsgo (native TS compiler) via @typescript/native-preview
-  - Should be significantly faster than standard tsc
-
 ### Test Coverage
 
 Current: 296 tests across 15 files. Pure-logic modules tested:
