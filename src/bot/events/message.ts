@@ -12,6 +12,7 @@ import { parseProxyMessage, formatProxyForContext } from "../../proxies";
 import { getPersona, formatPersonaForContext } from "../../personas";
 import { getWorldConfig } from "../../config";
 import { syncRealtimeIfNeeded, buildTimeSkipNarrationPrompt } from "../../world/time";
+import { checkRandomEvents, applyEventEffects } from "../../events/random";
 
 // In-memory message history per channel
 const channelMessages = new Map<string, Message[]>();
@@ -121,7 +122,7 @@ export async function handleMessage(
   }
 
   // --- Realtime sync: auto-advance game time based on real-time gap ---
-  let narration: string | undefined;
+  const narrationParts: string[] = [];
 
   if (scene) {
     const worldConfig = getWorldConfig(scene.worldId);
@@ -138,21 +139,39 @@ export async function handleMessage(
             system: narrationPrompt,
             messages: [{ role: "user", content: "Narrate the passage of time." }],
           });
-          narration = narrationResult.text;
-
-          // Record narration in history as system context
-          addToHistory(channelId, {
-            role: "assistant",
-            content: `*${narration}*`,
-            timestamp: Date.now(),
-            gameTime: syncResult.newTime,
-          });
+          narrationParts.push(narrationResult.text);
         } catch (err) {
           console.error("Error generating time-skip narration:", err);
         }
       }
+
+      // Check random events triggered by time advancement
+      const timeEvents = checkRandomEvents(scene, "time_advance", worldConfig);
+      for (const event of timeEvents) {
+        applyEventEffects(scene, event.entry);
+        narrationParts.push(event.entry.content);
+      }
+    }
+
+    // Check random events triggered per-message (independent of time sync)
+    const messageEvents = checkRandomEvents(scene, "message", worldConfig);
+    for (const event of messageEvents) {
+      applyEventEffects(scene, event.entry);
+      narrationParts.push(event.entry.content);
+    }
+
+    // Record combined narration in history
+    if (narrationParts.length > 0) {
+      addToHistory(channelId, {
+        role: "assistant",
+        content: `*${narrationParts.join("\n\n")}*`,
+        timestamp: Date.now(),
+        gameTime: syncResult.advanced ? syncResult.newTime : scene.time,
+      });
     }
   }
+
+  const narration = narrationParts.length > 0 ? narrationParts.join("\n\n") : undefined;
 
   // --- Determine active AI character IDs ---
   let activeCharacterIds: number[] = [];

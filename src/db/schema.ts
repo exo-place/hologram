@@ -293,6 +293,89 @@ export function initSchema(db: Database) {
 
     CREATE INDEX IF NOT EXISTS idx_proxies_user ON user_proxies(user_id);
 
+    -- Random event tables (probability-based event templates)
+    CREATE TABLE IF NOT EXISTS random_event_tables (
+      id INTEGER PRIMARY KEY,
+      world_id INTEGER REFERENCES worlds(id),
+      name TEXT NOT NULL,
+      trigger TEXT NOT NULL,       -- "time_advance" | "message" | "location_enter" | "manual"
+      enabled BOOLEAN DEFAULT 1,
+      chance REAL NOT NULL,        -- 0.0-1.0, checked per trigger
+      cooldown_minutes INTEGER,    -- Min game-time between fires
+      last_fired_at INTEGER,       -- Game-time (day*1440 + hour*60 + minute) when last fired
+      conditions JSON,             -- Optional: timeOfDay, season, location, weather, etc.
+      data JSON,
+      created_at INTEGER DEFAULT (unixepoch())
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_random_tables_world ON random_event_tables(world_id, enabled);
+
+    -- Random event entries (weighted outcomes within a table)
+    CREATE TABLE IF NOT EXISTS random_event_entries (
+      id INTEGER PRIMARY KEY,
+      table_id INTEGER REFERENCES random_event_tables(id) ON DELETE CASCADE,
+      weight INTEGER DEFAULT 1,
+      content TEXT NOT NULL,
+      type TEXT DEFAULT 'narration',  -- "narration" | "weather_change" | "npc_arrival" | "item_drop" | "effect"
+      effects JSON,                   -- Side effects: weatherChange, spawnCharacter, advanceTime, etc.
+      created_at INTEGER DEFAULT (unixepoch())
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_random_entries_table ON random_event_entries(table_id);
+
+    -- NPC behavior tracks (independent state machine layers per character)
+    -- e.g., "mood" (happy/sad/angry), "activity" (idle/shopping/napping), "energy" (rested/tired)
+    CREATE TABLE IF NOT EXISTS behavior_tracks (
+      id INTEGER PRIMARY KEY,
+      world_id INTEGER REFERENCES worlds(id),
+      character_id INTEGER REFERENCES entities(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,                -- "mood", "activity", "energy"
+      description TEXT,                  -- "Governs emotional state"
+      created_at INTEGER DEFAULT (unixepoch()),
+      UNIQUE(character_id, name)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_behavior_tracks_char ON behavior_tracks(character_id);
+
+    -- States within a track
+    CREATE TABLE IF NOT EXISTS behavior_states (
+      id INTEGER PRIMARY KEY,
+      track_id INTEGER REFERENCES behavior_tracks(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,                -- "idle", "shopping", "napping", "happy", "angry"
+      description TEXT,                  -- "relaxing at home"
+      min_duration_minutes INTEGER,      -- Min real minutes before transitioning
+      max_duration_minutes INTEGER,      -- Max real minutes before transitioning
+      conditions JSON,                   -- Optional: only valid during certain times, weather, etc.
+      created_at INTEGER DEFAULT (unixepoch()),
+      UNIQUE(track_id, name)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_behavior_states_track ON behavior_states(track_id);
+
+    -- Transitions between states (within the same track)
+    CREATE TABLE IF NOT EXISTS behavior_transitions (
+      id INTEGER PRIMARY KEY,
+      from_state_id INTEGER REFERENCES behavior_states(id) ON DELETE CASCADE,
+      to_state_id INTEGER REFERENCES behavior_states(id) ON DELETE CASCADE,
+      weight INTEGER DEFAULT 1,          -- Relative probability
+      narration TEXT NOT NULL,            -- "Alice yawns and heads to bed"
+      conditions JSON,                   -- Optional conditions (timeOfDay, etc.)
+      effects JSON,                      -- Optional side effects (weatherChange, etc.)
+      created_at INTEGER DEFAULT (unixepoch())
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_behavior_trans_from ON behavior_transitions(from_state_id);
+
+    -- Current state per track per character (runtime)
+    CREATE TABLE IF NOT EXISTS character_behaviors (
+      character_id INTEGER REFERENCES entities(id) ON DELETE CASCADE,
+      track_id INTEGER REFERENCES behavior_tracks(id) ON DELETE CASCADE,
+      current_state_id INTEGER REFERENCES behavior_states(id),
+      state_entered_at INTEGER DEFAULT (unixepoch()),  -- Real timestamp
+      game_time_entered INTEGER DEFAULT 0,             -- Game-time in minutes
+      PRIMARY KEY (character_id, track_id)
+    );
+
     -- Wizard sessions (multi-step creation flows)
     CREATE TABLE IF NOT EXISTS wizard_sessions (
       id TEXT PRIMARY KEY,

@@ -74,6 +74,10 @@ export const DEFAULT_TIME: TimeConfig = {
   useRealtimeSync: false,
   narrateTimeSkips: false,
   timeSkipNarrationThreshold: 60, // Real minutes before narrating
+  useRandomEvents: false,
+  randomEventCheckOnMessage: false,
+  randomEventMinInterval: 5, // Min real minutes between background checks
+  randomEventMaxInterval: 30, // Max real minutes between background checks
 };
 
 export const DEFAULT_CHARACTER_STATE: CharacterStateConfig = {
@@ -373,6 +377,8 @@ export const features = {
     config.time.enabled && config.time.mode === "realtime" && config.time.useRealtimeSync,
   timeSkipNarration: (config: WorldConfig) =>
     config.time.enabled && config.time.narrateTimeSkips,
+  randomEvents: (config: WorldConfig) =>
+    config.time.enabled && config.time.useRandomEvents,
 };
 
 /** Get the resolved config for a world (DB config merged with defaults) */

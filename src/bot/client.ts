@@ -1,6 +1,7 @@
 import { createBot, Intents } from "@discordeno/bot";
 import { handleMessage } from "./events/message";
 import { registerCommands, handleInteraction } from "./commands";
+import { startEventScheduler } from "../events/scheduler";
 
 const token = process.env.DISCORD_TOKEN;
 if (!token) {
@@ -50,6 +51,11 @@ bot.events.ready = async (payload) => {
 
   // Register slash commands
   await registerCommands(bot);
+
+  // Start background event scheduler (random events + NPC behavior ticks)
+  startEventScheduler({
+    sendMessage: (channelId, options) => bot.helpers.sendMessage(channelId, options),
+  });
 };
 
 bot.events.messageCreate = async (message) => {

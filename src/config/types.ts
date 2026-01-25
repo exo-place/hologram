@@ -86,6 +86,10 @@ export interface TimeConfig {
   useRealtimeSync: boolean; // Auto-advance game time based on real-time gap
   narrateTimeSkips: boolean; // LLM narrates what happened during absence
   timeSkipNarrationThreshold: number; // Real minutes before narrating (default 60)
+  useRandomEvents: boolean; // Enable probability-based random events
+  randomEventCheckOnMessage: boolean; // Also check random events on each message (optional, noisy)
+  randomEventMinInterval: number; // Min real minutes between background checks (default 5)
+  randomEventMaxInterval: number; // Max real minutes between background checks (default 30)
 }
 
 // === Character State ===
