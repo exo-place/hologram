@@ -1,5 +1,6 @@
 import { createBot, Intents } from "@discordeno/bot";
-import { handleMessage } from "./events/message";
+import { initPluginSystem, initPlugins } from "../plugins";
+import { handleMessage } from "../plugins/handler";
 import { registerCommands, handleInteraction } from "./commands";
 import { startEventScheduler } from "../events/scheduler";
 import { sendMultiCharResponse } from "./webhooks";
@@ -60,6 +61,11 @@ let botUserId: bigint | null = null;
 bot.events.ready = async (payload) => {
   console.log(`Logged in as ${payload.user.username}`);
   botUserId = payload.user.id;
+
+  // Initialize plugin system
+  await initPluginSystem();
+  await initPlugins();
+  console.log("Plugin system initialized");
 
   // Register slash commands
   await registerCommands(bot);

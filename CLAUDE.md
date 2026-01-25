@@ -10,37 +10,49 @@ Discord RP bot with smart state/worldstate/memory/context management. SillyTaver
 - **Database**: bun:sqlite + sqlite-vec for vectors (28 tables: 26 regular + 2 virtual)
 - **Embeddings**: Local via @huggingface/transformers (MiniLM, 384-dim)
 - **Linting**: oxlint
-- **Testing**: bun:test (211 tests across 12 files)
+- **Testing**: bun:test (291 tests across 15 files)
 
 ## Project Structure
 
 ```
 src/
 ├── index.ts                    # Entry point
+├── plugins/                    # Plugin system (middleware-based message handling)
+│   ├── types.ts                # Plugin, Middleware, Extractor, Formatter interfaces
+│   ├── registry.ts             # Plugin registration + middleware chain
+│   ├── handler.ts              # Message handler entry point
+│   ├── index.ts                # Loads built-in plugins + defines modes
+│   ├── core/index.ts           # History, gate, context assembly, LLM, extraction
+│   ├── scene/index.ts          # Scene loading, state formatting
+│   ├── character/index.ts      # Persona + relationships formatters
+│   ├── identity/index.ts       # Proxy + persona middleware
+│   ├── chronicle/index.ts      # Memory extraction + RAG formatter
+│   ├── time/index.ts           # Realtime sync + random events
+│   ├── inventory/index.ts      # Inventory formatter + extractor
+│   ├── world/index.ts          # World rules + lore formatters
+│   └── delivery/index.ts       # Multi-char response parsing
 ├── bot/
 │   ├── client.ts               # Discordeno setup, event wiring
 │   ├── webhooks.ts             # Per-character webhook impersonation
-│   ├── commands/               # 18 slash commands
-│   │   ├── index.ts            # Command registry + interaction router
-│   │   ├── build.ts            # /build - LLM-assisted wizard (character/world/location/item)
-│   │   ├── character.ts        # /character create|edit|list|delete|view
-│   │   ├── chronicle.ts        # /chronicle recall|history|add|forget
-│   │   ├── combat.ts           # /combat start|join|leave|next|end|status
-│   │   ├── config.ts           # /config show|set|preset|reset (interactive wizard)
-│   │   ├── faction.ts          # /faction list|info|join|leave|standing
-│   │   ├── location.ts         # /location go|look|create|connect|map
-│   │   ├── memory.ts           # /memory add|search|forget (legacy facts)
-│   │   ├── persona.ts          # /persona set|show|clear
-│   │   ├── proxy.ts            # /proxy list|add|remove|set
-│   │   ├── relationship.ts     # /relationship show|set|list|affinity
-│   │   ├── roll.ts             # /roll + /r (dice expressions)
-│   │   ├── scene.ts            # /scene start|pause|resume|end|status|list
-│   │   ├── session.ts          # /session enable|disable|model|character
-│   │   ├── status.ts           # /status (character state, effects, form)
-│   │   ├── time.ts             # /time show|advance|set|dawn|noon|dusk|night
-│   │   └── world.ts            # /world create|edit|info|link
-│   └── events/
-│       └── message.ts          # Message handler → full pipeline
+│   └── commands/               # 18 slash commands
+│       ├── index.ts            # Command registry + interaction router
+│       ├── build.ts            # /build - LLM-assisted wizard (character/world/location/item)
+│       ├── character.ts        # /character create|edit|list|delete|view
+│       ├── chronicle.ts        # /chronicle recall|history|add|forget
+│       ├── combat.ts           # /combat start|join|leave|next|end|status
+│       ├── config.ts           # /config show|set|preset|reset (interactive wizard)
+│       ├── faction.ts          # /faction list|info|join|leave|standing
+│       ├── location.ts         # /location go|look|create|connect|map
+│       ├── memory.ts           # /memory add|search|forget (legacy facts)
+│       ├── persona.ts          # /persona set|show|clear
+│       ├── proxy.ts            # /proxy list|add|remove|set
+│       ├── relationship.ts     # /relationship show|set|list|affinity
+│       ├── roll.ts             # /roll + /r (dice expressions)
+│       ├── scene.ts            # /scene start|pause|resume|end|status|list
+│       ├── session.ts          # /session enable|disable|model|character
+│       ├── status.ts           # /status (character state, effects, form)
+│       ├── time.ts             # /time show|advance|set|dawn|noon|dusk|night
+│       └── world.ts            # /world create|edit|info|link
 ├── ai/
 │   ├── models.ts               # Provider abstraction (provider:model spec)
 │   ├── embeddings.ts           # Local embeddings via @huggingface/transformers
@@ -103,21 +115,39 @@ bunfig.toml                     # [test] preload for native module mocking
 
 ## Architecture
 
-### Message Pipeline (`src/bot/events/message.ts`)
+### Plugin System (`src/plugins/`)
+
+The message pipeline is middleware-based. Plugins register middleware, extractors, and formatters.
 
 ```
-Discord message
-  → Proxy interception (PluralKit-style brackets/prefix)
-  → Persona lookup (user identity in RP)
-  → Scene resolution (active scene for channel)
-  → Real-time sync (advance game time based on wall-clock gap)
-  → Time-skip narration (LLM describes what happened during absence)
-  → Random event check (probability-based events fire)
-  → Context assembly (perspective-aware, budget-managed)
-  → LLM call (AI SDK → provider:model)
-  → Extraction pipeline (chronicle entries, state changes, effects)
-  → Multi-character delivery (webhooks or tagged output)
+Discord message → createContext() → runMiddleware() → getDeliveryResult()
+
+Middleware chain (sorted by priority):
+  identity:proxy     [100]  → rewrite user identity (proxy/persona)
+  core:history       [150]  → load message history
+  scene:load         [200]  → load scene + config
+  time:sync          [300]  → realtime sync + narration
+  time:events        [400]  → random events
+  core:context       [800]  → run formatters → build system prompt
+  core:llm           [900]  → call LLM
+  core:extraction    [1000] → fire extractors (async)
+  delivery:prepare   [1100] → parse multi-char response
 ```
+
+### Modes (Plugin Presets)
+
+Modes define which plugins are active and their config:
+
+| Mode | Description |
+|------|-------------|
+| `minimal` | Simple chat, no mechanics |
+| `sillytavern` | Character chat + memory |
+| `mud` | Locations + inventory + exploration |
+| `survival` | Hunger/thirst/stamina + random events |
+| `tits` | Adult adventure + transformation |
+| `tabletop` | Dice + combat + turn-based |
+| `parser` | Classic text adventure (strict commands) |
+| `full` | Everything enabled |
 
 ### Database (26 tables + 2 virtual)
 
@@ -144,7 +174,7 @@ All features are optional. `WorldConfig` has 9 subsystem configs:
 - `relationships` - Affinity, factions, relationship types
 - `context` - Token budget, history depth, RAG results, timestamps
 
-Presets: `minimal` (chat only), `simple` (scenes + chronicle), `full` (everything)
+Presets match modes: `minimal`, `sillytavern`, `mud`, `survival`, `tits`, `tabletop`, `parser`, `full`
 
 ### Key Concepts
 
@@ -169,7 +199,7 @@ bun run dev          # Development with watch
 bun run start        # Production
 bun run lint         # oxlint
 bun run check:types  # TypeScript check (tsgo --noEmit, ~10x faster)
-bun test             # Run tests (211 tests, 12 files)
+bun test             # Run tests (291 tests, 15 files)
 ```
 
 ## Environment Variables

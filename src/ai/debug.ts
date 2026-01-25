@@ -1,7 +1,14 @@
 // Context debugging and inspection tools
 
-import type { AssembledContext } from "./context";
 import { estimateTokens } from "./budget";
+import type { Message } from "./context";
+
+/** Assembled context shape (minimal for debug) */
+export interface AssembledContext {
+  systemPrompt: string;
+  messages: Message[];
+  tokenEstimate: number;
+}
 
 export interface ContextDebugInfo {
   totalTokens: number;

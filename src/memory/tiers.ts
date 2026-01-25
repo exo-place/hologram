@@ -2,7 +2,7 @@ import { retrieveFactsHybrid, storeFact, formatFactsForContext } from "./rag";
 import { formatGraphContextForEntity } from "./graph";
 
 // Tier 1: Ephemeral (in-memory recent messages)
-// Managed by bot/events/message.ts
+// Managed by plugins/core (message history)
 
 // Tier 2: Session (working memory for current scene)
 interface SessionMemory {

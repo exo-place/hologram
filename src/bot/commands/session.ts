@@ -9,8 +9,9 @@ import {
   disableChannel,
   isChannelEnabled,
   clearHistory,
-  getActiveCharacter,
-} from "../events/message";
+} from "../../plugins/core";
+import { getActiveCharacterLegacy as getActiveCharacter } from "../../plugins/scene";
+import { createContext, runFormatters } from "../../plugins/registry";
 import { getWorldState } from "../../world/state";
 import {
   getSessionMemory,
@@ -18,8 +19,7 @@ import {
   setSceneDescription,
   formatSessionDebug,
 } from "../../memory/tiers";
-import { assembleContext } from "../../ai/context";
-import { debugContext, formatDebugInfo } from "../../ai/debug";
+import { debugContext, formatDebugInfo, type AssembledContext } from "../../ai/debug";
 import { getOptionValue, getSubcommand, respond, editResponse, USER_APP_INTEGRATION } from "./index";
 
 export const sessionCommand: CreateApplicationCommand = {
@@ -138,9 +138,26 @@ export async function handleSessionCommand(
       await respond(bot, interaction, "Assembling context for debug...", true);
 
       try {
-        const activeCharId = getActiveCharacter(channelId);
-        // Assemble context with empty messages just to see system prompt
-        const context = await assembleContext(channelId, [], activeCharId);
+        // Create a minimal context to run formatters
+        const ctx = createContext({
+          channelId,
+          guildId: interaction.guildId?.toString(),
+          authorId: interaction.user?.id?.toString() ?? "unknown",
+          authorName: interaction.user?.username ?? "unknown",
+          content: "",
+          isBotMentioned: false,
+        });
+
+        // Run formatters to build system prompt
+        const sections = await runFormatters(ctx);
+        const systemPrompt = sections.map((s) => s.content).join("\n\n");
+
+        const context: AssembledContext = {
+          systemPrompt,
+          messages: [],
+          tokenEstimate: sections.reduce((sum, s) => sum + (s.minTokens ?? 50), 0),
+        };
+
         const debugInfo = debugContext(context);
         const formatted = formatDebugInfo(debugInfo);
 

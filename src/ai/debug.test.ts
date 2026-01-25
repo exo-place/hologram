@@ -9,7 +9,8 @@ import {
   type ContextDebugInfo,
   type ContextTrace,
 } from "./debug";
-import type { AssembledContext, Message } from "./context";
+import { type AssembledContext } from "./debug";
+import type { Message } from "./context";
 
 // Helper to create a minimal AssembledContext
 function makeContext(opts: {

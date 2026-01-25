@@ -7,7 +7,7 @@ import type { HologramBot, HologramInteraction } from "../types";
 import { storeFact, retrieveRelevantFacts } from "../../memory/rag";
 import { getImportantFacts, deleteFact, getFact } from "../../db/facts";
 import { getMemoryStats } from "../../memory/consolidate";
-import { getActiveCharacter } from "../events/message";
+import { getActiveCharacterLegacy as getActiveCharacter } from "../../plugins/scene";
 import { getOptionValue, getSubcommand, respond, editResponse, USER_APP_INTEGRATION } from "./index";
 
 export const memoryCommand: CreateApplicationCommand = {
