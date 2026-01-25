@@ -28,6 +28,8 @@ export interface CalendarConfig {
   monthsPerYear?: number;
   monthNames?: string[];
   dayNames?: string[];
+  yearOffset?: number; // Add to year display (e.g., 2846 to start at "Year 2847")
+  era?: string; // Era suffix (e.g., "AE", "After Eclipse", "Cycle")
   seasons?: Array<{
     name: string;
     startMonth: number;
@@ -129,14 +131,18 @@ export function formatDate(
   const monthIndex = Math.floor(day / daysPerMonth) % (calendar.monthsPerYear ?? 12);
   const monthName = calendar.monthNames?.[monthIndex] ?? `Month ${monthIndex + 1}`;
 
-  // Calculate year
+  // Calculate year with optional offset
   const daysPerYear = daysPerMonth * (calendar.monthsPerYear ?? 12);
-  const year = Math.floor(day / daysPerYear) + 1;
+  const rawYear = Math.floor(day / daysPerYear) + 1;
+  const year = rawYear + (calendar.yearOffset ?? 0);
+
+  // Format year with optional era
+  const yearStr = calendar.era ? `Year ${year} ${calendar.era}` : `Year ${year}`;
 
   if (dayOfWeek) {
-    return `${dayOfWeek}, ${monthName} ${dayOfMonth}, Year ${year}`;
+    return `${dayOfWeek}, ${monthName} ${dayOfMonth}, ${yearStr}`;
   }
-  return `${monthName} ${dayOfMonth}, Year ${year}`;
+  return `${monthName} ${dayOfMonth}, ${yearStr}`;
 }
 
 /** Get current season */

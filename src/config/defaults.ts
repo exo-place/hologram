@@ -119,6 +119,9 @@ export const DEFAULT_CONTEXT: ContextConfig = {
   includeWorldLore: true,
   includeWorldRules: true,
   dynamicPriority: true,
+  showTimestamps: false,
+  timestampFormat: "relative",
+  timestampThreshold: 300, // 5 minutes
 };
 
 export const DEFAULT_CONFIG: WorldConfig = {
@@ -361,6 +364,8 @@ export const features = {
     config.relationships.enabled && config.relationships.useAffinity,
   factions: (config: WorldConfig) =>
     config.relationships.enabled && config.relationships.useFactions,
+  timestamps: (config: WorldConfig) =>
+    config.context.showTimestamps,
 };
 
 /** Get the resolved config for a world (DB config merged with defaults) */

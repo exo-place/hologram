@@ -59,6 +59,8 @@ export interface CalendarConfig {
   monthsPerYear?: number;
   monthNames?: string[];
   dayNames?: string[];
+  yearOffset?: number; // Add to year display (e.g., 2846 to start at "Year 2847")
+  era?: string; // Era suffix (e.g., "AE", "After Eclipse", "Cycle")
   seasons?: Array<{
     name: string;
     startMonth: number;
@@ -123,6 +125,15 @@ export interface ContextConfig {
   includeWorldLore: boolean;
   includeWorldRules: boolean;
   dynamicPriority: boolean; // Adjust based on query
+
+  // Inter-message timestamps
+  showTimestamps: boolean; // Inject time markers between messages in context
+  timestampFormat: "relative" | "absolute" | "calendar" | "both";
+  // relative:  "[3 hours later]"
+  // absolute:  "[Day 3, 14:30]" (game time)
+  // calendar:  "[Moonday, 15th of Frostfall, 14:30]" (custom calendar, falls back to absolute)
+  // both:      "[3 hours later — Moonday, 15th of Frostfall, 14:30]"
+  timestampThreshold: number; // Only show if gap > N real seconds (default 300 = 5 min)
 }
 
 // === Master Configuration ===

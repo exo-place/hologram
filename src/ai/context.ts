@@ -13,6 +13,7 @@ import {
   getSceneCharacters,
   type Scene,
   type SceneCharacter,
+  type TimeState,
 } from "../scene";
 import {
   formatEntriesForContext,
@@ -21,21 +22,27 @@ import {
 } from "../chronicle";
 import { formatStateForContext } from "../state";
 import { getLocation, formatLocationForContext } from "../world/locations";
-import { getTimePeriod } from "../world/time";
+import {
+  getTimePeriod,
+  formatTime,
+  formatDate,
+  type CalendarConfig,
+} from "../world/time";
 import {
   allocateBudget,
   ContextPriority,
   estimateTokens,
   type BudgetSection,
 } from "./budget";
-import { type WorldConfig } from "../config/types";
+import { type WorldConfig, type ContextConfig as WorldContextConfig } from "../config/types";
 import { getWorldConfig } from "../config";
 
 export interface Message {
   role: "user" | "assistant" | "system";
   content: string;
   name?: string;
-  timestamp?: number;
+  timestamp?: number; // Real-world timestamp (Date.now())
+  gameTime?: TimeState; // In-world game time when message was recorded
 }
 
 export interface ContextConfig {
@@ -237,7 +244,14 @@ export async function assembleSceneContext(
   // Fit recent messages into remaining budget
   const messagesBudget = maxTokens - budgetResult.totalTokens;
   const messages: Message[] = [];
-  const truncatedMessages = recentMessages.slice(-historyMessages);
+  let truncatedMessages = recentMessages.slice(-historyMessages);
+
+  // Inject inter-message timestamps if configured
+  if (worldConfig.context.showTimestamps) {
+    const calendar = worldConfig.time.useCalendar ? worldConfig.time.calendar : undefined;
+    truncatedMessages = injectTimestamps(truncatedMessages, worldConfig.context, calendar);
+  }
+
   let msgBudget = messagesBudget;
 
   for (const msg of truncatedMessages) {
@@ -595,10 +609,157 @@ export async function assembleContext(
 export function formatMessagesForAI(
   messages: Message[]
 ): Array<{ role: "user" | "assistant"; content: string }> {
-  return messages
-    .filter((m) => m.role === "user" || m.role === "assistant")
-    .map((m) => ({
+  const result: Array<{ role: "user" | "assistant"; content: string }> = [];
+  let pendingTimestamp: string | null = null;
+
+  for (const m of messages) {
+    if (m.role === "system") {
+      // Buffer timestamp markers to prepend to the next message
+      pendingTimestamp = m.content;
+      continue;
+    }
+
+    if (m.role !== "user" && m.role !== "assistant") continue;
+
+    let content = m.name ? `${m.name}: ${m.content}` : m.content;
+
+    // Prepend buffered timestamp to this message
+    if (pendingTimestamp) {
+      content = `${pendingTimestamp}\n${content}`;
+      pendingTimestamp = null;
+    }
+
+    result.push({
       role: m.role as "user" | "assistant",
-      content: m.name ? `${m.name}: ${m.content}` : m.content,
-    }));
+      content,
+    });
+  }
+
+  return result;
+}
+
+// =======================================================
+// Inter-message timestamp injection
+// =======================================================
+
+/**
+ * Inject timestamp markers between messages based on config.
+ * Timestamps can be relative ("3 hours later"), absolute game time,
+ * full calendar dates, or both.
+ */
+export function injectTimestamps(
+  messages: Message[],
+  contextConfig: WorldContextConfig,
+  calendar?: CalendarConfig
+): Message[] {
+  if (!contextConfig.showTimestamps) return messages;
+
+  const result: Message[] = [];
+  const format = contextConfig.timestampFormat;
+  const threshold = contextConfig.timestampThreshold;
+
+  for (let i = 0; i < messages.length; i++) {
+    const msg = messages[i];
+    const prev = i > 0 ? messages[i - 1] : null;
+
+    if (prev) {
+      const marker = buildTimestampMarker(prev, msg, format, threshold, calendar);
+      if (marker) {
+        result.push({
+          role: "system",
+          content: marker,
+        });
+      }
+    }
+
+    result.push(msg);
+  }
+
+  return result;
+}
+
+/** Build a timestamp marker between two messages, or null if gap is below threshold */
+function buildTimestampMarker(
+  prev: Message,
+  curr: Message,
+  format: WorldContextConfig["timestampFormat"],
+  threshold: number,
+  calendar?: CalendarConfig
+): string | null {
+  // Check real-time gap
+  const hasRealGap = prev.timestamp && curr.timestamp;
+  const realGapSeconds = hasRealGap
+    ? (curr.timestamp! - prev.timestamp!) / 1000
+    : 0;
+
+  // Check game-time gap
+  const hasGameGap = prev.gameTime && curr.gameTime;
+
+  // Need at least one gap above threshold
+  if (!hasRealGap && !hasGameGap) return null;
+  if (hasRealGap && realGapSeconds < threshold) {
+    // Even if game time changed, skip if real gap is tiny
+    // (unless game time jumped significantly via /time advance)
+    if (!hasGameGap) return null;
+    const gameMinutesDiff = gameTimeToMinutes(curr.gameTime!) - gameTimeToMinutes(prev.gameTime!);
+    if (gameMinutesDiff < 5) return null;
+  }
+
+  const parts: string[] = [];
+
+  // Relative part: "[3 hours later]"
+  if (format === "relative" || format === "both") {
+    if (hasGameGap) {
+      const gameGap = gameTimeToMinutes(curr.gameTime!) - gameTimeToMinutes(prev.gameTime!);
+      if (gameGap > 0) {
+        parts.push(formatDurationGap(gameGap));
+      }
+    } else if (hasRealGap && realGapSeconds >= threshold) {
+      parts.push(formatDurationGap(Math.floor(realGapSeconds / 60)));
+    }
+  }
+
+  // Absolute/calendar part
+  if (format === "absolute" || format === "calendar" || format === "both") {
+    if (curr.gameTime) {
+      if (format === "calendar" || format === "both") {
+        // Full calendar format
+        const timeStr = formatTime(curr.gameTime);
+        if (calendar) {
+          const dateStr = formatDate(curr.gameTime, calendar);
+          parts.push(`${dateStr}, ${timeStr}`);
+        } else {
+          // No calendar config, fall back to absolute
+          parts.push(`Day ${curr.gameTime.day + 1}, ${timeStr}`);
+        }
+      } else {
+        // Simple absolute
+        const timeStr = formatTime(curr.gameTime);
+        parts.push(`Day ${curr.gameTime.day + 1}, ${timeStr}`);
+      }
+    }
+  }
+
+  if (parts.length === 0) return null;
+
+  return `[${parts.join(" — ")}]`;
+}
+
+/** Convert TimeState to total minutes for easy comparison */
+function gameTimeToMinutes(time: TimeState): number {
+  return time.day * 24 * 60 + time.hour * 60 + time.minute;
+}
+
+/** Format a duration gap in minutes into a human-readable relative string */
+function formatDurationGap(minutes: number): string {
+  if (minutes < 2) return "a moment later";
+  if (minutes < 60) return `${minutes} minutes later`;
+  if (minutes < 120) return "1 hour later";
+  if (minutes < 1440) {
+    const hours = Math.floor(minutes / 60);
+    return `${hours} hours later`;
+  }
+  const days = Math.floor(minutes / 1440);
+  if (days === 1) return "1 day later";
+  return `${days} days later`;
 }

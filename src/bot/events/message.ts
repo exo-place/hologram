@@ -6,6 +6,7 @@ import {
   type Message,
 } from "../../ai/context";
 import { processMessageForMemory } from "../../memory/tiers";
+import { getActiveScene } from "../../scene";
 
 // In-memory message history per channel
 const channelMessages = new Map<string, Message[]>();
@@ -68,12 +69,17 @@ export async function handleMessage(
   content: string,
   isBotMentioned: boolean
 ): Promise<string | null> {
+  // Capture game time from active scene (if any)
+  const scene = getActiveScene(channelId);
+  const gameTime = scene ? { ...scene.time } : undefined;
+
   // Add user message to history
   addToHistory(channelId, {
     role: "user",
     content,
     name: authorName,
     timestamp: Date.now(),
+    gameTime,
   });
 
   // Check if we should respond
@@ -101,11 +107,13 @@ export async function handleMessage(
 
     const response = result.text;
 
-    // Add assistant response to history
+    // Add assistant response to history (re-read scene time - may have advanced during LLM call)
+    const currentScene = getActiveScene(channelId);
     addToHistory(channelId, {
       role: "assistant",
       content: response,
       timestamp: Date.now(),
+      gameTime: currentScene ? { ...currentScene.time } : gameTime,
     });
 
     // Process for memory extraction (fire and forget)
