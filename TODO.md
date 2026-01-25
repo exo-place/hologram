@@ -14,9 +14,10 @@
 
 ### Test Coverage
 
-Current: 211 tests across 12 files. Pure-logic modules tested:
+Current: 296 tests across 15 files. Pure-logic modules tested:
 - `src/ai/budget.ts` - token estimation, budget allocation
 - `src/ai/context.ts` - message formatting, timestamp injection
+- `src/ai/debug.ts` - context debugging, trace formatting, export
 - `src/ai/extract.ts` - extraction prompt parsing
 - `src/bot/webhooks.ts` - multi-char response parsing
 - `src/chronicle/index.ts` - chronicle formatting, perspective filtering
@@ -26,16 +27,16 @@ Current: 211 tests across 12 files. Pure-logic modules tested:
 - `src/proxies/index.ts` - proxy matching (prefix/suffix/brackets)
 - `src/relationships/index.ts` - affinity labels
 - `src/state/index.ts` - outfit context formatting
+- `src/wizards/index.ts` - wizard step flow, config-aware flow building
+- `src/world/rng.ts` - seeded RNG determinism, distribution, dice notation
 - `src/world/time.ts` - time math, calendar, periods, formatting
 
-Modules with testable pure logic that lack tests:
-- [ ] `src/world/rng.ts` - seeded RNG determinism, distribution
+Remaining modules (DB-dependent, need mocking to test):
 - [ ] `src/events/random.ts` - weighted selection, condition evaluation
 - [ ] `src/events/behavior.ts` - state machine transitions
 - [ ] `src/combat/index.ts` - initiative ordering, turn management
 - [ ] `src/world/locations.ts` - location graph traversal, hierarchy
 - [ ] `src/world/inventory.ts` - capacity checks, equipment slot validation
-- [ ] `src/wizards/index.ts` - wizard step flow, config-aware flow building
 - [ ] `src/memory/graph.ts` - knowledge graph queries
 - [ ] `src/ai/extraction-pipeline.ts` - explicit marker parsing, heuristic extraction
 
@@ -54,3 +55,5 @@ All integration and feature work from Phases 1-7 is done:
 - [x] State extraction pipeline (explicit markers, heuristic, LLM-based)
 - [x] Chronicle embeddings virtual table in schema
 - [x] Perspective-based chronicle filtering for user queries
+- [x] Deduplicate evaluateConditions into shared events/conditions.ts
+- [x] Extract respond/editResponse/respondDeferred into shared commands/index.ts
