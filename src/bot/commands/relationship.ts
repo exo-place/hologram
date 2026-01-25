@@ -1,11 +1,10 @@
 import {
-  type Bot,
-  type Interaction,
   InteractionResponseTypes,
   ApplicationCommandOptionTypes,
   DiscordApplicationIntegrationType,
   DiscordInteractionContextType,
 } from "@discordeno/bot";
+import type { HologramBot, HologramInteraction } from "../types";
 import { getEntity } from "../../db/entities";
 import {
   getRelationship,
@@ -19,11 +18,6 @@ import {
 } from "../../relationships";
 import { getWorldConfig } from "../../config/defaults";
 import { getActiveScene } from "../../scene";
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
-type AnyBot = Bot<any, any>;
-type AnyInteraction = Interaction;
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
 export const relationshipCommand = {
   name: "relationship",
@@ -223,7 +217,7 @@ export const relationshipCommand = {
   ],
 };
 
-function getSubOpt<T>(interaction: AnyInteraction, name: string): T | undefined {
+function getSubOpt<T>(interaction: HologramInteraction, name: string): T | undefined {
   const options = interaction.data?.options ?? [];
   if (options.length === 0) return undefined;
   const sub = options[0];
@@ -241,8 +235,8 @@ function getRelConfig(channelId: string) {
 }
 
 export async function handleRelationshipCommand(
-  bot: AnyBot,
-  interaction: AnyInteraction
+  bot: HologramBot,
+  interaction: HologramInteraction
 ): Promise<void> {
   const channelId = interaction.channelId?.toString() ?? "";
   const subcommand = interaction.data?.options?.[0]?.name;

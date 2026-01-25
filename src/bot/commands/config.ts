@@ -1,14 +1,12 @@
 import {
   type CreateApplicationCommand,
+  type MessageComponent,
   ApplicationCommandOptionTypes,
   MessageComponentTypes,
   ButtonStyles,
 } from "@discordeno/bot";
+import type { HologramBot, HologramInteraction } from "../types";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyBot = any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyInteraction = any;
 
 import { getWorldState } from "../../world/state";
 import {
@@ -106,8 +104,8 @@ export const configCommand: CreateApplicationCommand = {
 };
 
 export async function handleConfigCommand(
-  bot: AnyBot,
-  interaction: AnyInteraction
+  bot: HologramBot,
+  interaction: HologramInteraction
 ): Promise<void> {
   const subcommand = getSubcommand(interaction);
   const channelId = interaction.channelId?.toString() ?? "";
@@ -274,8 +272,8 @@ function decodeWizardId(customId: string): { worldId: number; state: WizardState
 }
 
 async function respondWithWizard(
-  bot: AnyBot,
-  interaction: AnyInteraction,
+  bot: HologramBot,
+  interaction: HologramInteraction,
   config: WorldConfig,
   worldId: number
 ): Promise<void> {
@@ -319,10 +317,7 @@ function formatWizardMessage(state: WizardState): string {
 function buildWizardComponents(
   baseId: string,
   state: WizardState
-): Array<{
-  type: MessageComponentTypes;
-  components: Array<unknown>;
-}> {
+) {
   const features: Array<[keyof WizardState, string]> = [
     ["chronicle", "Chronicle"],
     ["scenes", "Scenes"],
@@ -382,13 +377,13 @@ function buildWizardComponents(
     { type: MessageComponentTypes.ActionRow, components: row1 },
     { type: MessageComponentTypes.ActionRow, components: row2 },
     { type: MessageComponentTypes.ActionRow, components: row3 },
-  ];
+  ] as MessageComponent[];
 }
 
 /** Handle wizard button clicks */
 export async function handleConfigWizardComponent(
-  bot: AnyBot,
-  interaction: AnyInteraction
+  bot: HologramBot,
+  interaction: HologramInteraction
 ): Promise<boolean> {
   const customId = interaction.data?.customId;
   if (!customId?.startsWith("cfgwiz:")) return false;

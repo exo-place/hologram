@@ -1,11 +1,10 @@
 import {
-  type Bot,
-  type Interaction,
   InteractionResponseTypes,
   ApplicationCommandOptionTypes,
   DiscordApplicationIntegrationType,
   DiscordInteractionContextType,
 } from "@discordeno/bot";
+import type { HologramBot, HologramInteraction } from "../types";
 import {
   roll,
   rollWithAttributes,
@@ -14,11 +13,6 @@ import {
   formatRollForDisplay,
 } from "../../dice";
 import { getActiveScene } from "../../scene";
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
-type AnyBot = Bot<any, any>;
-type AnyInteraction = Interaction;
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
 export const rollCommand = {
   name: "roll",
@@ -90,8 +84,8 @@ export const rCommand = {
 };
 
 export async function handleRollCommand(
-  bot: AnyBot,
-  interaction: AnyInteraction
+  bot: HologramBot,
+  interaction: HologramInteraction
 ): Promise<void> {
   const options = interaction.data?.options ?? [];
   const expression = options.find((o: { name: string }) => o.name === "expression")?.value as string;
@@ -169,8 +163,8 @@ export async function handleRollCommand(
 
 // Short /r handler - delegates to the same logic
 export async function handleRCommand(
-  bot: AnyBot,
-  interaction: AnyInteraction
+  bot: HologramBot,
+  interaction: HologramInteraction
 ): Promise<void> {
   await handleRollCommand(bot, interaction);
 }

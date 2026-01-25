@@ -1,8 +1,6 @@
 import { getDb } from "../db";
 import { getEntity, type CharacterData } from "../db/entities";
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyBot = any;
+import type { HologramBot } from "./types";
 
 export interface CharacterWebhook {
   id: number;
@@ -72,7 +70,7 @@ export function deleteCachedWebhook(channelId: string, characterId: number): voi
 
 /** Get or create a webhook for a character in a channel */
 export async function getOrCreateWebhook(
-  bot: AnyBot,
+  bot: HologramBot,
   channelId: string,
   characterId: number
 ): Promise<{ webhookId: string; webhookToken: string } | null> {
@@ -103,6 +101,11 @@ export async function getOrCreateWebhook(
     const webhookId = webhook.id.toString();
     const webhookToken = webhook.token;
 
+    if (!webhookToken) {
+      console.error("Created webhook has no token");
+      return null;
+    }
+
     // Cache it
     cacheWebhook(channelId, characterId, webhookId, webhookToken);
 
@@ -115,7 +118,7 @@ export async function getOrCreateWebhook(
 
 /** Send a message as a character using webhook */
 export async function sendAsCharacter(
-  bot: AnyBot,
+  bot: HologramBot,
   channelId: string,
   characterId: number,
   content: string,
@@ -165,7 +168,7 @@ export function formatMultiCharOutput(
 
 /** Send responses for multiple characters */
 export async function sendMultiCharResponse(
-  bot: AnyBot,
+  bot: HologramBot,
   channelId: string,
   responses: Array<{ characterId: number; characterName: string; content: string }>,
   mode: MultiCharMode
@@ -205,7 +208,7 @@ export async function sendMultiCharResponse(
 
 /** Check if webhooks are available in a channel */
 export async function canUseWebhooks(
-  bot: AnyBot,
+  bot: HologramBot,
   channelId: string,
   guildId?: string
 ): Promise<boolean> {
@@ -276,7 +279,7 @@ export function parseMultiCharResponse(
 
 /** Clean up old/unused webhooks for a channel */
 export async function cleanupWebhooks(
-  bot: AnyBot,
+  bot: HologramBot,
   channelId: string
 ): Promise<number> {
   const db = getDb();

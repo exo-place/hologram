@@ -5,6 +5,7 @@ import {
   DiscordApplicationIntegrationType,
   DiscordInteractionContextType,
 } from "@discordeno/bot";
+import type { HologramBot, HologramInteraction } from "../types";
 
 // User app integration - works in DMs and guilds
 export const USER_APP_INTEGRATION = {
@@ -23,11 +24,6 @@ export const GUILD_ONLY_INTEGRATION = {
   integrationTypes: [DiscordApplicationIntegrationType.GuildInstall],
   contexts: [DiscordInteractionContextType.Guild],
 };
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyBot = any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyInteraction = any;
 import { characterCommand, handleCharacterCommand } from "./character";
 import { worldCommand, handleWorldCommand } from "./world";
 import { memoryCommand, handleMemoryCommand } from "./memory";
@@ -69,7 +65,7 @@ export const commands: CreateApplicationCommand[] = [
 ];
 
 // Register commands with Discord
-export async function registerCommands(bot: AnyBot): Promise<void> {
+export async function registerCommands(bot: HologramBot): Promise<void> {
   console.log("Registering slash commands...");
 
   try {
@@ -84,7 +80,7 @@ export async function registerCommands(bot: AnyBot): Promise<void> {
 
 // Register commands for a specific guild (instant, good for dev)
 export async function registerGuildCommands(
-  bot: AnyBot,
+  bot: HologramBot,
   guildId: bigint
 ): Promise<void> {
   console.log(`Registering commands for guild ${guildId}...`);
@@ -99,8 +95,8 @@ export async function registerGuildCommands(
 
 // Handle incoming interactions
 export async function handleInteraction(
-  bot: AnyBot,
-  interaction: AnyInteraction
+  bot: HologramBot,
+  interaction: HologramInteraction
 ): Promise<void> {
   // Handle component interactions (buttons, selects)
   if (interaction.type === InteractionTypes.MessageComponent) {
@@ -214,7 +210,7 @@ export async function handleInteraction(
 
 // Helper to get option value from interaction
 export function getOptionValue<T>(
-  interaction: AnyInteraction,
+  interaction: HologramInteraction,
   name: string
 ): T | undefined {
   const options = interaction.data?.options;
@@ -239,7 +235,7 @@ export function getOptionValue<T>(
 }
 
 // Get subcommand name
-export function getSubcommand(interaction: AnyInteraction): string | undefined {
+export function getSubcommand(interaction: HologramInteraction): string | undefined {
   const options = interaction.data?.options;
   if (!options || options.length === 0) return undefined;
 
@@ -256,8 +252,8 @@ export function getSubcommand(interaction: AnyInteraction): string | undefined {
 
 // Shared interaction response helpers
 export async function respond(
-  bot: AnyBot,
-  interaction: AnyInteraction,
+  bot: HologramBot,
+  interaction: HologramInteraction,
   content: string,
   ephemeral = false
 ): Promise<void> {
@@ -271,8 +267,8 @@ export async function respond(
 }
 
 export async function respondDeferred(
-  bot: AnyBot,
-  interaction: AnyInteraction
+  bot: HologramBot,
+  interaction: HologramInteraction
 ): Promise<void> {
   await bot.helpers.sendInteractionResponse(interaction.id, interaction.token, {
     type: 5, // DeferredChannelMessageWithSource
@@ -280,8 +276,8 @@ export async function respondDeferred(
 }
 
 export async function editResponse(
-  bot: AnyBot,
-  interaction: AnyInteraction,
+  bot: HologramBot,
+  interaction: HologramInteraction,
   content: string
 ): Promise<void> {
   await bot.helpers.editOriginalInteractionResponse(interaction.token, {
@@ -291,7 +287,7 @@ export async function editResponse(
 
 // Get nested subcommand (for subcommand groups)
 export function getNestedSubcommand(
-  interaction: AnyInteraction
+  interaction: HologramInteraction
 ): string | undefined {
   const options = interaction.data?.options;
   if (!options || options.length === 0) return undefined;

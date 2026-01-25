@@ -2,11 +2,8 @@ import {
   type CreateApplicationCommand,
   ApplicationCommandOptionTypes,
 } from "@discordeno/bot";
+import type { HologramBot, HologramInteraction } from "../types";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyBot = any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyInteraction = any;
 import {
   enableChannel,
   disableChannel,
@@ -72,8 +69,8 @@ export const sessionCommand: CreateApplicationCommand = {
 };
 
 export async function handleSessionCommand(
-  bot: AnyBot,
-  interaction: AnyInteraction
+  bot: HologramBot,
+  interaction: HologramInteraction
 ): Promise<void> {
   const subcommand = getSubcommand(interaction);
   const channelId = interaction.channelId?.toString() ?? "";

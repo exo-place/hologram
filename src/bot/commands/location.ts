@@ -1,11 +1,10 @@
 import {
-  type Bot,
-  type Interaction,
   InteractionResponseTypes,
   ApplicationCommandOptionTypes,
   DiscordApplicationIntegrationType,
   DiscordInteractionContextType,
 } from "@discordeno/bot";
+import type { HologramBot, HologramInteraction } from "../types";
 import {
   getLocation,
   getLocationsInWorld,
@@ -20,11 +19,6 @@ import {
 } from "../../world/locations";
 import { getActiveScene, updateScene, type Scene } from "../../scene";
 import { type LocationType } from "../../db/entities";
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
-type AnyBot = Bot<any, any>;
-type AnyInteraction = Interaction;
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
 export const locationCommand = {
   name: "location",
@@ -225,8 +219,8 @@ export const locationCommand = {
 };
 
 export async function handleLocationCommand(
-  bot: AnyBot,
-  interaction: AnyInteraction
+  bot: HologramBot,
+  interaction: HologramInteraction
 ): Promise<void> {
   const subcommand = interaction.data?.options?.[0];
   if (!subcommand) {
@@ -277,8 +271,8 @@ export async function handleLocationCommand(
 }
 
 async function handleLook(
-  bot: AnyBot,
-  interaction: AnyInteraction,
+  bot: HologramBot,
+  interaction: HologramInteraction,
   scene: Scene | null
 ): Promise<void> {
   if (!scene?.locationId) {
@@ -314,8 +308,8 @@ interface CommandOption {
 }
 
 async function handleGo(
-  bot: AnyBot,
-  interaction: AnyInteraction,
+  bot: HologramBot,
+  interaction: HologramInteraction,
   scene: Scene | null,
   options?: CommandOption[]
 ): Promise<void> {
@@ -384,8 +378,8 @@ async function handleGo(
 }
 
 async function handleMap(
-  bot: AnyBot,
-  interaction: AnyInteraction,
+  bot: HologramBot,
+  interaction: HologramInteraction,
   scene: Scene | null,
   options?: CommandOption[]
 ): Promise<void> {
@@ -410,8 +404,8 @@ async function handleMap(
 }
 
 async function handleCreate(
-  bot: AnyBot,
-  interaction: AnyInteraction,
+  bot: HologramBot,
+  interaction: HologramInteraction,
   scene: Scene | null,
   options?: CommandOption[]
 ): Promise<void> {
@@ -443,8 +437,8 @@ async function handleCreate(
 }
 
 async function handleConnect(
-  bot: AnyBot,
-  interaction: AnyInteraction,
+  bot: HologramBot,
+  interaction: HologramInteraction,
   options?: CommandOption[]
 ): Promise<void> {
   const fromId = options?.find((o) => o.name === "from")?.value as number;
@@ -492,8 +486,8 @@ async function handleConnect(
 }
 
 async function handleDisconnect(
-  bot: AnyBot,
-  interaction: AnyInteraction,
+  bot: HologramBot,
+  interaction: HologramInteraction,
   options?: CommandOption[]
 ): Promise<void> {
   const fromId = options?.find((o) => o.name === "from")?.value as number;
@@ -524,8 +518,8 @@ async function handleDisconnect(
 }
 
 async function handleDiscover(
-  bot: AnyBot,
-  interaction: AnyInteraction,
+  bot: HologramBot,
+  interaction: HologramInteraction,
   options?: CommandOption[]
 ): Promise<void> {
   const fromId = options?.find((o) => o.name === "from")?.value as number;
@@ -557,8 +551,8 @@ async function handleDiscover(
 }
 
 async function handleList(
-  bot: AnyBot,
-  interaction: AnyInteraction,
+  bot: HologramBot,
+  interaction: HologramInteraction,
   scene: Scene | null,
   options?: CommandOption[]
 ): Promise<void> {
@@ -591,8 +585,8 @@ async function handleList(
 }
 
 async function handleChildren(
-  bot: AnyBot,
-  interaction: AnyInteraction,
+  bot: HologramBot,
+  interaction: HologramInteraction,
   scene: Scene | null,
   options?: CommandOption[]
 ): Promise<void> {

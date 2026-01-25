@@ -1,11 +1,10 @@
 import {
-  type Bot,
-  type Interaction,
   InteractionResponseTypes,
   ApplicationCommandOptionTypes,
   DiscordApplicationIntegrationType,
   DiscordInteractionContextType,
 } from "@discordeno/bot";
+import type { HologramBot, HologramInteraction } from "../types";
 import { getActiveScene } from "../../scene";
 import {
   getUserProxies,
@@ -16,11 +15,6 @@ import {
   parseProxyMessage,
   formatProxyTrigger,
 } from "../../proxies";
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
-type AnyBot = Bot<any, any>;
-type AnyInteraction = Interaction;
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
 export const proxyCommand = {
   name: "proxy",
@@ -194,7 +188,7 @@ export const proxyCommand = {
   ],
 };
 
-function getSubOpt<T>(interaction: AnyInteraction, name: string): T | undefined {
+function getSubOpt<T>(interaction: HologramInteraction, name: string): T | undefined {
   const options = interaction.data?.options ?? [];
   if (options.length === 0) return undefined;
   const sub = options[0];
@@ -204,8 +198,8 @@ function getSubOpt<T>(interaction: AnyInteraction, name: string): T | undefined 
 }
 
 export async function handleProxyCommand(
-  bot: AnyBot,
-  interaction: AnyInteraction
+  bot: HologramBot,
+  interaction: HologramInteraction
 ): Promise<void> {
   const channelId = interaction.channelId?.toString() ?? "";
   const userId = interaction.user?.id?.toString() ?? interaction.member?.id?.toString() ?? "";

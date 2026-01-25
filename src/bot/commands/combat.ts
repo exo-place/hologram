@@ -1,11 +1,10 @@
 import {
-  type Bot,
-  type Interaction,
   InteractionResponseTypes,
   ApplicationCommandOptionTypes,
   DiscordApplicationIntegrationType,
   DiscordInteractionContextType,
 } from "@discordeno/bot";
+import type { HologramBot, HologramInteraction } from "../types";
 import { getActiveScene } from "../../scene";
 import { getEntity } from "../../db/entities";
 import {
@@ -23,11 +22,6 @@ import {
   getCombatLog,
   formatCombatForDisplay,
 } from "../../combat";
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
-type AnyBot = Bot<any, any>;
-type AnyInteraction = Interaction;
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
 export const combatCommand = {
   name: "combat",
@@ -197,7 +191,7 @@ export const combatCommand = {
   ],
 };
 
-function getSubOpt<T>(interaction: AnyInteraction, name: string): T | undefined {
+function getSubOpt<T>(interaction: HologramInteraction, name: string): T | undefined {
   const options = interaction.data?.options ?? [];
   if (options.length === 0) return undefined;
   const sub = options[0];
@@ -207,8 +201,8 @@ function getSubOpt<T>(interaction: AnyInteraction, name: string): T | undefined 
 }
 
 export async function handleCombatCommand(
-  bot: AnyBot,
-  interaction: AnyInteraction
+  bot: HologramBot,
+  interaction: HologramInteraction
 ): Promise<void> {
   const channelId = interaction.channelId?.toString() ?? "";
   const subcommand = interaction.data?.options?.[0]?.name;

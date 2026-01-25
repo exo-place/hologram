@@ -30,6 +30,17 @@ export const bot = createBot({
       author: true,
       mentionedUserIds: true as const,
     },
+    member: {
+      id: true,
+      nick: true,
+    },
+    channel: {
+      type: true,
+    },
+    webhook: {
+      id: true,
+      token: true,
+    },
     interaction: {
       id: true,
       type: true,

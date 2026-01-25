@@ -1,11 +1,10 @@
 import {
-  type Bot,
-  type Interaction,
   InteractionResponseTypes,
   ApplicationCommandOptionTypes,
   DiscordApplicationIntegrationType,
   DiscordInteractionContextType,
 } from "@discordeno/bot";
+import type { HologramBot, HologramInteraction } from "../types";
 import { getActiveScene } from "../../scene";
 import {
   formatTime,
@@ -22,11 +21,6 @@ import {
   cancelEvent,
   type ScheduledEvent,
 } from "../../world/time";
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
-type AnyBot = Bot<any, any>;
-type AnyInteraction = Interaction;
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
 export const timeCommand = {
   name: "time",
@@ -177,8 +171,8 @@ export const timeCommand = {
 };
 
 export async function handleTimeCommand(
-  bot: AnyBot,
-  interaction: AnyInteraction
+  bot: HologramBot,
+  interaction: HologramInteraction
 ): Promise<void> {
   const subcommand = interaction.data?.options?.[0];
   if (!subcommand) {
@@ -241,8 +235,8 @@ interface SceneArg {
 }
 
 async function handleShow(
-  bot: AnyBot,
-  interaction: AnyInteraction,
+  bot: HologramBot,
+  interaction: HologramInteraction,
   scene: SceneArg
 ): Promise<void> {
   const time = scene.time;
@@ -287,8 +281,8 @@ async function handleShow(
 }
 
 async function handleAdvance(
-  bot: AnyBot,
-  interaction: AnyInteraction,
+  bot: HologramBot,
+  interaction: HologramInteraction,
   channelId: string,
   scene: SceneArg,
   options?: CommandOption[]
@@ -345,8 +339,8 @@ async function handleAdvance(
 }
 
 async function handleSet(
-  bot: AnyBot,
-  interaction: AnyInteraction,
+  bot: HologramBot,
+  interaction: HologramInteraction,
   channelId: string,
   scene: SceneArg,
   options?: CommandOption[]
@@ -405,8 +399,8 @@ async function handleSet(
 }
 
 async function handleSkip(
-  bot: AnyBot,
-  interaction: AnyInteraction,
+  bot: HologramBot,
+  interaction: HologramInteraction,
   channelId: string,
   options?: CommandOption[]
 ): Promise<void> {
@@ -448,8 +442,8 @@ async function handleSkip(
 }
 
 async function handleEvent(
-  bot: AnyBot,
-  interaction: AnyInteraction,
+  bot: HologramBot,
+  interaction: HologramInteraction,
   scene: SceneArg,
   options?: CommandOption[]
 ): Promise<void> {
@@ -470,8 +464,8 @@ async function handleEvent(
 }
 
 async function handleEventSchedule(
-  bot: AnyBot,
-  interaction: AnyInteraction,
+  bot: HologramBot,
+  interaction: HologramInteraction,
   scene: SceneArg,
   options?: CommandOption[]
 ): Promise<void> {
@@ -550,8 +544,8 @@ async function handleEventSchedule(
 }
 
 async function handleEventList(
-  bot: AnyBot,
-  interaction: AnyInteraction,
+  bot: HologramBot,
+  interaction: HologramInteraction,
   scene: SceneArg
 ): Promise<void> {
   const events = getUpcomingEvents(scene.id, scene.time, 15);
@@ -585,8 +579,8 @@ async function handleEventList(
 }
 
 async function handleEventCancel(
-  bot: AnyBot,
-  interaction: AnyInteraction,
+  bot: HologramBot,
+  interaction: HologramInteraction,
   options?: CommandOption[]
 ): Promise<void> {
   const eventId = options?.find((o) => o.name === "id")?.value as number;

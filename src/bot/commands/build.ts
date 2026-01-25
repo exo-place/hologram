@@ -1,6 +1,4 @@
 import {
-  type Bot,
-  type Interaction,
   InteractionResponseTypes,
   ApplicationCommandOptionTypes,
   DiscordApplicationIntegrationType,
@@ -8,6 +6,7 @@ import {
   MessageComponentTypes,
   TextStyles,
 } from "@discordeno/bot";
+import type { HologramBot, HologramInteraction } from "../types";
 import { getActiveScene } from "../../scene";
 import { createEntity } from "../../db/entities";
 import {
@@ -23,11 +22,6 @@ import {
   type WizardSession,
   type WizardType,
 } from "../../wizards";
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
-type AnyBot = Bot<any, any>;
-type AnyInteraction = Interaction;
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
 export const buildCommand = {
   name: "build",
@@ -70,8 +64,8 @@ export const buildCommand = {
 };
 
 export async function handleBuildCommand(
-  bot: AnyBot,
-  interaction: AnyInteraction
+  bot: HologramBot,
+  interaction: HologramInteraction
 ): Promise<void> {
   const channelId = interaction.channelId?.toString() ?? "";
   const userId = interaction.user?.id?.toString() ?? interaction.member?.id?.toString() ?? "";
@@ -114,8 +108,8 @@ export async function handleBuildCommand(
 
 /** Send the current wizard step as a message with components */
 async function sendWizardStep(
-  bot: AnyBot,
-  interaction: AnyInteraction,
+  bot: HologramBot,
+  interaction: HologramInteraction,
   session: WizardSession,
   isUpdate: boolean
 ): Promise<void> {
@@ -187,8 +181,8 @@ function buildStepComponents(session: WizardSession): any[] {
 
 /** Send the wizard preview with create/cancel buttons */
 async function sendWizardPreview(
-  bot: AnyBot,
-  interaction: AnyInteraction,
+  bot: HologramBot,
+  interaction: HologramInteraction,
   session: WizardSession,
   isUpdate: boolean
 ): Promise<void> {
@@ -249,8 +243,8 @@ async function sendWizardPreview(
 
 /** Handle wizard component interactions (buttons and modals) */
 export async function handleBuildWizardComponent(
-  bot: AnyBot,
-  interaction: AnyInteraction
+  bot: HologramBot,
+  interaction: HologramInteraction
 ): Promise<boolean> {
   const customId = interaction.data?.customId;
   if (!customId?.startsWith("wizard:")) return false;
