@@ -6,7 +6,7 @@ import {
   formatMessagesForAI,
   type Message,
 } from "../../ai/context";
-import { processMessageForMemory } from "../../memory/tiers";
+import { runExtractionPipeline } from "../../ai/extraction-pipeline";
 import { getActiveScene, getActiveCharacters, touchScene } from "../../scene";
 import { parseProxyMessage, formatProxyForContext } from "../../proxies";
 import { getPersona, formatPersonaForContext } from "../../personas";
@@ -245,13 +245,15 @@ export async function handleMessage(
       touchScene(currentScene.id);
     }
 
-    // Process for memory extraction (fire and forget)
-    processMessageForMemory(
+    // Run state/memory extraction pipeline (fire and forget)
+    runExtractionPipeline({
       channelId,
-      effectiveContent,
-      response,
-      activeCharacterIds[0]
-    ).catch((err) => console.error("Error processing message for memory:", err));
+      scene: currentScene,
+      worldConfig: worldConfig ?? null,
+      activeCharacterIds,
+      userMessage: effectiveContent,
+      assistantResponse: response,
+    }).catch((err) => console.error("Error in extraction pipeline:", err));
 
     // Parse multi-character response for webhook delivery
     let segments: CharacterSegment[] | undefined;
