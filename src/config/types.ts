@@ -160,9 +160,16 @@ export interface WorldConfig {
   context: ContextConfig;
 }
 
-// Deep partial for config overrides
+// Partial scene config with deep partial boundaries (matches mergeConfig behavior)
+type PartialSceneConfig = Partial<Omit<SceneConfig, "boundaries">> & {
+  boundaries?: Partial<SceneBoundaryConfig>;
+};
+
+// Partial for config overrides (1 level deep, except scenes.boundaries which is 2)
 export type PartialWorldConfig = {
-  [K in keyof WorldConfig]?: WorldConfig[K] extends object
-    ? Partial<WorldConfig[K]>
-    : WorldConfig[K];
+  [K in keyof WorldConfig]?: K extends "scenes"
+    ? PartialSceneConfig
+    : WorldConfig[K] extends object
+      ? Partial<WorldConfig[K]>
+      : WorldConfig[K];
 };
