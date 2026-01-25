@@ -4,15 +4,16 @@
 
 ### Test Coverage
 
-Current: 296 tests across 15 files. Pure-logic modules tested:
+Current: 314 tests across 16 files. Pure-logic modules tested:
 - `src/ai/budget.ts` - token estimation, budget allocation
 - `src/ai/context.ts` - message formatting, timestamp injection
 - `src/ai/debug.ts` - context debugging, trace formatting, export
-- `src/ai/extract.ts` - extraction prompt parsing
+- `src/ai/extract.ts` - extraction prompt parsing, heuristic extraction
 - `src/bot/webhooks.ts` - multi-char response parsing
-- `src/chronicle/index.ts` - chronicle formatting, perspective filtering
+- `src/chronicle/index.ts` - chronicle formatting, perspective filtering, explicit markers
 - `src/config/defaults.ts` - config merging, presets
 - `src/dice/index.ts` - dice parser (expressions, keep/drop, explode)
+- `src/events/conditions.ts` - event condition evaluation (time, season, location, weather)
 - `src/personas/index.ts` - persona context formatting
 - `src/proxies/index.ts` - proxy matching (prefix/suffix/brackets)
 - `src/relationships/index.ts` - affinity labels
@@ -22,13 +23,11 @@ Current: 296 tests across 15 files. Pure-logic modules tested:
 - `src/world/time.ts` - time math, calendar, periods, formatting
 
 Remaining modules (DB-dependent, need mocking to test):
-- [ ] `src/events/random.ts` - weighted selection, condition evaluation
 - [ ] `src/events/behavior.ts` - state machine transitions
 - [ ] `src/combat/index.ts` - initiative ordering, turn management
 - [ ] `src/world/locations.ts` - location graph traversal, hierarchy
 - [ ] `src/world/inventory.ts` - capacity checks, equipment slot validation
 - [ ] `src/memory/graph.ts` - knowledge graph queries
-- [ ] `src/ai/extraction-pipeline.ts` - explicit marker parsing, heuristic extraction
 
 ---
 
