@@ -81,6 +81,7 @@ export interface SceneContextOptions {
   ragResults?: number;
   includeWorldLore?: boolean;
   includeWorldRules?: boolean;
+  userContext?: string; // Pre-formatted user persona or proxy persona text
 }
 
 /**
@@ -142,6 +143,17 @@ export async function assembleSceneContext(
         minTokens: 200,
       });
     }
+  }
+
+  // 2b. User persona / proxy identity
+  if (options.userContext) {
+    sections.push({
+      name: "userPersona",
+      content: options.userContext,
+      priority: ContextPriority.USER_PERSONA,
+      canTruncate: true,
+      minTokens: 30,
+    });
   }
 
   // 3. Scene state (location, time, weather)

@@ -416,6 +416,12 @@ export function getActiveCharacters(sceneId: number): SceneCharacter[] {
   return getSceneCharacters(sceneId).filter((c) => c.isAI && c.isActive);
 }
 
+/** Bump lastActiveAt without overwriting other fields */
+export function touchScene(sceneId: number): void {
+  const db = getDb();
+  db.prepare("UPDATE scenes SET last_active_at = unixepoch() WHERE id = ?").run(sceneId);
+}
+
 // Time management
 
 /** Advance time in a scene */

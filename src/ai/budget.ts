@@ -112,6 +112,7 @@ function truncateToTokens(content: string, maxTokens: number): string {
 export const ContextPriority = {
   CHARACTER_PERSONA: 100, // Always include active character
   SYSTEM_INSTRUCTIONS: 95, // Critical instructions
+  USER_PERSONA: 90, // User's persona / proxy identity
   WORLD_STATE: 80, // Current location, time
   INVENTORY: 70, // Character's items
   ACTIVE_SCENE: 65, // Scene description

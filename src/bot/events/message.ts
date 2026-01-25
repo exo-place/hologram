@@ -2,11 +2,14 @@ import { generateText } from "ai";
 import { getLanguageModel, DEFAULT_MODEL } from "../../ai/models";
 import {
   assembleContext,
+  assembleSceneContext,
   formatMessagesForAI,
   type Message,
 } from "../../ai/context";
 import { processMessageForMemory } from "../../memory/tiers";
-import { getActiveScene } from "../../scene";
+import { getActiveScene, getActiveCharacters, touchScene } from "../../scene";
+import { parseProxyMessage, formatProxyForContext } from "../../proxies";
+import { getPersona, formatPersonaForContext } from "../../personas";
 
 // In-memory message history per channel
 const channelMessages = new Map<string, Message[]>();
@@ -47,7 +50,7 @@ function addToHistory(channelId: string, message: Message): void {
   }
 }
 
-// Per-channel active character
+// Per-channel active character (legacy fallback for sceneless channels)
 const channelActiveCharacter = new Map<string, number>();
 
 export function setActiveCharacter(
@@ -69,15 +72,36 @@ export async function handleMessage(
   content: string,
   isBotMentioned: boolean
 ): Promise<string | null> {
-  // Capture game time from active scene (if any)
+  // Get active scene (if any)
   const scene = getActiveScene(channelId);
+  const worldId = scene?.worldId;
   const gameTime = scene ? { ...scene.time } : undefined;
 
-  // Add user message to history
+  // --- Proxy interception ---
+  // Check if message matches a proxy pattern (e.g., "a: Hello" or "[Hello]")
+  let effectiveName = authorName;
+  let effectiveContent = content;
+  let userContext: string | undefined;
+
+  const proxyMatch = parseProxyMessage(authorId, content, worldId);
+  if (proxyMatch) {
+    effectiveName = proxyMatch.proxy.name;
+    effectiveContent = proxyMatch.content;
+    userContext = formatProxyForContext(proxyMatch.proxy);
+  } else {
+    // No proxy - check for user persona
+    const persona = getPersona(authorId, worldId);
+    if (persona) {
+      effectiveName = persona.name;
+      userContext = formatPersonaForContext(persona);
+    }
+  }
+
+  // Add user message to history (with proxy-rewritten attribution)
   addToHistory(channelId, {
     role: "user",
-    content,
-    name: authorName,
+    content: effectiveContent,
+    name: effectiveName,
     timestamp: Date.now(),
     gameTime,
   });
@@ -88,14 +112,42 @@ export async function handleMessage(
     return null;
   }
 
-  // Get active character for this channel
-  const activeCharacterId = getActiveCharacter(channelId);
+  // --- Determine active AI character IDs ---
+  let activeCharacterIds: number[] = [];
 
-  // Assemble context (now async due to RAG)
+  if (scene) {
+    // Scene system: get AI characters being voiced
+    const activeChars = getActiveCharacters(scene.id);
+    activeCharacterIds = activeChars.map((c) => c.characterId);
+  }
+
+  // Legacy fallback: per-channel character map
+  if (activeCharacterIds.length === 0) {
+    const legacyCharId = channelActiveCharacter.get(channelId);
+    if (legacyCharId !== undefined) {
+      activeCharacterIds = [legacyCharId];
+    }
+  }
+
+  // --- Assemble context ---
   const history = getChannelHistory(channelId);
-  const context = await assembleContext(channelId, history, activeCharacterId);
 
-  // Call LLM
+  let context;
+  if (scene) {
+    // Scene-aware context assembly (Phase 7+)
+    context = await assembleSceneContext(channelId, history, activeCharacterIds, {
+      userContext,
+    });
+  } else {
+    // Legacy context assembly
+    context = await assembleContext(
+      channelId,
+      history,
+      activeCharacterIds[0],
+    );
+  }
+
+  // --- Call LLM ---
   try {
     const model = getLanguageModel(process.env.DEFAULT_MODEL || DEFAULT_MODEL);
 
@@ -116,10 +168,18 @@ export async function handleMessage(
       gameTime: currentScene ? { ...currentScene.time } : gameTime,
     });
 
+    // Touch scene lastActiveAt (lightweight - only updates timestamp)
+    if (currentScene) {
+      touchScene(currentScene.id);
+    }
+
     // Process for memory extraction (fire and forget)
-    processMessageForMemory(channelId, content, response, activeCharacterId).catch(
-      (err) => console.error("Error processing message for memory:", err)
-    );
+    processMessageForMemory(
+      channelId,
+      effectiveContent,
+      response,
+      activeCharacterIds[0]
+    ).catch((err) => console.error("Error processing message for memory:", err));
 
     return response;
   } catch (error) {
