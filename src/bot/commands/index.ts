@@ -41,6 +41,7 @@ import { timeCommand, handleTimeCommand } from "./time";
 import { rollCommand, rCommand, handleRollCommand, handleRCommand } from "./roll";
 import { combatCommand, handleCombatCommand } from "./combat";
 import { relationshipCommand, handleRelationshipCommand } from "./relationship";
+import { factionCommand, handleFactionCommand } from "./faction";
 
 // All slash commands
 export const commands: CreateApplicationCommand[] = [
@@ -58,6 +59,7 @@ export const commands: CreateApplicationCommand[] = [
   rCommand,
   combatCommand,
   relationshipCommand,
+  factionCommand,
 ];
 
 // Register commands with Discord
@@ -155,6 +157,9 @@ export async function handleInteraction(
         break;
       case "relationship":
         await handleRelationshipCommand(bot, interaction);
+        break;
+      case "faction":
+        await handleFactionCommand(bot, interaction);
         break;
       default:
         await bot.helpers.sendInteractionResponse(interaction.id, interaction.token, {

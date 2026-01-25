@@ -1,6 +1,6 @@
 import { getDb } from "./index";
 
-export type EntityType = "character" | "location" | "item" | "concept";
+export type EntityType = "character" | "location" | "item" | "concept" | "faction";
 
 export interface Entity<T = Record<string, unknown>> {
   id: number;
@@ -100,6 +100,15 @@ export interface ItemData {
     reverseItem?: number;      // Item ID that reverses this
   };
 
+  [key: string]: unknown;
+}
+
+export interface FactionData {
+  description: string;
+  parentFactionId?: number;    // For sub-factions
+  motto?: string;
+  alignment?: string;          // "lawful", "chaotic", etc.
+  headquarters?: number;       // Location entity ID
   [key: string]: unknown;
 }
 

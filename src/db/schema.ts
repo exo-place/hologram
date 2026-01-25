@@ -244,6 +244,21 @@ export function initSchema(db: Database) {
     );
 
     CREATE INDEX IF NOT EXISTS idx_combat_log ON combat_log(combat_id);
+
+    -- Faction membership
+    CREATE TABLE IF NOT EXISTS faction_members (
+      id INTEGER PRIMARY KEY,
+      faction_id INTEGER REFERENCES entities(id) ON DELETE CASCADE,
+      character_id INTEGER REFERENCES entities(id) ON DELETE CASCADE,
+      rank TEXT,
+      standing INTEGER DEFAULT 0,
+      is_public BOOLEAN DEFAULT 1,
+      joined_at INTEGER DEFAULT (unixepoch()),
+      UNIQUE(faction_id, character_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_faction_members_faction ON faction_members(faction_id);
+    CREATE INDEX IF NOT EXISTS idx_faction_members_char ON faction_members(character_id);
   `);
 }
 
