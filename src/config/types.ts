@@ -83,6 +83,9 @@ export interface TimeConfig {
   useDayNight: boolean;
   periods: TimePeriod[];
   useScheduledEvents: boolean;
+  useRealtimeSync: boolean; // Auto-advance game time based on real-time gap
+  narrateTimeSkips: boolean; // LLM narrates what happened during absence
+  timeSkipNarrationThreshold: number; // Real minutes before narrating (default 60)
 }
 
 // === Character State ===

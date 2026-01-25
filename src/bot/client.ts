@@ -68,7 +68,7 @@ bot.events.messageCreate = async (message) => {
   );
 
   // Handle the message
-  const response = await handleMessage(
+  const result = await handleMessage(
     message.channelId.toString(),
     message.guildId?.toString(),
     message.author.id.toString(),
@@ -78,10 +78,16 @@ bot.events.messageCreate = async (message) => {
   );
 
   // Send response if we got one
-  if (response) {
+  if (result) {
     try {
+      // Send time-skip narration first (if any)
+      if (result.narration) {
+        await bot.helpers.sendMessage(message.channelId, {
+          content: `*${result.narration}*`,
+        });
+      }
       await bot.helpers.sendMessage(message.channelId, {
-        content: response,
+        content: result.response,
       });
     } catch (error) {
       console.error("Error sending message:", error);

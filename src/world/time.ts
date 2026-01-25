@@ -1,5 +1,6 @@
 import { getDb } from "../db";
 import { type TimeState, getActiveScene, updateScene, type Scene } from "../scene";
+import type { WorldConfig } from "../config/types";
 
 // Default time periods (day/night cycle)
 export const DEFAULT_PERIODS = [
@@ -595,6 +596,128 @@ export function formatTimeForContext(
       lines.push(`Season: ${season}`);
     }
   }
+
+  return lines.join("\n");
+}
+
+// === Realtime Sync ===
+
+export interface RealtimeSyncResult {
+  advanced: boolean;
+  gameMinutesAdvanced: number;
+  realMinutesElapsed: number;
+  duration: { days: number; hours: number; minutes: number };
+  previousTime: TimeState;
+  newTime: TimeState;
+  triggeredEvents: ScheduledEvent[];
+}
+
+/**
+ * Sync game time with real-world clock for realtime mode.
+ * Computes the real-time gap since last activity, converts to game time
+ * via realtimeRatio, and advances the scene.
+ */
+export function syncRealtimeIfNeeded(
+  scene: Scene,
+  config: WorldConfig
+): RealtimeSyncResult {
+  const empty: RealtimeSyncResult = {
+    advanced: false,
+    gameMinutesAdvanced: 0,
+    realMinutesElapsed: 0,
+    duration: { days: 0, hours: 0, minutes: 0 },
+    previousTime: { ...scene.time },
+    newTime: { ...scene.time },
+    triggeredEvents: [],
+  };
+
+  if (!config.time.enabled || config.time.mode !== "realtime" || !config.time.useRealtimeSync) {
+    return empty;
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  const realSeconds = now - scene.lastActiveAt;
+  const realMinutes = realSeconds / 60;
+
+  // Convert real hours to game hours via ratio
+  const realHours = realSeconds / 3600;
+  const gameHours = realHours * config.time.realtimeRatio;
+  const gameMinutes = Math.floor(gameHours * 60);
+
+  if (gameMinutes < 1) {
+    return empty;
+  }
+
+  const previousTime = { ...scene.time };
+
+  const duration = {
+    days: Math.floor(gameMinutes / (24 * 60)),
+    hours: Math.floor((gameMinutes % (24 * 60)) / 60),
+    minutes: gameMinutes % 60,
+  };
+
+  const result = advanceSceneTime(scene.channelId, duration);
+  if (!result) return empty;
+
+  return {
+    advanced: true,
+    gameMinutesAdvanced: gameMinutes,
+    realMinutesElapsed: Math.floor(realMinutes),
+    duration,
+    previousTime,
+    newTime: result.scene.time,
+    triggeredEvents: result.triggered,
+  };
+}
+
+/**
+ * Build a prompt for LLM time-skip narration.
+ * Returns null if narration is disabled or the gap is below threshold.
+ */
+export function buildTimeSkipNarrationPrompt(
+  scene: Scene,
+  syncResult: RealtimeSyncResult,
+  config: WorldConfig
+): string | null {
+  if (!config.time.narrateTimeSkips) return null;
+
+  // Check threshold (real minutes)
+  if (syncResult.realMinutesElapsed < config.time.timeSkipNarrationThreshold) {
+    return null;
+  }
+
+  const { duration, previousTime, newTime } = syncResult;
+
+  // Build readable duration
+  const parts: string[] = [];
+  if (duration.days > 0) parts.push(`${duration.days} day${duration.days > 1 ? "s" : ""}`);
+  if (duration.hours > 0) parts.push(`${duration.hours} hour${duration.hours > 1 ? "s" : ""}`);
+  if (duration.minutes > 0) parts.push(`${duration.minutes} minute${duration.minutes > 1 ? "s" : ""}`);
+  const durationStr = parts.join(", ");
+
+  const prevPeriod = getTimePeriod(previousTime.hour);
+  const newPeriod = getTimePeriod(newTime.hour);
+
+  const lines = [
+    "You are narrating a time skip in a roleplay scene.",
+    `${durationStr} of in-game time has passed.`,
+    `Before: Day ${previousTime.day + 1}, ${formatTime(previousTime)} (${prevPeriod.name})`,
+    `After: Day ${newTime.day + 1}, ${formatTime(newTime)} (${newPeriod.name})`,
+  ];
+
+  if (scene.weather) {
+    lines.push(`Weather: ${scene.weather}`);
+  }
+  if (scene.ambience) {
+    lines.push(`Ambience: ${scene.ambience}`);
+  }
+
+  lines.push("");
+  lines.push(
+    "Write a brief atmospheric narration (2-4 sentences) describing the passage of time. " +
+    "Focus on environmental changes (light, sounds, weather shifts), not character actions. " +
+    "Use present tense. Do not address the reader directly."
+  );
 
   return lines.join("\n");
 }

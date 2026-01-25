@@ -10,6 +10,8 @@ import { processMessageForMemory } from "../../memory/tiers";
 import { getActiveScene, getActiveCharacters, touchScene } from "../../scene";
 import { parseProxyMessage, formatProxyForContext } from "../../proxies";
 import { getPersona, formatPersonaForContext } from "../../personas";
+import { getWorldConfig } from "../../config";
+import { syncRealtimeIfNeeded, buildTimeSkipNarrationPrompt } from "../../world/time";
 
 // In-memory message history per channel
 const channelMessages = new Map<string, Message[]>();
@@ -64,6 +66,12 @@ export function getActiveCharacter(channelId: string): number | undefined {
   return channelActiveCharacter.get(channelId);
 }
 
+/** Result from message handling, may include time-skip narration */
+export interface MessageResult {
+  response: string;
+  narration?: string; // Time-skip narration to send as a separate message before the response
+}
+
 export async function handleMessage(
   channelId: string,
   guildId: string | undefined,
@@ -71,7 +79,7 @@ export async function handleMessage(
   authorName: string,
   content: string,
   isBotMentioned: boolean
-): Promise<string | null> {
+): Promise<MessageResult | null> {
   // Get active scene (if any)
   const scene = getActiveScene(channelId);
   const worldId = scene?.worldId;
@@ -110,6 +118,40 @@ export async function handleMessage(
   const shouldRespond = isChannelEnabled(channelId) || isBotMentioned;
   if (!shouldRespond) {
     return null;
+  }
+
+  // --- Realtime sync: auto-advance game time based on real-time gap ---
+  let narration: string | undefined;
+
+  if (scene) {
+    const worldConfig = getWorldConfig(scene.worldId);
+    const syncResult = syncRealtimeIfNeeded(scene, worldConfig);
+
+    if (syncResult.advanced) {
+      // Generate time-skip narration if configured and gap is significant
+      const narrationPrompt = buildTimeSkipNarrationPrompt(scene, syncResult, worldConfig);
+      if (narrationPrompt) {
+        try {
+          const model = getLanguageModel(process.env.DEFAULT_MODEL || DEFAULT_MODEL);
+          const narrationResult = await generateText({
+            model,
+            system: narrationPrompt,
+            messages: [{ role: "user", content: "Narrate the passage of time." }],
+          });
+          narration = narrationResult.text;
+
+          // Record narration in history as system context
+          addToHistory(channelId, {
+            role: "assistant",
+            content: `*${narration}*`,
+            timestamp: Date.now(),
+            gameTime: syncResult.newTime,
+          });
+        } catch (err) {
+          console.error("Error generating time-skip narration:", err);
+        }
+      }
+    }
   }
 
   // --- Determine active AI character IDs ---
@@ -181,7 +223,7 @@ export async function handleMessage(
       activeCharacterIds[0]
     ).catch((err) => console.error("Error processing message for memory:", err));
 
-    return response;
+    return { response, narration };
   } catch (error) {
     console.error("Error generating response:", error);
     return null;

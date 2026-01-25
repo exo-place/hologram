@@ -71,6 +71,9 @@ export const DEFAULT_TIME: TimeConfig = {
     { name: "night", startHour: 21, lightLevel: "dark" },
   ],
   useScheduledEvents: false,
+  useRealtimeSync: false,
+  narrateTimeSkips: false,
+  timeSkipNarrationThreshold: 60, // Real minutes before narrating
 };
 
 export const DEFAULT_CHARACTER_STATE: CharacterStateConfig = {
@@ -366,6 +369,10 @@ export const features = {
     config.relationships.enabled && config.relationships.useFactions,
   timestamps: (config: WorldConfig) =>
     config.context.showTimestamps,
+  realtimeSync: (config: WorldConfig) =>
+    config.time.enabled && config.time.mode === "realtime" && config.time.useRealtimeSync,
+  timeSkipNarration: (config: WorldConfig) =>
+    config.time.enabled && config.time.narrateTimeSkips,
 };
 
 /** Get the resolved config for a world (DB config merged with defaults) */
