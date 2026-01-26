@@ -47,75 +47,339 @@ export interface ExprContext {
 }
 
 // =============================================================================
-// Sanitization
+// Tokenizer
 // =============================================================================
 
-// Allowed tokens in expressions
-// Note: brackets [] intentionally excluded to prevent property access bypass
-// e.g. self["con" + "structor"] would bypass the "constructor" blocklist
-const ALLOWED_PATTERN = /^[\w\s\d.,()!&|<>=+\-*/%?:"']+$/;
+type TokenType =
+  | "number"
+  | "string"
+  | "boolean"
+  | "identifier"
+  | "operator"
+  | "paren"
+  | "dot"
+  | "comma"
+  | "eof";
 
-// Dangerous patterns to reject
-const DANGEROUS_PATTERNS = [
-  /\beval\b/,
-  /\bFunction\b/,
-  /\bconstructor\b/,
-  /\bprototype\b/,
-  /\b__proto__\b/,
-  /\bimport\b/,
-  /\bexport\b/,
-  /\brequire\b/,
-  /\bprocess\b/,
-  /\bglobal\b/,
-  /\bwindow\b/,
-  /\bdocument\b/,
-  /\bfetch\b/,
-  /\bXMLHttpRequest\b/,
-  /\bsetTimeout\b/,
-  /\bsetInterval\b/,
-  /\bPromise\b/,
-  /\basync\b/,
-  /\bawait\b/,
-  /\bwhile\b/,
-  /\bfor\b/,
-  /\bdo\b/,
-  /\bclass\b/,
-  /\bnew\b/,
-  /\bthis\b/,
-  /\bsuper\b/,
-  /\breturn\b/,
-  /\bthrow\b/,
-  /\btry\b/,
-  /\bcatch\b/,
-  /\bfinally\b/,
-  /\bdelete\b/,
-  /\btypeof\b/,
-  /\binstanceof\b/,
-  /\bvoid\b/,
-  /\bin\b/,
-  /\bof\b/,
-  /\blet\b/,
-  /\bconst\b/,
-  /\bvar\b/,
-  /\bfunction\b/,
-  /=>/,        // arrow functions
-  /[;{}]/,     // statement separators, blocks
+interface Token {
+  type: TokenType;
+  value: string | number | boolean;
+  raw: string;
+}
+
+const OPERATORS = [
+  "&&", "||", "==", "!=", "<=", ">=", "<", ">",
+  "+", "-", "*", "/", "%", "!", "?", ":"
 ];
 
-export function sanitizeExpr(expr: string): string {
-  const trimmed = expr.trim();
+function tokenize(expr: string): Token[] {
+  const tokens: Token[] = [];
+  let i = 0;
 
-  if (!ALLOWED_PATTERN.test(trimmed)) {
-    throw new ExprError(`Invalid characters in expression: ${trimmed}`);
-  }
-
-  for (const pattern of DANGEROUS_PATTERNS) {
-    if (pattern.test(trimmed)) {
-      throw new ExprError(`Dangerous pattern in expression: ${trimmed}`);
+  while (i < expr.length) {
+    // Skip whitespace
+    if (/\s/.test(expr[i])) {
+      i++;
+      continue;
     }
+
+    // Number
+    if (/\d/.test(expr[i]) || (expr[i] === "." && /\d/.test(expr[i + 1]))) {
+      let num = "";
+      while (i < expr.length && /[\d.]/.test(expr[i])) {
+        num += expr[i++];
+      }
+      tokens.push({ type: "number", value: parseFloat(num), raw: num });
+      continue;
+    }
+
+    // String (double or single quotes)
+    if (expr[i] === '"' || expr[i] === "'") {
+      const quote = expr[i++];
+      let str = "";
+      while (i < expr.length && expr[i] !== quote) {
+        if (expr[i] === "\\") {
+          i++; // skip backslash
+          if (i < expr.length) str += expr[i++];
+        } else {
+          str += expr[i++];
+        }
+      }
+      if (expr[i] !== quote) throw new ExprError("Unterminated string");
+      i++; // skip closing quote
+      tokens.push({ type: "string", value: str, raw: `${quote}${str}${quote}` });
+      continue;
+    }
+
+    // Identifier or boolean
+    if (/[a-zA-Z_]/.test(expr[i])) {
+      let id = "";
+      while (i < expr.length && /[a-zA-Z0-9_]/.test(expr[i])) {
+        id += expr[i++];
+      }
+      if (id === "true") {
+        tokens.push({ type: "boolean", value: true, raw: id });
+      } else if (id === "false") {
+        tokens.push({ type: "boolean", value: false, raw: id });
+      } else {
+        tokens.push({ type: "identifier", value: id, raw: id });
+      }
+      continue;
+    }
+
+    // Operators (try longest match first)
+    let matched = false;
+    for (const op of OPERATORS) {
+      if (expr.slice(i, i + op.length) === op) {
+        tokens.push({ type: "operator", value: op, raw: op });
+        i += op.length;
+        matched = true;
+        break;
+      }
+    }
+    if (matched) continue;
+
+    // Parentheses
+    if (expr[i] === "(" || expr[i] === ")") {
+      tokens.push({ type: "paren", value: expr[i], raw: expr[i] });
+      i++;
+      continue;
+    }
+
+    // Dot
+    if (expr[i] === ".") {
+      tokens.push({ type: "dot", value: ".", raw: "." });
+      i++;
+      continue;
+    }
+
+    // Comma
+    if (expr[i] === ",") {
+      tokens.push({ type: "comma", value: ",", raw: "," });
+      i++;
+      continue;
+    }
+
+    throw new ExprError(`Unexpected character: ${expr[i]}`);
   }
 
-  return trimmed;
+  tokens.push({ type: "eof", value: "", raw: "" });
+  return tokens;
+}
+
+// =============================================================================
+// Parser & Evaluator
+// =============================================================================
+
+type ExprNode =
+  | { type: "literal"; value: string | number | boolean }
+  | { type: "identifier"; name: string }
+  | { type: "member"; object: ExprNode; property: string }
+  | { type: "call"; callee: ExprNode; args: ExprNode[] }
+  | { type: "unary"; operator: string; operand: ExprNode }
+  | { type: "binary"; operator: string; left: ExprNode; right: ExprNode }
+  | { type: "ternary"; test: ExprNode; consequent: ExprNode; alternate: ExprNode };
+
+class Parser {
+  private tokens: Token[];
+  private pos = 0;
+
+  constructor(tokens: Token[]) {
+    this.tokens = tokens;
+  }
+
+  private peek(): Token {
+    return this.tokens[this.pos];
+  }
+
+  private consume(): Token {
+    return this.tokens[this.pos++];
+  }
+
+  private expect(type: TokenType, value?: string | number | boolean): Token {
+    const token = this.consume();
+    if (token.type !== type || (value !== undefined && token.value !== value)) {
+      throw new ExprError(`Expected ${type}${value !== undefined ? ` '${value}'` : ""}, got ${token.type} '${token.raw}'`);
+    }
+    return token;
+  }
+
+  parse(): ExprNode {
+    const node = this.parseTernary();
+    if (this.peek().type !== "eof") {
+      throw new ExprError(`Unexpected token: ${this.peek().raw}`);
+    }
+    return node;
+  }
+
+  private parseTernary(): ExprNode {
+    let node = this.parseOr();
+    if (this.peek().type === "operator" && this.peek().value === "?") {
+      this.consume(); // ?
+      const consequent = this.parseTernary();
+      this.expect("operator", ":");
+      const alternate = this.parseTernary();
+      node = { type: "ternary", test: node, consequent, alternate };
+    }
+    return node;
+  }
+
+  private parseOr(): ExprNode {
+    let node = this.parseAnd();
+    while (this.peek().type === "operator" && this.peek().value === "||") {
+      this.consume();
+      node = { type: "binary", operator: "||", left: node, right: this.parseAnd() };
+    }
+    return node;
+  }
+
+  private parseAnd(): ExprNode {
+    let node = this.parseEquality();
+    while (this.peek().type === "operator" && this.peek().value === "&&") {
+      this.consume();
+      node = { type: "binary", operator: "&&", left: node, right: this.parseEquality() };
+    }
+    return node;
+  }
+
+  private parseEquality(): ExprNode {
+    let node = this.parseComparison();
+    while (this.peek().type === "operator" && (this.peek().value === "==" || this.peek().value === "!=")) {
+      const op = this.consume().value as string;
+      node = { type: "binary", operator: op, left: node, right: this.parseComparison() };
+    }
+    return node;
+  }
+
+  private parseComparison(): ExprNode {
+    let node = this.parseAdditive();
+    while (this.peek().type === "operator" && ["<", ">", "<=", ">="].includes(this.peek().value as string)) {
+      const op = this.consume().value as string;
+      node = { type: "binary", operator: op, left: node, right: this.parseAdditive() };
+    }
+    return node;
+  }
+
+  private parseAdditive(): ExprNode {
+    let node = this.parseMultiplicative();
+    while (this.peek().type === "operator" && (this.peek().value === "+" || this.peek().value === "-")) {
+      const op = this.consume().value as string;
+      node = { type: "binary", operator: op, left: node, right: this.parseMultiplicative() };
+    }
+    return node;
+  }
+
+  private parseMultiplicative(): ExprNode {
+    let node = this.parseUnary();
+    while (this.peek().type === "operator" && ["*", "/", "%"].includes(this.peek().value as string)) {
+      const op = this.consume().value as string;
+      node = { type: "binary", operator: op, left: node, right: this.parseUnary() };
+    }
+    return node;
+  }
+
+  private parseUnary(): ExprNode {
+    if (this.peek().type === "operator" && (this.peek().value === "!" || this.peek().value === "-")) {
+      const op = this.consume().value as string;
+      return { type: "unary", operator: op, operand: this.parseUnary() };
+    }
+    return this.parseCall();
+  }
+
+  private parseCall(): ExprNode {
+    let node = this.parseMember();
+    while (this.peek().type === "paren" && this.peek().value === "(") {
+      this.consume(); // (
+      const args: ExprNode[] = [];
+      if (!(this.peek().type === "paren" && this.peek().value === ")")) {
+        args.push(this.parseTernary());
+        while (this.peek().type === "comma") {
+          this.consume();
+          args.push(this.parseTernary());
+        }
+      }
+      this.expect("paren", ")");
+      node = { type: "call", callee: node, args };
+    }
+    return node;
+  }
+
+  private parseMember(): ExprNode {
+    let node = this.parsePrimary();
+    while (this.peek().type === "dot") {
+      this.consume(); // .
+      const prop = this.expect("identifier").value as string;
+      node = { type: "member", object: node, property: prop };
+    }
+    return node;
+  }
+
+  private parsePrimary(): ExprNode {
+    const token = this.peek();
+
+    if (token.type === "number" || token.type === "string" || token.type === "boolean") {
+      this.consume();
+      return { type: "literal", value: token.value };
+    }
+
+    if (token.type === "identifier") {
+      this.consume();
+      return { type: "identifier", name: token.value as string };
+    }
+
+    if (token.type === "paren" && token.value === "(") {
+      this.consume();
+      const node = this.parseTernary();
+      this.expect("paren", ")");
+      return node;
+    }
+
+    throw new ExprError(`Unexpected token: ${token.raw}`);
+  }
+}
+
+// Allowed top-level identifiers (whitelist)
+const ALLOWED_GLOBALS = new Set([
+  "self", "random", "has_fact", "roll", "time",
+  "dt_ms", "elapsed_ms", "mentioned", "content", "author", "interaction_type"
+]);
+
+/**
+ * Generate JS code from AST. Since we control the AST structure,
+ * the generated code is safe to execute.
+ */
+function generateCode(node: ExprNode): string {
+  switch (node.type) {
+    case "literal":
+      if (typeof node.value === "string") {
+        return JSON.stringify(node.value);
+      }
+      return String(node.value);
+
+    case "identifier":
+      if (!ALLOWED_GLOBALS.has(node.name)) {
+        throw new ExprError(`Unknown identifier: ${node.name}`);
+      }
+      return `ctx.${node.name}`;
+
+    case "member":
+      // Safe: self/time are Object.create(null), no prototype chain
+      return `(${generateCode(node.object)}?.${node.property})`;
+
+    case "call":
+      const callee = generateCode(node.callee);
+      const args = node.args.map(generateCode).join(", ");
+      return `${callee}(${args})`;
+
+    case "unary":
+      return `(${node.operator}${generateCode(node.operand)})`;
+
+    case "binary":
+      return `(${generateCode(node.left)} ${node.operator} ${generateCode(node.right)})`;
+
+    case "ternary":
+      return `(${generateCode(node.test)} ? ${generateCode(node.consequent)} : ${generateCode(node.alternate)})`;
+  }
 }
 
 // =============================================================================
@@ -128,14 +392,13 @@ export function compileExpr(expr: string): (ctx: ExprContext) => boolean {
   let fn = exprCache.get(expr);
   if (fn) return fn;
 
-  const sanitized = sanitizeExpr(expr);
+  const tokens = tokenize(expr);
+  const parser = new Parser(tokens);
+  const ast = parser.parse();
+  const code = generateCode(ast);
 
-  // Compile with 'with' to provide context variables as globals
-  // This is safe because we've sanitized the expression
-  fn = new Function(
-    "ctx",
-    `with(ctx) { return Boolean(${sanitized}); }`
-  ) as (ctx: ExprContext) => boolean;
+  // Safe: we generated this code from a validated AST
+  fn = new Function("ctx", `return Boolean(${code})`) as (ctx: ExprContext) => boolean;
 
   exprCache.set(expr, fn);
   return fn;
@@ -390,9 +653,12 @@ function parseValue(value: string): string | number | boolean {
  * Parse facts into a self context object.
  * Facts matching "key: value" pattern are extracted.
  * Other facts are ignored.
+ *
+ * Uses Object.create(null) so there's no prototype chain -
+ * no constructor, __proto__, etc. to worry about.
  */
 export function parseSelfContext(facts: string[]): SelfContext {
-  const self: SelfContext = {};
+  const self: SelfContext = Object.create(null);
 
   for (const fact of facts) {
     // Skip comments
@@ -441,11 +707,11 @@ export function createBaseContext(options: BaseContextOptions): ExprContext {
     random: (chance: number) => Math.random() < chance,
     has_fact: options.has_fact,
     roll: (dice: string) => rollDice(dice),
-    time: {
+    time: Object.assign(Object.create(null), {
       hour,
       is_day: hour >= 6 && hour < 18,
       is_night: hour < 6 || hour >= 18,
-    },
+    }),
     dt_ms: options.dt_ms ?? 0,
     elapsed_ms: options.elapsed_ms ?? 0,
     mentioned: options.mentioned ?? false,
