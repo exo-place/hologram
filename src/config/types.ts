@@ -201,6 +201,15 @@ export interface ResponseConfig {
   globalCooldown: number; // Seconds between any response in channel (0 = no limit)
 }
 
+// === Preset Notes ===
+export interface PresetNote {
+  content: string;
+  /** Where to insert: "system" (system prompt), "start" (before messages), or number (N messages from bottom) */
+  depth: "system" | "start" | number;
+  /** Optional condition: only include if this string matches channel or character context */
+  condition?: string;
+}
+
 // === Context Assembly ===
 export interface ContextConfig {
   maxTokens: number;
@@ -209,6 +218,9 @@ export interface ContextConfig {
   includeWorldLore: boolean;
   includeWorldRules: boolean;
   dynamicPriority: boolean; // Adjust based on query
+
+  // Preset notes (Author's Notes / Jailbreak style)
+  presetNotes: PresetNote[];
 
   // Inter-message timestamps
   showTimestamps: boolean; // Inject time markers between messages in context

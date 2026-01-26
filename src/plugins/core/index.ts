@@ -359,7 +359,33 @@ const llmMiddleware: Middleware = {
     }
 
     const historyMessages = ctx.config?.context.historyMessages ?? 20;
-    const messages = formatMessagesForAI(ctx.history.slice(-historyMessages));
+    const presetNotes = ctx.config?.context.presetNotes ?? [];
+
+    // Build system prompt with preset notes at depth="system"
+    let systemPrompt = ctx.systemPrompt;
+    const systemNotes = presetNotes
+      .filter((n) => n.depth === "system")
+      .map((n) => n.content);
+    if (systemNotes.length > 0) {
+      systemPrompt += "\n\n" + systemNotes.join("\n\n");
+    }
+
+    // Format messages and inject preset notes at specified depths
+    const rawMessages = ctx.history.slice(-historyMessages);
+    let messages = formatMessagesForAI(rawMessages);
+
+    // Inject preset notes at specific depths
+    const depthNotes = presetNotes.filter((n) => typeof n.depth === "number" || n.depth === "start");
+    for (const note of depthNotes) {
+      const depth = note.depth === "start" ? messages.length : note.depth;
+      // Insert at position (from bottom) - depth 0 = end, depth 1 = before last message, etc.
+      const insertIndex = Math.max(0, messages.length - (depth as number));
+      messages = [
+        ...messages.slice(0, insertIndex),
+        { role: "user" as const, content: `[Author's Note: ${note.content}]` },
+        ...messages.slice(insertIndex),
+      ];
+    }
 
     // Need at least one message to respond to
     if (messages.length === 0) {
@@ -369,7 +395,7 @@ const llmMiddleware: Middleware = {
 
     const result = await generateText({
       model,
-      system: ctx.systemPrompt,
+      system: systemPrompt,
       messages,
     });
 

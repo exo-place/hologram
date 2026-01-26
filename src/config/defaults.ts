@@ -131,6 +131,7 @@ export const DEFAULT_CONTEXT: ContextConfig = {
   includeWorldLore: true,
   includeWorldRules: true,
   dynamicPriority: true,
+  presetNotes: [], // Author's notes / jailbreaks - empty by default
   showTimestamps: false,
   timestampFormat: "relative",
   timestampThreshold: 300, // 5 minutes
