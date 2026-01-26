@@ -67,6 +67,9 @@ export const bot = createBot({
 
 let botUserId: bigint | null = null;
 
+// Track startup state - guildCreate fires for all existing guilds on startup
+let isInitialStartup = true;
+
 // Message deduplication to prevent double responses
 const processedMessages = new Set<string>();
 const MAX_PROCESSED_MESSAGES = 1000;
@@ -105,11 +108,27 @@ bot.events.ready = async (payload) => {
   startEventScheduler({
     sendMessage: (channelId, options) => bot.helpers.sendMessage(channelId, options),
   });
+
+  // Mark initial startup complete after a delay
+  // This allows all cached guilds to fire guildCreate without triggering welcome messages
+  setTimeout(() => {
+    isInitialStartup = false;
+    info("Initial startup complete, will now welcome new guilds");
+  }, 5000);
 };
 
-// Handle guild join - send welcome message
+// Handle guild join - send welcome message (only for new guilds, not on startup)
 bot.events.guildCreate = async (guild) => {
-  info("Joined guild", { guildId: guild.id.toString(), name: guild.name });
+  // Skip welcome message during initial startup (existing guilds fire guildCreate on connect)
+  if (isInitialStartup) {
+    debug("Skipping welcome for existing guild during startup", {
+      guildId: guild.id.toString(),
+      name: guild.name
+    });
+    return;
+  }
+
+  info("Joined new guild", { guildId: guild.id.toString(), name: guild.name });
 
   // Send welcome message to system channel if available
   if (guild.systemChannelId) {

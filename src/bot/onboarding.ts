@@ -30,60 +30,9 @@ export async function sendWelcomeMessage(
   _guildName: string
 ): Promise<void> {
   await bot.helpers.sendMessage(channelId, {
-    embeds: [
-      {
-        title: "Welcome to Hologram!",
-        description:
-          "I'm an RP bot with smart context, memory, and world management. " +
-          "Let me help you get set up.",
-        color: 0x5865f2, // Discord blurple
-        fields: [
-          {
-            name: "Quick Start",
-            value: "Click **Quick Setup** to create a world and character in seconds.",
-            inline: false,
-          },
-          {
-            name: "Choose Your Style",
-            value:
-              "Different modes for different playstyles: simple chat, text adventure, " +
-              "tabletop RPG, and more.",
-            inline: false,
-          },
-        ],
-        footer: {
-          text: "Use /help anytime to see what I can do",
-        },
-      },
-    ],
-    components: [
-      {
-        type: MessageComponentTypes.ActionRow,
-        components: [
-          {
-            type: MessageComponentTypes.Button,
-            style: ButtonStyles.Primary,
-            label: "Quick Setup",
-            customId: "onboarding:quick_setup",
-            emoji: { name: "🚀" },
-          },
-          {
-            type: MessageComponentTypes.Button,
-            style: ButtonStyles.Secondary,
-            label: "Choose Mode",
-            customId: "onboarding:choose_mode",
-            emoji: { name: "🎮" },
-          },
-          {
-            type: MessageComponentTypes.Button,
-            style: ButtonStyles.Link,
-            label: "Documentation",
-            url: "https://github.com/pterror/hologram#readme",
-            emoji: { name: "📖" },
-          },
-        ],
-      },
-    ],
+    content:
+      "Thanks for adding me! To get started, go to the channel you want to use for RP and run `/setup`.\n\n" +
+      "-# Use `/help` to learn more about what I can do.",
   });
 }
 
