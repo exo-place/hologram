@@ -18,10 +18,17 @@
             bun
             # Native deps for sqlite-vec
             sqlite
+            # Native deps for sharp (via @huggingface/transformers)
+            vips
+            pkg-config
           ];
           shellHook = ''
             git config core.hooksPath .githooks
           '';
+          # sharp needs libstdc++
+          LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
+            pkgs.stdenv.cc.cc.lib
+          ];
         };
       }
     );
