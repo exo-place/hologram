@@ -17,9 +17,10 @@ import {
   type SceneCharacter,
 } from "../../scene";
 import { getWorldConfig } from "../../config";
-import { getEntity, type CharacterData, type Entity } from "../../db/entities";
-import { getLocation, formatLocationForContext } from "../../world/locations";
+import { getEntity, type CharacterData, type ItemData, type Entity } from "../../db/entities";
+import { getLocation, getConnectedLocations, getChildLocations } from "../../world/locations";
 import { getTimePeriod } from "../../world/time";
+import { getInventory } from "../../world/inventory";
 
 // =============================================================================
 // Legacy fallback: per-channel character (for sceneless operation)
@@ -87,6 +88,7 @@ const sceneStateFormatter: Formatter = {
   shouldRun: (ctx) => ctx.scene !== null,
   fn: (ctx) => {
     const scene = ctx.scene!;
+    const worldConfig = ctx.config;
     const lines: string[] = [];
 
     // Time
@@ -102,17 +104,103 @@ const sceneStateFormatter: Formatter = {
       lines.push(`Weather: ${scene.weather}`);
     }
 
-    // Location
+    // Location with enhanced visibility
     if (scene.locationId) {
       const location = getLocation(scene.locationId);
       if (location) {
         lines.push("");
-        lines.push(formatLocationForContext(location));
-      }
-    }
+        lines.push(`## Location: ${location.name}`);
+        lines.push(location.data.description);
 
-    // Ambience
-    if (scene.ambience) {
+        // Ambience (from location or scene)
+        const ambience = scene.ambience || location.data.ambience;
+        if (ambience) {
+          lines.push("");
+          lines.push(`*${ambience}*`);
+        }
+
+        // Location properties as context hints
+        if (location.data.properties) {
+          const props = location.data.properties;
+          const hints: string[] = [];
+
+          if (props.indoor) hints.push("indoors");
+          if (props.outdoor) hints.push("outdoors");
+          if (props.lightLevel) hints.push(`${props.lightLevel} lighting`);
+          if (props.temperature) hints.push(`${props.temperature}`);
+          if (props.safe) hints.push("safe area");
+          if (props.dangerous) hints.push("dangerous area");
+
+          if (hints.length > 0) {
+            lines.push(`(${hints.join(", ")})`);
+          }
+        }
+
+        // Items at location (location "owns" them - ground items, props)
+        if (worldConfig?.inventory?.enabled) {
+          const locationItems = getInventory(location.id);
+          if (locationItems.length > 0) {
+            lines.push("");
+            lines.push("**Visible Items:**");
+            for (const item of locationItems.slice(0, 10)) { // Limit to 10
+              let itemLine = `- ${item.name}`;
+              if (item.quantity > 1) itemLine += ` (x${item.quantity})`;
+              if (item.description) {
+                const shortDesc = item.description.length > 50
+                  ? item.description.slice(0, 50) + "..."
+                  : item.description;
+                itemLine += `: ${shortDesc}`;
+              }
+              lines.push(itemLine);
+            }
+            if (locationItems.length > 10) {
+              lines.push(`- ...and ${locationItems.length - 10} more items`);
+            }
+          }
+        }
+
+        // Sub-locations (rooms, areas within)
+        if (worldConfig?.locations?.enabled && location.worldId) {
+          const children = getChildLocations(location.id, location.worldId);
+          if (children.length > 0) {
+            lines.push("");
+            lines.push("**Areas:**");
+            for (const child of children.slice(0, 5)) {
+              lines.push(`- ${child.name}`);
+            }
+            if (children.length > 5) {
+              lines.push(`- ...and ${children.length - 5} more areas`);
+            }
+          }
+        }
+
+        // Exits with more detail
+        if (worldConfig?.locations?.enabled) {
+          const connections = getConnectedLocations(location.id);
+          if (connections.length > 0) {
+            lines.push("");
+            lines.push("**Exits:**");
+            for (const conn of connections.slice(0, 8)) {
+              let exitLine = `- ${conn.location.name}`;
+              if (conn.connection.type) {
+                exitLine += ` (${conn.connection.type})`;
+              }
+              if (conn.connection.travelTime) {
+                exitLine += ` [${conn.connection.travelTime} min]`;
+              }
+              if (conn.connection.description) {
+                exitLine += ` - ${conn.connection.description}`;
+              }
+              lines.push(exitLine);
+            }
+            if (connections.length > 8) {
+              lines.push(`- ...and ${connections.length - 8} more exits`);
+            }
+          }
+        }
+      }
+    } else if (scene.ambience) {
+      // Ambience without location
       lines.push("");
       lines.push(`*${scene.ambience}*`);
     }
