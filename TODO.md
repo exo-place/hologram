@@ -179,6 +179,31 @@ Allow users and guilds to provide their own API keys for LLM and image providers
 
 **Environment:** Set `BYOK_MASTER_KEY` (32-byte hex) to enable.
 
+### Architecture Rethink (High Priority)
+
+See `docs/postmortem/2026-01-26-ux-critique.md` for full analysis.
+
+**Core Problem:** Over-engineered scaffolding. SillyTavern works with zero scaffolding. We have 7 formatters adding markdown headers and structure that the LLM doesn't need.
+
+- [ ] Strip prompt scaffolding - remove markdown headers, sections, structure
+- [ ] Per-character memory - each character should have their own fact/memory store
+- [x] Example dialogue as user/assistant messages (correct, matches SillyTavern)
+- [ ] Collapse concepts: world/scene/session/channel → simpler model
+- [ ] Command consolidation: 28 commands → ~10 essential
+- [ ] Silent failure elimination - always explain why nothing happened
+- [ ] Dynamic token allocation - not hardcoded 20-message window
+
+**Refactors:**
+- [ ] Character location system - characters should have locations, not just scenes
+- [ ] Remove 'active character in channel' concept
+- [ ] Add hearing distance / proximity awareness
+- [ ] Audit TiTS-style transformation/form functionality
+
+**Features:**
+- [ ] Shareable world/character template presets
+- [ ] Clone/fork functionality with permissions
+- [ ] Zero-command start (mention → "who should I be?" → works)
+
 ### Plugin Ideas
 
 - [ ] D&D support as plugin
