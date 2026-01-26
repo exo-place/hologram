@@ -188,14 +188,16 @@ export function formatMessagesForContext(messages: Message[]): string {
 // User Onboarding Tracking
 // =============================================================================
 
-// Track users we've welcomed (in-memory, resets on restart - that's fine)
-const welcomedUsers = new Set<string>();
-
 export function isNewUser(userId: string): boolean {
-  if (welcomedUsers.has(userId)) return false;
-
   const db = getDb();
-  // Check if user has any entity mappings
+
+  // Check if already welcomed
+  const welcomed = db.prepare(`
+    SELECT 1 FROM welcomed_users WHERE discord_id = ? LIMIT 1
+  `).get(userId);
+  if (welcomed) return false;
+
+  // Check if user has any entity mappings (existing user)
   const hasMapping = db.prepare(`
     SELECT 1 FROM discord_entities WHERE discord_id = ? AND discord_type = 'user' LIMIT 1
   `).get(userId);
@@ -204,5 +206,8 @@ export function isNewUser(userId: string): boolean {
 }
 
 export function markUserWelcomed(userId: string): void {
-  welcomedUsers.add(userId);
+  const db = getDb();
+  db.prepare(`
+    INSERT OR IGNORE INTO welcomed_users (discord_id) VALUES (?)
+  `).run(userId);
 }

@@ -7,7 +7,7 @@ Discord bot for collaborative worldbuilding and roleplay, built on an entity-fac
 - **Runtime**: Bun (native SQLite, TypeScript-first)
 - **Discord**: Discordeno (Bun-native)
 - **LLM**: AI SDK v5 with provider-agnostic `provider:model` spec (default: `google:gemini-3-flash-preview`)
-- **Database**: bun:sqlite (5 tables)
+- **Database**: bun:sqlite (6 tables)
 - **Linting**: oxlint
 - **Type checking**: tsgo
 
@@ -52,7 +52,7 @@ Facts:
   - trigger: mention -> respond
 ```
 
-### Database (5 tables)
+### Database (6 tables)
 
 ```sql
 entities        -- id, name, created_by, created_at
@@ -60,6 +60,7 @@ facts           -- id, entity_id, content, created_at, updated_at
 discord_entities -- discord_id, discord_type, entity_id, scope_guild_id, scope_channel_id
 fact_embeddings -- (planned) vector search
 messages        -- channel_id, user_id, author_name, content, created_at
+welcomed_users  -- discord_id, welcomed_at (onboarding DM tracking)
 ```
 
 ### Message Pipeline
@@ -142,6 +143,7 @@ OPENAI_API_KEY=      # For OpenAI (optional)
 
 ## Core Rules
 
+- **No cutting corners. Ever.** If state needs to persist, use the database. If something needs tracking, track it properly. No "resets on restart is fine" or in-memory shortcuts for persistent data.
 - **Note things down immediately:** problems, tech debt, issues → TODO.md
 - **Do the work properly.** No undocumented workarounds.
 

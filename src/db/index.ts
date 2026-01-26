@@ -80,6 +80,14 @@ function initSchema(db: Database) {
     )
   `);
 
+  // Welcomed users (for onboarding DM tracking)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS welcomed_users (
+      discord_id TEXT PRIMARY KEY,
+      welcomed_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
   // Indexes
   db.exec(`CREATE INDEX IF NOT EXISTS idx_facts_entity ON facts(entity_id)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_discord_entities_lookup ON discord_entities(discord_id, discord_type)`);
