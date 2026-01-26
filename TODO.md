@@ -137,33 +137,20 @@ All integration and feature work from Phases 1-7 is done:
 
 ## Backlog
 
-### Image Generation
+### Image Generation ✓
 
-- [ ] Image gen to S3-compatible bucket (R2, S3, MinIO, etc.)
-  - **Research done** - see comparison below
-  - **Recommended**: RunComfy (easy) or RunPod/SaladCloud (cheap at scale)
+- [x] Image gen to S3-compatible bucket (R2, S3, MinIO, etc.)
+- [x] ComfyUI host abstraction (RunComfy, SaladCloud, RunPod, self-hosted)
+- [x] Workflow engine with variable substitution
+- [x] /imagine command (prompt, portrait, expression)
+- [x] Images plugin with [IMAGE:], [PORTRAIT:], [SCENE:] marker extraction
+- [x] ImageConfig in WorldConfig, disabled by default
 
-#### API Research (Jan 2026)
-
-| Platform | Custom Models | Scale to Zero | Pricing | Notes |
-|----------|---------------|---------------|---------|-------|
-| RunComfy | ✅ Full ComfyUI | ✅ Serverless API | $1.39/hr or per-gen | Best DX, one-click deploy |
-| RunPod | ✅ BYOM container | ✅ Serverless | ~$3.35/hr H100 | Cheapest raw compute |
-| SaladCloud | ✅ URL-based | ✅ Stateless | Per-compute | Horizontal scaling |
-| Fal.ai | ⚠️ Their models | ✅ Native | ~$0.035/MP | Fast cold starts |
-| Replicate | ✅ Deploy custom | ✅ Native | ~$5.04/hr H100 | Easy but expensive |
-
-All support scale-to-zero via serverless. Architecture should be provider-agnostic:
-- Abstract behind `ImageProvider` interface
-- User configures provider + credentials in world config
-- Small guilds: Fal.ai/Replicate (no infra)
-- Large guilds: RunPod/SaladCloud (cheaper at volume)
-
-**Next steps:**
-- [ ] Prototype with RunComfy (easiest path)
-- [ ] Design provider-agnostic `ImageProvider` interface
-- [ ] Workflow: prompt → provider API → S3-compat upload → Discord embed
-- [ ] Add provider selection to world config
+**Future enhancements:**
+- [ ] Expression workflow with Qwen image understanding
+- [ ] Custom workflow upload via command
+- [ ] Auto-portrait on character creation
+- [ ] Scene illustration triggers on location change
 
 ### Plugin Ideas
 
