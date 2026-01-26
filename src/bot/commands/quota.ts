@@ -6,7 +6,8 @@
 
 import { type CreateApplicationCommand } from "@discordeno/bot";
 import type { HologramBot, HologramInteraction } from "../types";
-import { respond, USER_APP_INTEGRATION } from "./index";
+import { respond } from "./index";
+import { USER_APP_INTEGRATION } from "./integration";
 import { getWorldState } from "../../world/state";
 import { getWorldConfig } from "../../config";
 import { checkQuota, formatQuotaStatus } from "../../quota";

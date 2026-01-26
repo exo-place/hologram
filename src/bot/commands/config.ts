@@ -19,7 +19,8 @@ import {
 } from "../../config";
 import { getModes, getModeConfig, getMode } from "../../plugins";
 import { getDb } from "../../db";
-import { getOptionValue, getSubcommand, respond, USER_APP_INTEGRATION } from "./index";
+import { getOptionValue, getSubcommand, respond } from "./index";
+import { USER_APP_INTEGRATION } from "./integration";
 
 export const configCommand: CreateApplicationCommand = {
   name: "config",

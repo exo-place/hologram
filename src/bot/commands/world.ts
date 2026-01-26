@@ -20,7 +20,8 @@ import {
   findEntityByName,
   type LocationData,
 } from "../../db/entities";
-import { getOptionValue, getSubcommand, respond, USER_APP_INTEGRATION } from "./index";
+import { getOptionValue, getSubcommand, respond } from "./index";
+import { USER_APP_INTEGRATION } from "./integration";
 
 export const worldCommand: CreateApplicationCommand = {
   name: "world",

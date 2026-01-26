@@ -14,7 +14,8 @@ import {
   BitwisePermissionFlags,
 } from "@discordeno/bot";
 import type { HologramBot, HologramInteraction } from "../types";
-import { respond, getSubcommand, getOptionValue, USER_APP_INTEGRATION } from "./index";
+import { respond, getSubcommand, getOptionValue } from "./index";
+import { USER_APP_INTEGRATION } from "./integration";
 import {
   storeApiKey,
   deleteApiKey,

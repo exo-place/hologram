@@ -2,7 +2,8 @@ import {
   ApplicationCommandOptionTypes,
 } from "@discordeno/bot";
 import type { HologramBot, HologramInteraction } from "../types";
-import { GUILD_ONLY_INTEGRATION, getSubcommand, getOptionValue, respond, respondDeferred, editResponse } from "./index";
+import { getSubcommand, getOptionValue, respond, respondDeferred, editResponse } from "./index";
+import { GUILD_ONLY_INTEGRATION } from "./integration";
 import { getWorldState } from "../../world/state";
 import { getWorldConfig } from "../../config";
 import {

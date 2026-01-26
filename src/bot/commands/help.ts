@@ -18,7 +18,8 @@ import {
   ButtonStyles,
 } from "@discordeno/bot";
 import type { HologramBot, HologramInteraction } from "../types";
-import { getOptionValue, getSubcommand, USER_APP_INTEGRATION } from "./index";
+import { getOptionValue, getSubcommand } from "./index";
+import { USER_APP_INTEGRATION } from "./integration";
 import { getWorldState } from "../../world/state";
 import { isChannelEnabled } from "../../plugins/core";
 import { getWorldConfig } from "../../config/defaults";

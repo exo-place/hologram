@@ -20,7 +20,8 @@ import {
   formatSessionDebug,
 } from "../../memory/tiers";
 import { debugContext, formatDebugInfo, type AssembledContext } from "../../ai/debug";
-import { getOptionValue, getSubcommand, respond, editResponse, USER_APP_INTEGRATION } from "./index";
+import { getOptionValue, getSubcommand, respond, editResponse } from "./index";
+import { USER_APP_INTEGRATION } from "./integration";
 
 export const sessionCommand: CreateApplicationCommand = {
   name: "session",

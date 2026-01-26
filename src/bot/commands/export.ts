@@ -3,7 +3,8 @@ import {
   ApplicationCommandOptionTypes,
 } from "@discordeno/bot";
 import type { HologramBot, HologramInteraction } from "../types";
-import { getOptionValue, getSubcommand, respond, respondDeferred, editResponse, USER_APP_INTEGRATION } from "./index";
+import { getOptionValue, getSubcommand, respond, respondDeferred, editResponse } from "./index";
+import { USER_APP_INTEGRATION } from "./integration";
 import { findEntityByName, type CharacterData } from "../../db/entities";
 import { getWorldState } from "../../world/state";
 import {

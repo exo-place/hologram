@@ -21,7 +21,8 @@ import {
 import { getActiveScene } from "../../scene";
 import { getWorldState } from "../../world/state";
 import { getEntitiesByType, type CharacterData, type Entity } from "../../db/entities";
-import { getOptionValue, getSubcommand, getNestedSubcommand, respond, USER_APP_INTEGRATION } from "./index";
+import { getOptionValue, getSubcommand, getNestedSubcommand, respond } from "./index";
+import { USER_APP_INTEGRATION } from "./integration";
 
 export const statusCommand: CreateApplicationCommand = {
   name: "status",

@@ -12,7 +12,8 @@ import {
   MessageComponentTypes,
 } from "@discordeno/bot";
 import type { HologramBot, HologramInteraction } from "../types";
-import { respond, USER_APP_INTEGRATION, getSubcommand } from "./index";
+import { respond, getSubcommand } from "./index";
+import { USER_APP_INTEGRATION } from "./integration";
 import { createWorld, initWorldState, linkGuildToWorld, getWorldState } from "../../world/state";
 import { enableChannel, isChannelEnabled } from "../../plugins/core";
 import { getModes } from "../../plugins";

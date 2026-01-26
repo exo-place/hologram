@@ -9,7 +9,8 @@ import {
   ApplicationCommandOptionTypes,
 } from "@discordeno/bot";
 import type { HologramBot, HologramInteraction } from "../types";
-import { respond, getSubcommand, USER_APP_INTEGRATION } from "./index";
+import { respond, getSubcommand } from "./index";
+import { USER_APP_INTEGRATION } from "./integration";
 import { setTipsEnabled, areTipsEnabled, resetTips } from "../tips";
 
 export const tipsCommand: CreateApplicationCommand = {

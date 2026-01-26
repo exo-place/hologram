@@ -13,7 +13,8 @@ import {
   type CharacterData,
 } from "../../db/entities";
 import { setActiveCharacter, getActiveCharacterLegacy as getActiveCharacter } from "../../plugins/scene";
-import { getOptionValue, getSubcommand, respond, USER_APP_INTEGRATION } from "./index";
+import { getOptionValue, getSubcommand, respond } from "./index";
+import { USER_APP_INTEGRATION } from "./integration";
 
 export const characterCommand: CreateApplicationCommand = {
   name: "character",

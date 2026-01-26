@@ -19,7 +19,8 @@ import {
 } from "../../chronicle";
 import { getActiveScene, getSceneCharacters } from "../../scene";
 import { getWorldState } from "../../world/state";
-import { getOptionValue, getSubcommand, respond, respondDeferred, editResponse, USER_APP_INTEGRATION } from "./index";
+import { getOptionValue, getSubcommand, respond, respondDeferred, editResponse } from "./index";
+import { USER_APP_INTEGRATION } from "./integration";
 
 /** Get the character IDs associated with a user in the current scene */
 function getUserCharacterIds(sceneId: number | undefined, userId: string): number[] {
