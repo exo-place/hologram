@@ -176,3 +176,77 @@ was forged during the Second Age
 is currently carried by [entity:3] (Aria)
 is said to reveal hidden truths
 ```
+
+## Body Descriptions & Transformations
+
+For characters with detailed or changing bodies (TiTS-style), keep all body facts on the character entity. This lets the LLM see and modify everything in one place.
+
+### Basic Body Description
+
+```
+is a character
+has shoulder-length black hair
+has green eyes
+has human ears
+has no tail
+has smooth tan skin
+has an average build
+```
+
+### Detailed Body Description
+
+```
+is a character
+has long silver hair, usually braided
+has heterochromatic eyes (left blue, right gold)
+has pointed elven ears
+has a slender athletic build
+has pale smooth skin
+has small breasts
+has a feminine figure with wide hips
+```
+
+### After Transformation
+
+When a transformation occurs, the LLM updates the relevant facts:
+
+```
+is a character
+has long silver hair, usually braided
+has heterochromatic eyes (left blue, right gold)
+has large fluffy fox ears (orange fur with white tips)
+has a slender athletic build
+has soft orange fur covering arms and legs
+has smooth pale skin on torso
+has a bushy fox tail (3ft long, very fluffy, orange with white tip)
+has small breasts
+has a feminine figure with wide hips
+has digitigrade legs with padded paws
+```
+
+### Transformation Items
+
+Describe TF items with their effects:
+
+```
+is a item
+is named Vulpine Elixir
+is a transformation potion
+is a small vial of shimmering orange liquid
+smells faintly of cinnamon
+effects: grants fox ears and tail
+effects: spreads soft fur on extremities
+effects: may cause digitigrade leg transformation (uncommon)
+effects: increases hearing sensitivity
+is consumed on use
+```
+
+### Tips for Body Facts
+
+- **Be specific**: "large fluffy fox ears (orange with white tips)" not just "fox ears"
+- **Note changes**: When something transforms, update or replace the old fact
+- **Keep related facts together**: All ear facts, all tail facts, etc.
+- **Include sensations**: "ears twitch when excited", "tail wags unconsciously"
+- **Track partial states**: "has fur on forearms but not hands yet"
+
+The LLM will use `add_fact`, `update_fact`, and `remove_fact` tools to track changes as transformations happen in the story.
