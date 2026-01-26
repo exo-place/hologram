@@ -4,7 +4,7 @@ Hologram is a Discord bot for collaborative worldbuilding and roleplay. Its core
 
 ## Installation
 
-1. [Invite the bot](https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID) to your server
+1. Invite the bot to your server (link from server admin)
 2. Create a character: `/c character YourCharacter`
 3. Bind it to a channel: `/b channel YourCharacter`
 4. Start chatting!
