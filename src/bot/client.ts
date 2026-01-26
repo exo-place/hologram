@@ -4,6 +4,7 @@ import { handleMessage } from "../plugins/handler";
 import { registerCommands, handleInteraction } from "./commands";
 import { startEventScheduler } from "../events/scheduler";
 import { sendMultiCharResponse } from "./webhooks";
+import { info, error, debug } from "../logger";
 
 const token = process.env.DISCORD_TOKEN;
 if (!token) {
@@ -59,13 +60,13 @@ let botUserId: bigint | null = null;
 
 // Event handlers
 bot.events.ready = async (payload) => {
-  console.log(`Logged in as ${payload.user.username}`);
+  info("Bot logged in", { username: payload.user.username });
   botUserId = payload.user.id;
 
   // Initialize plugin system
   await initPluginSystem();
   await initPlugins();
-  console.log("Plugin system initialized");
+  info("Plugin system initialized");
 
   // Register slash commands
   await registerCommands(bot);
@@ -87,9 +88,11 @@ bot.events.messageCreate = async (message) => {
   const isBotMentioned =
     botUserId !== null && message.mentionedUserIds?.includes(botUserId);
 
-  console.log(
-    `[${message.guildId ?? "DM"}] ${message.author.username}: ${message.content}`
-  );
+  debug("Message received", {
+    guild: message.guildId?.toString() ?? "DM",
+    author: message.author.username,
+    content: message.content.slice(0, 100),
+  });
 
   // Handle the message
   const result = await handleMessage(
@@ -125,8 +128,8 @@ bot.events.messageCreate = async (message) => {
           content: result.response,
         });
       }
-    } catch (error) {
-      console.error("Error sending message:", error);
+    } catch (err) {
+      error("Failed to send message", err, { channelId: message.channelId.toString() });
     }
   }
 };
@@ -137,6 +140,6 @@ bot.events.interactionCreate = async (interaction) => {
 };
 
 export async function startBot() {
-  console.log("Starting Hologram bot...");
+  info("Starting Hologram bot");
   await bot.start();
 }

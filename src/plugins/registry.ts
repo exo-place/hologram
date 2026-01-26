@@ -23,6 +23,7 @@ import type { HologramBot, HologramInteraction } from "../bot/types";
 import type { Message } from "../ai/context";
 import { DEFAULT_CONFIG, mergeConfig } from "../config/defaults";
 import type { WorldConfig } from "../config/types";
+import { debug, warn, error } from "../logger";
 
 // =============================================================================
 // Registry State
@@ -46,7 +47,7 @@ let middlewareSorted = false;
 /** Register a plugin */
 export function registerPlugin(plugin: Plugin): void {
   if (plugins.has(plugin.id)) {
-    console.warn(`Plugin ${plugin.id} already registered, skipping`);
+    warn("Plugin already registered, skipping", { pluginId: plugin.id });
     return;
   }
 
@@ -84,7 +85,7 @@ export function registerPlugin(plugin: Plugin): void {
     for (const cmd of plugin.commands) {
       const name = cmd.definition.name;
       if (commands.has(name)) {
-        console.warn(`Command ${name} already registered, overwriting`);
+        warn("Command already registered, overwriting", { command: name });
       }
       commands.set(name, cmd);
 
@@ -95,7 +96,7 @@ export function registerPlugin(plugin: Plugin): void {
     }
   }
 
-  console.log(`Registered plugin: ${plugin.name} (${plugin.id})`);
+  debug("Registered plugin", { name: plugin.name, id: plugin.id });
 }
 
 /** Initialize all registered plugins */
@@ -116,7 +117,7 @@ export async function cleanupPlugins(): Promise<void> {
     try {
       cleanup();
     } catch (err) {
-      console.error("Plugin cleanup error:", err);
+      error("Plugin cleanup failed", err);
     }
   }
   cleanupFns.length = 0;
@@ -253,7 +254,7 @@ export async function runExtractors(
           createTimeout(timeoutMs, extractor.name),
         ]);
       } catch (err) {
-        console.error(`Extractor ${extractor.name} failed:`, err);
+        error("Extractor failed", err, { extractor: extractor.name });
       }
     })
   );
@@ -274,7 +275,7 @@ export async function runFormatters(ctx: PluginContext): Promise<ContextSection[
       try {
         return await formatter.fn(ctx);
       } catch (err) {
-        console.error(`Formatter ${formatter.name} failed:`, err);
+        error("Formatter failed", err, { formatter: formatter.name });
         return [];
       }
     })

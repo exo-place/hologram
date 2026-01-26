@@ -8,7 +8,7 @@
 - [x] Unify mode/preset system - `/config preset` now uses modes from `plugins/index.ts` as source of truth; legacy PRESETS in defaults.ts kept for backwards compat
 - [x] Add extractor timeout - extractors now wrapped with 30s timeout in `plugins/registry.ts`
 - [x] Type-safe plugin data - added `definePluginData<T>()` factory for type-safe accessors; delivery plugin updated as example
-- [ ] Add structured logging - replace console.log/error with logger abstraction (pino or similar)
+- [x] Add structured logging - added `src/logger.ts` with levels, timestamps, context; updated core files (index, client, registry, core plugin)
 - [ ] RAG query caching - consider caching similar queries to avoid re-embedding every message
 
 ### Test Coverage

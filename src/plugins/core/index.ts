@@ -17,6 +17,7 @@ import { getLanguageModel, DEFAULT_MODEL } from "../../ai/models";
 import { runFormatters, runExtractors } from "../registry";
 import { formatMessagesForAI, type Message } from "../../ai/context";
 import { allocateBudget } from "../../ai/budget";
+import { error } from "../../logger";
 
 // =============================================================================
 // In-memory state
@@ -177,7 +178,7 @@ const extractionMiddleware: Middleware = {
     if (ctx.response) {
       // Fire and forget - don't block response
       runExtractors(ctx).catch((err) =>
-        console.error("Extraction error:", err)
+        error("Extraction pipeline failed", err)
       );
     }
     await next();
