@@ -3,15 +3,21 @@
  *
  * Expressions are boolean JS with safe globals:
  *   $if random(0.3): has fox ears
- *   $if hasFact("poisoned") && random(0.5): takes damage
- *   $if time.isNight: glows faintly
+ *   $if has_fact("poisoned") && random(0.5): takes damage
+ *   $if time.is_night: glows faintly
+ *   $if self.fox_tf >= 0.5: has full fur
  */
 
 // =============================================================================
 // Types
 // =============================================================================
 
+/** Parsed fact values accessible via self.* in expressions */
+export type SelfContext = Record<string, string | number | boolean>;
+
 export interface ExprContext {
+  /** Entity's own parsed fact values (from "key: value" facts) */
+  self: SelfContext;
   /** Returns true with given probability (0.0-1.0) */
   random: (chance: number) => boolean;
   /** Check if entity has a fact matching pattern */
@@ -354,10 +360,63 @@ export class ExprError extends Error {
 }
 
 // =============================================================================
+// Self Context Parsing
+// =============================================================================
+
+/** Pattern for "key: value" facts */
+const KEY_VALUE_PATTERN = /^([a-z_][a-z0-9_]*)\s*:\s*(.+)$/i;
+
+/**
+ * Parse a value string into typed value (number, boolean, or string).
+ */
+function parseValue(value: string): string | number | boolean {
+  const trimmed = value.trim();
+
+  // Boolean
+  if (trimmed === "true") return true;
+  if (trimmed === "false") return false;
+
+  // Number (including decimals)
+  const num = parseFloat(trimmed);
+  if (!isNaN(num) && String(num) === trimmed) return num;
+
+  // String (default)
+  return trimmed;
+}
+
+/**
+ * Parse facts into a self context object.
+ * Facts matching "key: value" pattern are extracted.
+ * Other facts are ignored.
+ */
+export function parseSelfContext(facts: string[]): SelfContext {
+  const self: SelfContext = {};
+
+  for (const fact of facts) {
+    // Skip comments
+    if (fact.startsWith("#")) continue;
+
+    // Skip $if directives (we want raw facts)
+    if (fact.trim().startsWith("$if ")) continue;
+
+    const match = fact.match(KEY_VALUE_PATTERN);
+    if (match) {
+      const [, key, value] = match;
+      self[key] = parseValue(value);
+    }
+  }
+
+  return self;
+}
+
+// =============================================================================
 // Context Factory
 // =============================================================================
 
 export interface BaseContextOptions {
+  /** Entity's raw facts (used to build self context) */
+  facts?: string[];
+  /** Function to check if entity has a fact matching pattern */
   has_fact: (pattern: string) => boolean;
   dt_ms?: number;
   elapsed_ms?: number;
@@ -376,6 +435,7 @@ export function createBaseContext(options: BaseContextOptions): ExprContext {
   const hour = now.getHours();
 
   return {
+    self: parseSelfContext(options.facts ?? []),
     random: (chance: number) => Math.random() < chance,
     has_fact: options.has_fact,
     roll: (dice: string) => rollDice(dice),

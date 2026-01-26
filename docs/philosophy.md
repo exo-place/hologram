@@ -256,6 +256,9 @@ Expressions have access to:
 
 ```typescript
 interface ExprContext {
+  // Entity's own "key: value" facts, parsed
+  self: Record<string, string | number | boolean>;
+
   // Randomness
   random: (chance: number) => boolean;
   roll: (dice: string) => number;
@@ -276,6 +279,14 @@ interface ExprContext {
   // Interaction context (for items)
   interaction_type?: string;
 }
+```
+
+Facts matching `key: value` pattern are parsed into `self`:
+
+```
+fox_tf: 0.3           → self.fox_tf = 0.3
+is_poisoned: true     → self.is_poisoned = true
+name: Aria            → self.name = "Aria"
 ```
 
 ### $respond Directive
