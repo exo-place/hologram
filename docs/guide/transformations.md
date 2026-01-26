@@ -126,20 +126,35 @@ Entity: The Transformation Chamber
 Facts:
   is a location
   is a private testing room
-  contains a Vulpine Elixir dispenser (infinite supply)
-  contains a Feline Serum fountain (infinite supply)
+  has a Vulpine Elixir dispenser on the east wall
+  has a Feline Serum fountain in the center
 ```
 
-Stock it with items that aren't consumed:
+Items are fixtures, not loose objects:
 
 ```
-Entity: Vulpine Elixir (test)
+Entity: Vulpine Elixir Dispenser
 Facts:
-  is a transformation potion
+  is a fixture in The Transformation Chamber
+  cannot be taken or moved
+  dispenses transformation elixir when used
   grants fox ears (orange with white tips)
   $if random(0.3): grants fox tail
-  is not consumed on use
+  $if random(0.1): grants digitigrade legs
 ```
+
+```
+Entity: Feline Serum Fountain
+Facts:
+  is a fixture in The Transformation Chamber
+  cannot be taken or moved
+  a stone basin filled with shimmering liquid
+  grants cat ears (soft gray fur)
+  $if random(0.3): grants a cat tail
+  $if random(0.2): grants retractable claws
+```
+
+The LLM understands "is a fixture" and "cannot be taken" - no special system needed.
 
 ## Tips
 
