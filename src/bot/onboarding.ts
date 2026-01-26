@@ -17,7 +17,7 @@ import { setWorldConfig } from "../config/defaults";
 import { getDb } from "../db";
 import { info } from "../logger";
 import { createScene, getActiveScene, addCharacterToScene } from "../scene";
-import { createCharacter, findEntityByName, type CharacterData } from "../db/entities";
+import { createCharacter, findEntityByName } from "../db/entities";
 
 // =============================================================================
 // Welcome Embed
