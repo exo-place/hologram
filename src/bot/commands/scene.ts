@@ -30,6 +30,7 @@ import {
 } from "../../db/entities";
 import { getOptionValue, getSubcommand, respond } from "./index";
 import { USER_APP_INTEGRATION } from "./integration";
+import { clearHistory } from "../../plugins/core";
 
 export const sceneCommand: CreateApplicationCommand = {
   name: "scene",
@@ -197,6 +198,9 @@ export async function handleSceneCommand(
         weather: worldState!.weather ?? undefined,
       });
 
+      // Clear history on scene start - fresh context
+      clearHistory(channelId);
+
       let response = `**Scene started!** (ID: ${scene.id})\n`;
       response += formatSceneForContext(scene);
       response += "\n\nUse `/scene cast add <character>` to add characters.";
@@ -230,6 +234,9 @@ export async function handleSceneCommand(
           return;
         }
 
+        // Clear history on scene resume - context bounded to scene
+        clearHistory(channelId);
+
         let response = `**Scene resumed!** (ID: ${scene.id})\n`;
         response += formatSceneForContext(scene);
         await respond(bot, interaction, response);
@@ -246,6 +253,9 @@ export async function handleSceneCommand(
           await respond(bot, interaction, "Failed to resume scene.");
           return;
         }
+
+        // Clear history on scene resume - context bounded to scene
+        clearHistory(channelId);
 
         let response = `**Scene resumed!** (ID: ${scene.id})\n`;
         response += formatSceneForContext(scene);

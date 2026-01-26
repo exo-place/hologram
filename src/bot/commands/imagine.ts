@@ -54,6 +54,12 @@ export const imagineCommand = {
           minValue: 512,
           maxValue: 2048,
         },
+        {
+          name: "negative",
+          description: "Negative prompt (things to avoid)",
+          type: ApplicationCommandOptionTypes.String,
+          required: false,
+        },
       ],
     },
     {
@@ -149,6 +155,7 @@ async function handlePromptSubcommand(
   }
 
   const prompt = getOptionValue<string>(interaction, "prompt");
+  const negativePrompt = getOptionValue<string>(interaction, "negative");
   const workflowId = getOptionValue<string>(interaction, "workflow");
   const width = getOptionValue<number>(interaction, "width");
   const height = getOptionValue<number>(interaction, "height");
@@ -174,7 +181,7 @@ async function handlePromptSubcommand(
     const result = await generateImage(
       {
         workflow: workflowId || config.images.defaultWorkflow,
-        variables: { prompt },
+        variables: { prompt, negative_prompt: negativePrompt },
         width,
         height,
       },

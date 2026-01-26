@@ -61,6 +61,95 @@ export function clearHistory(channelId: string): void {
   channelMessages.delete(channelId);
 }
 
+export interface RerollResult {
+  success: boolean;
+  response?: string;
+  error?: string;
+}
+
+/** Store last message metadata per channel for reroll */
+const lastMessageMeta = new Map<string, {
+  authorId: string;
+  authorName: string;
+  guildId?: string;
+  content: string;
+}>();
+
+/** Called by history middleware to track last user message */
+export function trackLastUserMessage(
+  channelId: string,
+  authorId: string,
+  authorName: string,
+  guildId: string | undefined,
+  content: string
+): void {
+  lastMessageMeta.set(channelId, { authorId, authorName, guildId, content });
+}
+
+/**
+ * Reroll the last AI response with optional guidance
+ */
+export async function rerollLastResponse(
+  channelId: string,
+  guidance?: string
+): Promise<RerollResult> {
+  const history = getChannelHistory(channelId);
+  const meta = lastMessageMeta.get(channelId);
+
+  if (history.length === 0 || !meta) {
+    return { success: false, error: "No message history in this channel." };
+  }
+
+  // Find the last assistant message
+  let lastAssistantIdx = -1;
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (history[i].role === "assistant") {
+      lastAssistantIdx = i;
+      break;
+    }
+  }
+
+  if (lastAssistantIdx === -1) {
+    return { success: false, error: "No AI response to reroll." };
+  }
+
+  // Remove the last assistant message from history
+  history.splice(lastAssistantIdx, 1);
+
+  // Re-run the message with guidance appended
+  const { createContext, runMiddleware } = await import("../registry");
+  const { getDeliveryResult } = await import("../delivery");
+
+  const content = guidance
+    ? `${meta.content}\n\n[Reroll guidance: ${guidance}]`
+    : meta.content;
+
+  const ctx = createContext({
+    channelId,
+    guildId: meta.guildId,
+    authorId: meta.authorId,
+    authorName: meta.authorName,
+    content,
+    isBotMentioned: true, // Treat as mentioned to ensure response
+  });
+
+  try {
+    await runMiddleware(ctx);
+    const result = getDeliveryResult(ctx);
+
+    if (!result?.response) {
+      return { success: false, error: "No response generated." };
+    }
+
+    return { success: true, response: result.response };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Unknown error",
+    };
+  }
+}
+
 // =============================================================================
 // History management
 // =============================================================================
@@ -93,6 +182,15 @@ const historyMiddleware: Middleware = {
   fn: async (ctx, next) => {
     // Load history
     ctx.history = [...getChannelHistory(ctx.channelId)];
+
+    // Track last user message for reroll
+    trackLastUserMessage(
+      ctx.channelId,
+      ctx.authorId,
+      ctx.effectiveName,
+      ctx.guildId,
+      ctx.content
+    );
 
     // Add current message to history
     const gameTime = ctx.scene ? { ...ctx.scene.time } : undefined;

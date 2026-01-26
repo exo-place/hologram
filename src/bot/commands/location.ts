@@ -19,6 +19,7 @@ import {
 } from "../../world/locations";
 import { getActiveScene, updateScene, type Scene } from "../../scene";
 import { type LocationType } from "../../db/entities";
+import { clearHistory } from "../../plugins/core";
 
 export const locationCommand = {
   name: "location",
@@ -363,6 +364,12 @@ async function handleGo(
   // Update scene location
   const updatedScene: Scene = { ...scene, locationId: targetConn.location.id };
   updateScene(updatedScene);
+
+  // Clear history on location change - context bounded to location
+  const channelId = interaction.channelId?.toString();
+  if (channelId) {
+    clearHistory(channelId);
+  }
 
   const newLocation = targetConn.location;
   let response = `**Traveled to ${newLocation.name}**`;
