@@ -222,7 +222,7 @@ async function previewContext(
  * Redact sensitive content while preserving structure.
  * Shows section headers and placeholders instead of actual content.
  */
-function redactContent(content: string, sectionName: string): string {
+function redactContent(content: string, _sectionName: string): string {
   const lines = content.split("\n");
   const output: string[] = [];
 
