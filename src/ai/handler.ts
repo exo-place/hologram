@@ -1,8 +1,12 @@
-import { generateText } from "ai";
+import { generateText, tool, stepCountIs } from "ai";
+import { z } from "zod";
 import { getLanguageModel, DEFAULT_MODEL } from "./models";
 import { info, debug, error } from "../logger";
 import {
   getEntityWithFacts,
+  addFact,
+  updateFact,
+  removeFact,
   formatEntitiesForContext,
   type EntityWithFacts,
 } from "../db/entities";
@@ -27,7 +31,54 @@ export interface MessageContext {
 
 export interface ResponseResult {
   response: string;
+  factsAdded: number;
+  factsUpdated: number;
+  factsRemoved: number;
 }
+
+// =============================================================================
+// Tool Definitions
+// =============================================================================
+
+const tools = {
+  add_fact: tool({
+    description: "Add a new fact to an entity. Use this when something new is learned or happens.",
+    inputSchema: z.object({
+      entityId: z.number().describe("The entity ID to add the fact to"),
+      content: z.string().describe("The fact content"),
+    }),
+    execute: async ({ entityId, content }) => {
+      const fact = addFact(entityId, content);
+      debug("Tool: add_fact", { entityId, content, factId: fact.id });
+      return { success: true, factId: fact.id };
+    },
+  }),
+
+  update_fact: tool({
+    description: "Update an existing fact. Use this when a fact changes.",
+    inputSchema: z.object({
+      factId: z.number().describe("The fact ID to update"),
+      content: z.string().describe("The new fact content"),
+    }),
+    execute: async ({ factId, content }) => {
+      const fact = updateFact(factId, content);
+      debug("Tool: update_fact", { factId, content, success: !!fact });
+      return { success: !!fact };
+    },
+  }),
+
+  remove_fact: tool({
+    description: "Remove a fact that is no longer true.",
+    inputSchema: z.object({
+      factId: z.number().describe("The fact ID to remove"),
+    }),
+    execute: async ({ factId }) => {
+      const success = removeFact(factId);
+      debug("Tool: remove_fact", { factId, success });
+      return { success };
+    },
+  }),
+};
 
 // =============================================================================
 // Context Building
@@ -37,11 +88,19 @@ function buildSystemPrompt(entities: EntityWithFacts[]): string {
   if (entities.length === 0) {
     return "You are a helpful assistant. Respond naturally to the user.";
   }
-  return formatEntitiesForContext(entities);
+
+  const context = formatEntitiesForContext(entities);
+  return `${context}
+
+You have access to tools to modify facts about entities. Use them when:
+- Something new is learned (add_fact)
+- A fact changes (update_fact)
+- A fact is no longer true (remove_fact)
+
+Respond naturally in character based on the facts provided.`;
 }
 
 function buildUserMessage(messages: Array<{ author_name: string; content: string }>): string {
-  // Merge messages into single user block with persona prefixes
   return messages.map(m => `${m.author_name}: ${m.content}`).join("\n");
 }
 
@@ -87,7 +146,6 @@ export async function handleMessage(ctx: MessageContext): Promise<ResponseResult
   }
 
   // Decide whether to respond
-  // Respond if mentioned OR if there's a channel entity bound
   const shouldRespond = isMentioned || channelEntityId !== null;
   if (!shouldRespond) {
     debug("Not responding - not mentioned and no channel binding");
@@ -109,6 +167,11 @@ export async function handleMessage(ctx: MessageContext): Promise<ResponseResult
     systemPromptLength: systemPrompt.length,
   });
 
+  // Track tool usage
+  let factsAdded = 0;
+  let factsUpdated = 0;
+  let factsRemoved = 0;
+
   try {
     const model = getLanguageModel(DEFAULT_MODEL);
 
@@ -116,14 +179,29 @@ export async function handleMessage(ctx: MessageContext): Promise<ResponseResult
       model,
       system: systemPrompt,
       messages: [{ role: "user", content: userMessage }],
+      tools,
+      stopWhen: stepCountIs(5), // Allow up to 5 tool call rounds
+      onStepFinish: ({ toolCalls }) => {
+        for (const call of toolCalls ?? []) {
+          if (call.toolName === "add_fact") factsAdded++;
+          if (call.toolName === "update_fact") factsUpdated++;
+          if (call.toolName === "remove_fact") factsRemoved++;
+        }
+      },
     });
 
     info("LLM response", {
       textLength: result.text.length,
+      factsAdded,
+      factsUpdated,
+      factsRemoved,
     });
 
     return {
       response: result.text,
+      factsAdded,
+      factsUpdated,
+      factsRemoved,
     };
   } catch (err) {
     error("LLM error", err);

@@ -89,6 +89,32 @@ bot.events.messageCreate = async (message) => {
     mentioned: isMentioned,
   });
 
+  // Check if we should respond before starting typing
+  const channelEntityId = await import("../db/discord").then(m =>
+    m.resolveDiscordEntity(channelId, "channel", message.guildId?.toString(), channelId)
+  );
+  const shouldRespond = isMentioned || channelEntityId !== null;
+
+  if (!shouldRespond) {
+    debug("Not responding - not mentioned and no channel binding");
+    return;
+  }
+
+  // Start typing indicator
+  let typingInterval: ReturnType<typeof setInterval> | null = null;
+  try {
+    await bot.helpers.triggerTypingIndicator(message.channelId);
+    typingInterval = setInterval(async () => {
+      try {
+        await bot.helpers.triggerTypingIndicator(message.channelId);
+      } catch {
+        // Ignore typing errors
+      }
+    }, 8000);
+  } catch {
+    // Ignore typing errors
+  }
+
   // Handle message via LLM
   const result = await handleMessage({
     channelId,
@@ -98,6 +124,11 @@ bot.events.messageCreate = async (message) => {
     content: message.content,
     isMentioned: isMentioned ?? false,
   });
+
+  // Stop typing
+  if (typingInterval) {
+    clearInterval(typingInterval);
+  }
 
   if (result) {
     try {

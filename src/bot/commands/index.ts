@@ -237,8 +237,31 @@ export async function handleInteraction(bot: Bot, interaction: Interaction) {
 
   // Handle autocomplete
   if (interaction.type === InteractionTypes.ApplicationCommandAutocomplete) {
-    // TODO: Implement autocomplete for entity names
+    await handleAutocomplete(bot, interaction);
   }
+}
+
+async function handleAutocomplete(bot: Bot, interaction: Interaction) {
+  const focused = interaction.data?.options?.find((o: { focused?: boolean }) => o.focused);
+  if (!focused) return;
+
+  const query = (focused.value as string) || "";
+
+  // Import here to avoid circular deps
+  const { searchEntities } = await import("../../db/entities");
+  const results = searchEntities(query, 25);
+
+  const choices = results.map(e => ({
+    name: e.name,
+    value: e.name,
+  }));
+
+  await bot.helpers.sendInteractionResponse(interaction.id, interaction.token, {
+    type: InteractionResponseTypes.ApplicationCommandAutocompleteResult,
+    data: {
+      choices,
+    },
+  });
 }
 
 // Modal submit handlers
