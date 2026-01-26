@@ -132,3 +132,46 @@ All integration and feature work from Phases 1-7 is done:
 - [x] Perspective-based chronicle filtering for user queries
 - [x] Deduplicate evaluateConditions into shared events/conditions.ts
 - [x] Extract respond/editResponse/respondDeferred into shared commands/index.ts
+
+---
+
+## Backlog
+
+### Image Generation
+
+- [ ] Image gen to S3-compatible bucket (R2, S3, MinIO, etc.)
+  - **Research done** - see comparison below
+  - **Recommended**: RunComfy (easy) or RunPod/SaladCloud (cheap at scale)
+
+#### API Research (Jan 2026)
+
+| Platform | Custom Models | Scale to Zero | Pricing | Notes |
+|----------|---------------|---------------|---------|-------|
+| RunComfy | ✅ Full ComfyUI | ✅ Serverless API | $1.39/hr or per-gen | Best DX, one-click deploy |
+| RunPod | ✅ BYOM container | ✅ Serverless | ~$3.35/hr H100 | Cheapest raw compute |
+| SaladCloud | ✅ URL-based | ✅ Stateless | Per-compute | Horizontal scaling |
+| Fal.ai | ⚠️ Their models | ✅ Native | ~$0.035/MP | Fast cold starts |
+| Replicate | ✅ Deploy custom | ✅ Native | ~$5.04/hr H100 | Easy but expensive |
+
+All support scale-to-zero via serverless. Architecture should be provider-agnostic:
+- Abstract behind `ImageProvider` interface
+- User configures provider + credentials in world config
+- Small guilds: Fal.ai/Replicate (no infra)
+- Large guilds: RunPod/SaladCloud (cheaper at volume)
+
+**Next steps:**
+- [ ] Prototype with RunComfy (easiest path)
+- [ ] Design provider-agnostic `ImageProvider` interface
+- [ ] Workflow: prompt → provider API → S3-compat upload → Discord embed
+- [ ] Add provider selection to world config
+
+### Plugin Ideas
+
+- [ ] D&D support as plugin
+  - 5e SRD integration (monsters, spells, conditions)
+  - Character sheets, stat blocks
+  - Combat automation with dice plugin
+- [ ] CYOA support as plugin
+  - Branching narrative tracking
+  - Choice points and consequences
+  - State persistence for story branches
