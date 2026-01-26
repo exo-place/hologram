@@ -1,6 +1,7 @@
 import { createBot, Intents } from "@discordeno/bot";
-import { info, debug } from "../logger";
+import { info, debug, error } from "../logger";
 import { registerCommands, handleInteraction } from "./commands";
+import { handleMessage } from "../ai/handler";
 import "./commands/commands"; // Register all commands
 
 const token = process.env.DISCORD_TOKEN;
@@ -79,15 +80,34 @@ bot.events.messageCreate = async (message) => {
   if (!markProcessed(message.id)) return;
 
   const isMentioned = botUserId !== null && message.mentionedUserIds?.includes(botUserId);
+  const channelId = message.channelId.toString();
 
   debug("Message", {
-    channel: message.channelId.toString(),
+    channel: channelId,
     author: message.author.username,
     content: message.content.slice(0, 50),
     mentioned: isMentioned,
   });
 
-  // TODO: Handle message via new system
+  // Handle message via LLM
+  const result = await handleMessage({
+    channelId,
+    guildId: message.guildId?.toString(),
+    userId: message.author.id.toString(),
+    username: message.author.username,
+    content: message.content,
+    isMentioned: isMentioned ?? false,
+  });
+
+  if (result) {
+    try {
+      await bot.helpers.sendMessage(message.channelId, {
+        content: result.response,
+      });
+    } catch (err) {
+      error("Failed to send message", err);
+    }
+  }
 };
 
 bot.events.interactionCreate = async (interaction) => {
