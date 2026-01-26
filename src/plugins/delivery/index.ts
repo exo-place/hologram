@@ -30,6 +30,9 @@ export interface DeliveryResult {
   narration?: string;
   segments?: CharacterSegment[];
   multiCharMode?: MultiCharMode;
+  // Setup prompts (if user/channel needs configuration)
+  needsPersonaSetup?: boolean;
+  needsCharacterSetup?: boolean;
 }
 
 /** Type-safe accessor for delivery result */

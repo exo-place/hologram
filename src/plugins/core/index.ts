@@ -243,7 +243,26 @@ const gateMiddleware: Middleware = {
       characters: decision.respondingCharacters,
     });
 
+    // Store setup flags if needed (for delivery to send prompts)
+    if (decision.needsPersonaSetup) {
+      ctx.data.set("needsPersonaSetup", true);
+    }
+    if (decision.needsCharacterSetup) {
+      ctx.data.set("needsCharacterSetup", true);
+    }
+
     if (!decision.shouldRespond) {
+      // If setup is needed and bot was mentioned, send a helpful prompt
+      if (ctx.isBotMentioned && (decision.needsPersonaSetup || decision.needsCharacterSetup)) {
+        if (decision.needsPersonaSetup) {
+          ctx.response = "Before we can roleplay, I need to know who you are! Use `/persona set` to create your character identity.";
+        } else if (decision.needsCharacterSetup) {
+          ctx.response = "This channel doesn't have any characters set up yet. Use `/scene start` and `/scene cast add` to add characters, or `/setup` for guided setup.";
+        }
+        // Continue the chain to deliver the message
+        await next();
+        return;
+      }
       // Don't continue the chain - no response needed
       return;
     }

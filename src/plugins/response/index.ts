@@ -17,6 +17,8 @@ export interface ResponseDecision {
   shouldRespond: boolean;
   respondingCharacters: number[]; // Character IDs that should respond
   reason: string;
+  needsPersonaSetup?: boolean; // User needs to set up persona first
+  needsCharacterSetup?: boolean; // Channel needs character(s) added
 }
 
 export interface ResponseContext {
@@ -138,11 +140,12 @@ export function evaluateResponse(ctx: ResponseContext): ResponseDecision {
   }
 
   // Check persona requirement
-  if (ctx.config.requirePersona && !ctx.hasPersona && !ctx.isBotMentioned) {
+  if (ctx.config.requirePersona && !ctx.hasPersona) {
     return {
       shouldRespond: false,
       respondingCharacters: [],
       reason: "persona required",
+      needsPersonaSetup: true,
     };
   }
 
@@ -152,6 +155,7 @@ export function evaluateResponse(ctx: ResponseContext): ResponseDecision {
       shouldRespond: false,
       respondingCharacters: [],
       reason: "no characters in scene",
+      needsCharacterSetup: true,
     };
   }
 
