@@ -5,6 +5,7 @@ import { registerCommands, handleInteraction } from "./commands";
 import { startEventScheduler } from "../events/scheduler";
 import { sendMultiCharResponse } from "./webhooks";
 import { sendWelcomeMessage, checkAndOfferSetup } from "./onboarding";
+import { getActiveScene } from "../scene";
 import { checkForTip, buildTipContext, incrementMessageCount } from "./tips";
 import { getWorldState } from "../world/state";
 import { info, error, debug } from "../logger";
@@ -176,10 +177,20 @@ bot.events.messageCreate = async (message) => {
     }
   }
 
-  // Start typing indicator while processing
-  // Typing indicator lasts 10 seconds, so we refresh it every 8 seconds
+  // Only start typing if channel has an active scene (likely to respond)
+  const channelIdStr = message.channelId.toString();
+  const hasActiveScene = getActiveScene(channelIdStr) !== null;
+
   let typingInterval: ReturnType<typeof setInterval> | null = null;
-  const startTyping = async () => {
+  const stopTyping = () => {
+    if (typingInterval) {
+      clearInterval(typingInterval);
+      typingInterval = null;
+    }
+  };
+
+  // Start typing only if we have an active scene
+  if (hasActiveScene) {
     try {
       await bot.helpers.triggerTypingIndicator(message.channelId);
       typingInterval = setInterval(async () => {
@@ -192,16 +203,7 @@ bot.events.messageCreate = async (message) => {
     } catch {
       // Ignore typing errors
     }
-  };
-  const stopTyping = () => {
-    if (typingInterval) {
-      clearInterval(typingInterval);
-      typingInterval = null;
-    }
-  };
-
-  // Start typing before processing
-  await startTyping();
+  }
 
   // Handle the message
   const result = await handleMessage(
