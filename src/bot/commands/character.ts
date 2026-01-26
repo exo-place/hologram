@@ -98,6 +98,8 @@ export const characterCommand: CreateApplicationCommand = {
             { name: "scenario", value: "scenario" },
             { name: "example_dialogue", value: "exampleDialogue" },
             { name: "system_prompt", value: "systemPrompt" },
+            { name: "image_prompt", value: "imagePrompt" },
+            { name: "image_negative", value: "imageNegative" },
           ],
         },
         {
@@ -184,6 +186,37 @@ export const characterCommand: CreateApplicationCommand = {
           required: false,
           minValue: 0,
           maxValue: 100,
+        },
+      ],
+    },
+    {
+      name: "image",
+      description: "Set character image generation prompts",
+      type: ApplicationCommandOptionTypes.SubCommand,
+      options: [
+        {
+          name: "name",
+          description: "Character name",
+          type: ApplicationCommandOptionTypes.String,
+          required: true,
+        },
+        {
+          name: "prompt",
+          description: "Base image prompt for the character",
+          type: ApplicationCommandOptionTypes.String,
+          required: false,
+        },
+        {
+          name: "negative",
+          description: "Negative prompt (things to avoid)",
+          type: ApplicationCommandOptionTypes.String,
+          required: false,
+        },
+        {
+          name: "clear",
+          description: "Clear the image prompt",
+          type: ApplicationCommandOptionTypes.Boolean,
+          required: false,
         },
       ],
     },
@@ -297,6 +330,20 @@ export async function handleCharacterCommand(
       }
       if (chance !== undefined) {
         info.push(`Chance: ${(chance * 100).toFixed(0)}%`);
+      }
+
+      // Image settings
+      if (character.data.imagePrompt || character.data.imageNegative) {
+        info.push("", "**Image Generation:**");
+        if (character.data.imagePrompt) {
+          const prompt = character.data.imagePrompt.length > 200
+            ? character.data.imagePrompt.slice(0, 200) + "..."
+            : character.data.imagePrompt;
+          info.push(`Prompt: ${prompt}`);
+        }
+        if (character.data.imageNegative) {
+          info.push(`Negative: ${character.data.imageNegative}`);
+        }
       }
 
       await respond(bot, interaction, info.join("\n"));
@@ -435,6 +482,57 @@ export async function handleCharacterCommand(
         msg += ` with ${chance}% chance`;
       }
       await respond(bot, interaction, msg + ".");
+      break;
+    }
+
+    case "image": {
+      const name = getOptionValue<string>(interaction, "name")!;
+      const prompt = getOptionValue<string>(interaction, "prompt");
+      const negative = getOptionValue<string>(interaction, "negative");
+      const clear = getOptionValue<boolean>(interaction, "clear");
+
+      const character = findEntityByName<CharacterData>(name, "character");
+      if (!character) {
+        await respond(bot, interaction, `Character "${name}" not found.`);
+        return;
+      }
+
+      // Clear prompts if requested
+      if (clear) {
+        updateEntity<CharacterData>(character.id, {
+          data: { imagePrompt: undefined, imageNegative: undefined },
+        });
+        await respond(bot, interaction, `Cleared image prompts for **${name}**.`);
+        break;
+      }
+
+      // Show current prompts if no changes provided
+      if (!prompt && !negative) {
+        const lines = [`**${name}**'s image settings:`];
+        if (character.data.imagePrompt) {
+          lines.push(`**Prompt:** ${character.data.imagePrompt}`);
+        } else {
+          lines.push("**Prompt:** Not set");
+        }
+        if (character.data.imageNegative) {
+          lines.push(`**Negative:** ${character.data.imageNegative}`);
+        }
+        lines.push("", "Use `/imagine character` to generate images with these prompts.");
+        await respond(bot, interaction, lines.join("\n"));
+        break;
+      }
+
+      // Update prompts
+      const updates: Partial<CharacterData> = {};
+      if (prompt) updates.imagePrompt = prompt;
+      if (negative) updates.imageNegative = negative;
+
+      updateEntity<CharacterData>(character.id, { data: updates });
+
+      const parts: string[] = [];
+      if (prompt) parts.push("prompt");
+      if (negative) parts.push("negative prompt");
+      await respond(bot, interaction, `Updated **${name}**'s image ${parts.join(" and ")}.`);
       break;
     }
 

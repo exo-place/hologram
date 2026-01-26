@@ -67,6 +67,27 @@ export const bot = createBot({
 
 let botUserId: bigint | null = null;
 
+// Message deduplication to prevent double responses
+const processedMessages = new Set<string>();
+const MAX_PROCESSED_MESSAGES = 1000;
+
+function markMessageProcessed(messageId: bigint): boolean {
+  const id = messageId.toString();
+  if (processedMessages.has(id)) {
+    return false; // Already processed
+  }
+  processedMessages.add(id);
+  // Cleanup old messages to prevent memory leak
+  if (processedMessages.size > MAX_PROCESSED_MESSAGES) {
+    const iterator = processedMessages.values();
+    for (let i = 0; i < MAX_PROCESSED_MESSAGES / 2; i++) {
+      const value = iterator.next().value;
+      if (value) processedMessages.delete(value);
+    }
+  }
+  return true;
+}
+
 // Event handlers
 bot.events.ready = async (payload) => {
   info("Bot logged in", { username: payload.user.username });
@@ -102,11 +123,17 @@ bot.events.guildCreate = async (guild) => {
 };
 
 bot.events.messageCreate = async (message) => {
-  // Ignore bot messages
+  // Ignore bot messages (includes webhook messages from other bots)
   if (message.author.bot) return;
 
   // Ignore messages without content
   if (!message.content) return;
+
+  // Deduplicate messages to prevent double processing
+  if (!markMessageProcessed(message.id)) {
+    debug("Skipping duplicate message", { messageId: message.id.toString() });
+    return;
+  }
 
   // Check if bot is mentioned
   const isBotMentioned =
@@ -131,6 +158,33 @@ bot.events.messageCreate = async (message) => {
     }
   }
 
+  // Start typing indicator while processing
+  // Typing indicator lasts 10 seconds, so we refresh it every 8 seconds
+  let typingInterval: ReturnType<typeof setInterval> | null = null;
+  const startTyping = async () => {
+    try {
+      await bot.helpers.triggerTypingIndicator(message.channelId);
+      typingInterval = setInterval(async () => {
+        try {
+          await bot.helpers.triggerTypingIndicator(message.channelId);
+        } catch {
+          // Ignore typing errors
+        }
+      }, 8000);
+    } catch {
+      // Ignore typing errors
+    }
+  };
+  const stopTyping = () => {
+    if (typingInterval) {
+      clearInterval(typingInterval);
+      typingInterval = null;
+    }
+  };
+
+  // Start typing before processing
+  await startTyping();
+
   // Handle the message
   const result = await handleMessage(
     message.channelId.toString(),
@@ -140,6 +194,9 @@ bot.events.messageCreate = async (message) => {
     message.content,
     isBotMentioned ?? false
   );
+
+  // Stop typing indicator
+  stopTyping();
 
   // Send response if we got one
   if (result) {

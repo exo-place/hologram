@@ -24,6 +24,10 @@ export interface CharacterData {
   responseChance?: number; // 0.0-1.0 for chance/combined mode
   llmEvalPrompt?: string; // Custom "would I respond?" prompt
 
+  // Image generation
+  imagePrompt?: string; // Base prompt for generating character images
+  imageNegative?: string; // Negative prompt (things to avoid)
+
   [key: string]: unknown;
 }
 
