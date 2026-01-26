@@ -59,6 +59,7 @@ export const helpCommand: CreateApplicationCommand = {
             { name: "Configuration", value: "config" },
             { name: "API Keys (BYOK)", value: "keys" },
             { name: "Quotas", value: "quotas" },
+            { name: "Export", value: "export" },
             { name: "All Commands", value: "commands" },
           ],
         },
@@ -96,6 +97,7 @@ export const helpCommand: CreateApplicationCommand = {
             { name: "/keys", value: "keys" },
             { name: "/quota", value: "quota" },
             { name: "/imagine", value: "imagine" },
+            { name: "/export", value: "export" },
             { name: "/help", value: "help" },
           ],
         },
@@ -326,6 +328,7 @@ function buildOverviewComponents(): ActionRow[] {
             { label: "Configuration", value: "config", emoji: { name: "⚙️" } },
             { label: "API Keys", value: "keys", emoji: { name: "🔑" } },
             { label: "Quotas", value: "quotas", emoji: { name: "📊" } },
+            { label: "Export", value: "export", emoji: { name: "📤" } },
             { label: "All Commands", value: "commands", emoji: { name: "📜" } },
           ],
         },
@@ -887,6 +890,35 @@ Quotas are configured by the bot operator per-world:
 **BYOK & Quotas**
 When using your own API key, usage is still tracked but quotas may be configured differently by the bot operator.`,
   },
+  export: {
+    title: "Export",
+    content: `**About Export**
+Export your characters, worlds, and memories in various formats for backup or use with other tools.
+
+**Commands**
+- \`/export character <name>\` - Export a character
+- \`/export world\` - Export entire world
+- \`/export chronicle\` - Export memories as JSONL
+
+**Character Formats**
+- **CCv2 (Standard)** - SillyTavern Character Card v2
+- **CCv2 Extended** - CCv2 with full Hologram data
+- **Hologram Native** - Complete Hologram format
+
+**CCv2 Compliance Levels**
+- **Strict** - Spec-only fields
+- **Lenient** - Common extensions included
+- **Extended** - Full Hologram data in extensions
+
+**Permissions**
+- Export your own creations
+- Owners/admins can export world content
+- Creator tracking determines ownership
+
+**Output**
+- S3 storage: Download link (if configured)
+- No S3: Embedded in Discord (may truncate)`,
+  },
   commands: {
     title: "All Commands",
     content: `**Setup & Config**
@@ -915,6 +947,9 @@ When using your own API key, usage is still tracked but quotas may be configured
 
 **Usage & Keys**
 \`/quota\` \`/keys\`
+
+**Export**
+\`/export\`
 
 Use \`/help command <name>\` for detailed command help.`,
   },
@@ -1177,5 +1212,27 @@ Displays:
 /imagine expression Alice happy
 /imagine workflows`,
     related: "`/keys` `/character`",
+  },
+  export: {
+    description: "Export characters, worlds, and memories in various formats.",
+    subcommands: `\`character <name>\` - Export a character
+\`world\` - Export entire world (all entities)
+\`chronicle\` - Export memories as JSONL
+
+**Character Format Options:**
+• \`format\`: ccv2, ccv2-extended, hologram
+• \`compliance\`: strict, lenient, extended (CCv2 only)
+
+**World Options:**
+• \`include_chronicle\`: Include memory entries
+• \`include_facts\`: Include facts
+
+**Chronicle Options:**
+• \`scene_id\`: Filter to specific scene`,
+    examples: `/export character "Alice"
+/export character "Alice" format:ccv2 compliance:strict
+/export world include_chronicle:true
+/export chronicle`,
+    related: "`/character` `/world` `/chronicle`",
   },
 };
