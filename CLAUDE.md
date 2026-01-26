@@ -10,7 +10,7 @@ Discord RP bot with smart state/worldstate/memory/context management. SillyTaver
 - **Database**: bun:sqlite + sqlite-vec for vectors (28 tables: 26 regular + 2 virtual)
 - **Embeddings**: Local via @huggingface/transformers (MiniLM, 384-dim)
 - **Linting**: oxlint
-- **Testing**: bun:test (291 tests across 15 files)
+- **Testing**: bun:test (292 tests across 15 files)
 
 ## Project Structure
 
@@ -32,9 +32,11 @@ src/
 │   ├── world/index.ts          # World rules + lore formatters
 │   └── delivery/index.ts       # Multi-char response parsing
 ├── bot/
-│   ├── client.ts               # Discordeno setup, event wiring
+│   ├── client.ts               # Discordeno setup, event wiring, guild join handler
 │   ├── webhooks.ts             # Per-character webhook impersonation
-│   └── commands/               # 18 slash commands
+│   ├── onboarding.ts           # Guild welcome, quick setup, mode selection
+│   ├── tips.ts                 # Progressive disclosure system
+│   └── commands/               # 21 slash commands
 │       ├── index.ts            # Command registry + interaction router
 │       ├── build.ts            # /build - LLM-assisted wizard (character/world/location/item)
 │       ├── character.ts        # /character create|edit|list|delete|view
@@ -42,6 +44,7 @@ src/
 │       ├── combat.ts           # /combat start|join|leave|next|end|status
 │       ├── config.ts           # /config show|set|preset|reset (interactive wizard)
 │       ├── faction.ts          # /faction list|info|join|leave|standing
+│       ├── help.ts             # /help [topic] - in-Discord documentation
 │       ├── location.ts         # /location go|look|create|connect|map
 │       ├── memory.ts           # /memory add|search|forget (legacy facts)
 │       ├── persona.ts          # /persona set|show|clear
@@ -50,8 +53,10 @@ src/
 │       ├── roll.ts             # /roll + /r (dice expressions)
 │       ├── scene.ts            # /scene start|pause|resume|end|status|list
 │       ├── session.ts          # /session enable|disable|model|character
+│       ├── setup.ts            # /setup quick|guided|status|reset
 │       ├── status.ts           # /status (character state, effects, form)
 │       ├── time.ts             # /time show|advance|set|dawn|noon|dusk|night
+│       ├── tips.ts             # /tips enable|disable|status|reset
 │       └── world.ts            # /world create|edit|info|link
 ├── ai/
 │   ├── models.ts               # Provider abstraction (provider:model spec)
@@ -185,6 +190,8 @@ Presets match modes: `minimal`, `sillytavern`, `mud`, `survival`, `tits`, `table
 - **Webhook impersonation**: Each AI character gets their own Discord identity via webhooks
 - **Proxy system**: Users send as different characters via prefix/suffix/bracket syntax
 - **Behavior tracks**: NPC state machines with weighted transitions and conditions
+- **Onboarding**: Guild join welcome → Quick Setup button → world + session auto-created
+- **Progressive disclosure**: Tips suggest features based on usage milestones (10/50/100 messages)
 
 ### Memory Tiers
 1. **Ephemeral**: Recent Discord messages (configurable window)
@@ -199,7 +206,7 @@ bun run dev          # Development with watch
 bun run start        # Production
 bun run lint         # oxlint
 bun run check:types  # TypeScript check (tsgo --noEmit, ~10x faster)
-bun test             # Run tests (291 tests, 15 files)
+bun test             # Run tests (292 tests, 15 files)
 ```
 
 ## Environment Variables

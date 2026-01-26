@@ -2,42 +2,105 @@
 
 Hologram is highly configurable - every feature is optional. Configure at the world level with sensible defaults.
 
-## World Config
+**Note:** Defaults are now minimal (all features disabled). Use presets or the wizard to enable features.
 
-Use `/config` commands to manage world configuration:
+## Quick Config
 
 ```
-/config show           # Show current config
-/config preset minimal # Simple chat mode
-/config preset full    # Full RP with all features
-/config set <path> <value>
+/config preset sillytavern  # Good default for character RP
+/config wizard              # Interactive toggle UI
+/config show                # View current settings
 ```
 
-## Available Presets
+## World Config Commands
+
+| Command | Description |
+|---------|-------------|
+| `/config show [section]` | Show current configuration |
+| `/config set <path> <value>` | Set a specific option |
+| `/config preset <mode>` | Apply a preset mode |
+| `/config wizard` | Interactive feature toggles |
+| `/config reset` | Reset to defaults |
+
+## Available Presets (Modes)
 
 ### Minimal
-- Chronicle disabled
-- No scenes, locations, or time tracking
-- Just character chat
+- All features disabled
+- Just chat with a character
+- Tagged output (no webhooks)
 
-### Simple
-- Chronicle enabled with auto-extract
-- Basic scene tracking
-- No inventory or complex systems
+### SillyTavern (Recommended)
+- Chronicle (memory) enabled with auto-extract
+- Scenes enabled
+- Relationships enabled
+- Webhook output for character messages
+
+### MUD
+- Locations with connections
+- Inventory with equipment
+- Time tracking
+- Chronicle enabled
+- Text adventure style
+
+### Survival
+- All MUD features plus:
+- Character attributes (hunger, thirst, stamina)
+- Transformation/forms
+- Random events
+- Real-time sync
+
+### Tabletop
+- Dice rolling (advanced syntax)
+- Combat system (HP, AC, initiative)
+- Equipment and inventory
+- Manual time control
+
+### Parser
+- Classic text adventure style
+- Locations with properties
+- Inventory
+- Narrator output mode
 
 ### Full
-- All systems enabled
-- Inventory with equipment
-- Locations with connections
-- Calendar and time tracking
-- Relationships and factions
+- Everything enabled
+- All mechanics active
+- Maximum complexity
 
 ## Feature Flags
 
 Each system can be toggled independently:
 
-- `chronicle.enabled` - Memory and fact storage
-- `scenes.enabled` - Scene pause/resume
-- `inventory.enabled` - Item management
-- `locations.enabled` - Location graph
-- `time.enabled` - Time tracking
+| Path | Description |
+|------|-------------|
+| `chronicle.enabled` | Memory and fact storage |
+| `chronicle.autoExtract` | Automatically save important events |
+| `chronicle.perspectiveAware` | Filter by who knows what |
+| `scenes.enabled` | Scene pause/resume |
+| `inventory.enabled` | Item management |
+| `inventory.useEquipment` | Equipment slots |
+| `inventory.useCapacity` | Weight/slot limits |
+| `locations.enabled` | Location graph |
+| `locations.useConnections` | Named paths between locations |
+| `time.enabled` | Time tracking |
+| `time.useCalendar` | Custom calendar |
+| `time.useDayNight` | Day/night cycle |
+| `dice.enabled` | Dice rolling |
+| `dice.useCombat` | Turn-based combat |
+| `relationships.enabled` | Character relationships |
+| `relationships.useAffinity` | Numerical affinity scores |
+| `characterState.enabled` | Attributes and forms |
+| `characterState.useEffects` | Buffs, debuffs, conditions |
+
+## Examples
+
+```
+# Enable memory for an existing world
+/config set chronicle.enabled true
+
+# Enable dice without full combat
+/config set dice.enabled true
+/config set dice.useCombat false
+
+# Switch to tabletop mode
+/config preset tabletop
+```

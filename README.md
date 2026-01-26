@@ -4,8 +4,18 @@ Discord RP bot with smart state/worldstate/memory/context management.
 
 Inspired by SillyTavern but with proper knowledge graph, RAG, and tiered memory systems for sophisticated context assembly.
 
+## Quick Start
+
+When you add Hologram to your server:
+1. Click **Quick Setup** in the welcome message, or
+2. Use `/setup quick` for one-command setup, or
+3. Use `/setup guided` for step-by-step configuration
+
+Then create a character with `/build character` and start chatting!
+
 ## Features
 
+- **Zero-config start** - One button click to get going
 - **Freeform character system** - Not locked to CCv2 spec
 - **World state** - Location, time, weather tracking
 - **Inventory** - Items with consistent descriptions and stats
@@ -15,6 +25,7 @@ Inspired by SillyTavern but with proper knowledge graph, RAG, and tiered memory 
 - **Context assembly** - Smart selection of what fits in the LLM window
 - **Multi-provider LLM** - AI SDK with `provider:model` spec
 - **User App support** - Install personally, use in any DM or server
+- **Progressive disclosure** - Starts minimal, suggests features as you need them
 
 ## Setup
 
@@ -92,29 +103,39 @@ Use `provider:model` format:
 
 ## Slash Commands
 
+### Getting Started
+- `/setup quick` - One-command setup (creates world, enables session)
+- `/setup guided` - Step-by-step interactive setup
+- `/setup status` - Check current setup state
+- `/help` - Overview of setup and commands
+- `/help <topic>` - Deep dive (start, characters, worlds, memory, etc.)
+- `/tips enable|disable` - Toggle helpful suggestions
+
+### `/build` (AI-Assisted Wizards)
+- `character` - Create a character with AI suggestions
+- `world` - Create a world with AI suggestions
+- `location` - Create a location
+- `item` - Create an item
+
 ### `/character`
 - `create <name> <persona>` - Create a character
 - `list` - List all characters
 - `select <name>` - Set active character for channel
-- `info <name>` - Show character details
-- `edit <name> <field> <value>` - Edit character
+- `view <name>` - Show character details
+- `edit <name>` - Edit character
 - `delete <name>` - Delete character
 
 ### `/world`
 - `create <name>` - Create a world
 - `init <world>` - Initialize world for this channel
 - `status` - Show current world state
-- `location <name> [description]` - Go to or create location
-- `time <minutes>` - Advance time
-- `weather <description>` - Set weather
-- `locations` - List all locations
 
-### `/memory`
-- `add <content> [importance]` - Store a memory
-- `search <query>` - Semantic search
-- `important` - List important memories
-- `forget <id>` - Delete a memory
-- `stats` - Memory statistics
+### `/config`
+- `show [section]` - Show current configuration
+- `set <path> <value>` - Set a config value
+- `preset <mode>` - Apply a mode (minimal, sillytavern, mud, tabletop, etc.)
+- `wizard` - Interactive feature toggles
+- `reset` - Reset to defaults
 
 ### `/session`
 - `enable` - Enable bot in channel
@@ -123,6 +144,37 @@ Use `provider:model` format:
 - `clear` - Clear history
 - `scene <description>` - Set scene
 - `debug` - Show context debug info
+
+### `/chronicle` (Memory)
+- `recall <query>` - Search memories
+- `history` - View recent entries
+- `add <text>` - Manually add a memory
+- `forget <id>` - Remove a memory
+
+### `/scene`
+- `start <name>` - Start a named RP session
+- `pause` - Pause current scene
+- `resume <name>` - Resume a paused scene
+- `end` - End current scene
+- `list` - View all scenes
+
+### `/location`
+- `go <name>` - Travel to a location
+- `look` - Examine current location
+- `create <name>` - Create new location
+- `connect <from> <to>` - Connect locations
+- `map` - View all locations
+
+### `/roll`
+- `<expression>` - Roll dice (e.g., `2d6+3`, `4d6kh3`)
+- `/r <expression>` - Quick roll shortcut
+
+### `/combat`
+- `start` - Begin combat
+- `join <character>` - Add to initiative
+- `next` - Next turn
+- `status` - View initiative order
+- `end` - End combat
 
 ## Tech Stack
 
