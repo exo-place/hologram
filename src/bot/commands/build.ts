@@ -5,6 +5,9 @@ import {
   DiscordInteractionContextType,
   MessageComponentTypes,
   TextStyles,
+  ButtonStyles,
+  type ButtonComponent,
+  type ActionRow,
 } from "@discordeno/bot";
 import type { HologramBot, HologramInteraction } from "../types";
 import { getActiveScene } from "../../scene";
@@ -202,12 +205,12 @@ async function sendWizardPreview(
 
   const complete = isWizardComplete(session);
 
-  const buttons: any[] = [];
+  const buttons: ButtonComponent[] = [];
 
   if (complete) {
     buttons.push({
       type: MessageComponentTypes.Button,
-      style: 3, // Success
+      style: ButtonStyles.Success,
       label: "Create",
       customId: encodeWizardAction(session.id, "create"),
     });
@@ -216,14 +219,14 @@ async function sendWizardPreview(
   // Back button to edit
   buttons.push({
     type: MessageComponentTypes.Button,
-    style: 2, // Secondary
+    style: ButtonStyles.Secondary,
     label: "Edit (Go Back)",
     customId: encodeWizardAction(session.id, "back"),
   });
 
   buttons.push({
     type: MessageComponentTypes.Button,
-    style: 4, // Danger
+    style: ButtonStyles.Danger,
     label: "Cancel",
     customId: encodeWizardAction(session.id, "cancel"),
   });
@@ -234,8 +237,7 @@ async function sendWizardPreview(
     type: responseType,
     data: {
       content: lines.join("\n"),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      components: buttons.length > 0 ? [{ type: MessageComponentTypes.ActionRow, components: buttons } as any] : [],
+      components: buttons.length > 0 ? [{ type: MessageComponentTypes.ActionRow, components: buttons } as ActionRow] : [],
       flags: 64,
     },
   });
@@ -316,7 +318,8 @@ export async function handleBuildWizardComponent(
       const components = interaction.data?.components ?? [];
       let value = "";
       for (const row of components) {
-        for (const comp of (row as any).components ?? []) {
+        if (!("components" in row) || !row.components) continue;
+        for (const comp of row.components) {
           if (comp.customId === "wizard_input") {
             value = comp.value ?? "";
           }
