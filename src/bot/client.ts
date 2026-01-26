@@ -14,8 +14,8 @@ import {
   getThrottleRemainingMs,
   type TriggerAction,
 } from "../ai/response-decision";
-import { resolveDiscordEntity } from "../db/discord";
-import { getEntityWithFacts } from "../db/entities";
+import { resolveDiscordEntity, isNewUser, markUserWelcomed } from "../db/discord";
+import { getEntityWithFacts, getSystemEntity, getFactsForEntity } from "../db/entities";
 import "./commands/commands"; // Register all commands
 import { ensureHelpEntities } from "./commands/commands";
 
@@ -121,6 +121,15 @@ bot.events.messageCreate = async (message) => {
 
   const channelEntity = getEntityWithFacts(channelEntityId);
   if (!channelEntity) return;
+
+  // Welcome new users with a DM
+  const userId = message.author.id.toString();
+  if (isNewUser(userId)) {
+    markUserWelcomed(userId);
+    sendWelcomeDm(message.author.id).catch(() => {
+      // DMs may fail if user has them disabled - that's fine
+    });
+  }
 
   // Parse trigger config from channel facts
   const config = parseTriggerConfig(channelEntity.facts);
@@ -284,6 +293,32 @@ async function sendResponse(
       error("Failed to send message", err);
     }
   }
+}
+
+async function sendWelcomeDm(userId: bigint): Promise<void> {
+  // Get the help:start entity content
+  const helpEntity = getSystemEntity("help:start");
+  if (!helpEntity) {
+    debug("No help:start entity found for welcome DM");
+    return;
+  }
+
+  const facts = getFactsForEntity(helpEntity.id);
+  const content = facts
+    .map(f => f.content)
+    .filter(c => !c.startsWith("is ") && c !== "---")
+    .join("\n");
+
+  if (!content) return;
+
+  // Create DM channel and send
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const dmChannel = await bot.helpers.getDmChannel(userId) as any;
+  await bot.helpers.sendMessage(dmChannel.id, {
+    content: `**Welcome to Hologram!**\n\n${content}`,
+  });
+
+  debug("Sent welcome DM", { userId: userId.toString() });
 }
 
 bot.events.interactionCreate = async (interaction) => {

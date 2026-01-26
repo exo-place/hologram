@@ -183,3 +183,26 @@ export function formatMessagesForContext(messages: Message[]): string {
     .map(m => `${m.author_name}: ${m.content}`)
     .join("\n");
 }
+
+// =============================================================================
+// User Onboarding Tracking
+// =============================================================================
+
+// Track users we've welcomed (in-memory, resets on restart - that's fine)
+const welcomedUsers = new Set<string>();
+
+export function isNewUser(userId: string): boolean {
+  if (welcomedUsers.has(userId)) return false;
+
+  const db = getDb();
+  // Check if user has any entity mappings
+  const hasMapping = db.prepare(`
+    SELECT 1 FROM discord_entities WHERE discord_id = ? AND discord_type = 'user' LIMIT 1
+  `).get(userId);
+
+  return !hasMapping;
+}
+
+export function markUserWelcomed(userId: string): void {
+  welcomedUsers.add(userId);
+}
