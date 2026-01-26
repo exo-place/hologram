@@ -144,7 +144,10 @@ export const DEFAULT_CONFIG: WorldConfig = {
   context: DEFAULT_CONTEXT,
 };
 
-// === Presets ===
+// === Presets (Legacy) ===
+// NOTE: Modes in src/plugins/index.ts are now the source of truth for presets.
+// These are kept for backwards compatibility and testing.
+// The /config preset command uses modes, not these presets.
 
 /** Minimal config - just chat with a character, no game mechanics */
 export const PRESET_MINIMAL: PartialWorldConfig = {

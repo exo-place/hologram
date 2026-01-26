@@ -11,13 +11,13 @@ import type { HologramBot, HologramInteraction } from "../types";
 import { getWorldState } from "../../world/state";
 import {
   DEFAULT_CONFIG,
-  PRESETS,
   mergeConfig,
   getConfigValue,
   setConfigValue,
   parseConfigValue,
   type WorldConfig,
 } from "../../config";
+import { getModes, getModeConfig, getMode } from "../../plugins";
 import { getDb } from "../../db";
 import { getOptionValue, getSubcommand, respond, USER_APP_INTEGRATION } from "./index";
 
@@ -72,7 +72,7 @@ export const configCommand: CreateApplicationCommand = {
     },
     {
       name: "preset",
-      description: "Apply a configuration preset",
+      description: "Apply a configuration preset (mode)",
       type: ApplicationCommandOptionTypes.SubCommand,
       options: [
         {
@@ -82,10 +82,12 @@ export const configCommand: CreateApplicationCommand = {
           required: true,
           choices: [
             { name: "minimal - Just chat, no mechanics", value: "minimal" },
-            { name: "simple - Basic RP features", value: "simple" },
+            { name: "sillytavern - Character chat with memory", value: "sillytavern" },
+            { name: "mud - Locations, inventory, exploration", value: "mud" },
+            { name: "survival - Hunger, thirst, transformation", value: "survival" },
+            { name: "tabletop - Dice, combat, turn-based", value: "tabletop" },
+            { name: "parser - Classic text adventure", value: "parser" },
             { name: "full - All features enabled", value: "full" },
-            { name: "tf - Transformation focused", value: "tf" },
-            { name: "tabletop - Dice and combat", value: "tabletop" },
           ],
         },
       ],
@@ -170,25 +172,26 @@ export async function handleConfigCommand(
     }
 
     case "preset": {
-      const presetName = getOptionValue<string>(interaction, "name")!;
-      const preset = PRESETS[presetName];
+      const modeName = getOptionValue<string>(interaction, "name")!;
+      const mode = getMode(modeName);
 
-      if (!preset) {
+      if (!mode) {
+        const validModes = getModes().map((m) => m.id).join(", ");
         await respond(
           bot,
           interaction,
-          `Unknown preset: ${presetName}. Valid: ${Object.keys(PRESETS).join(", ")}`
+          `Unknown preset: ${modeName}. Valid: ${validModes}`
         );
         return;
       }
 
-      const newConfig = mergeConfig(preset);
+      const newConfig = getModeConfig(modeName);
       saveWorldConfig(db, worldState.id, newConfig);
 
       await respond(
         bot,
         interaction,
-        `Applied preset: **${presetName}**\n${getPresetDescription(presetName)}`
+        `Applied preset: **${mode.name}**\n${mode.description}`
       );
       break;
     }
@@ -551,20 +554,4 @@ function formatConfigSection(name: string, config: unknown): string {
   return lines.join("\n");
 }
 
-function getPresetDescription(name: string): string {
-  switch (name) {
-    case "minimal":
-      return "All mechanics disabled. Simple character chat.";
-    case "simple":
-      return "Basic RP features. Chronicle, scenes, inventory, locations, time, relationships.";
-    case "full":
-      return "All features enabled including dice, combat, factions, effects.";
-    case "tf":
-      return "Transformation focused. Forms, effects, and attributes enabled.";
-    case "tabletop":
-      return "Tabletop RPG style. Dice, combat, HP/AC, manual time.";
-    default:
-      return "";
-  }
-}
 

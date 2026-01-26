@@ -4,8 +4,8 @@
 
 ### Architecture
 
-- [ ] Extract circular dependencies - lazy imports in `src/bot/commands/build.ts` and `src/dice/index.ts` should be extracted to shared modules
-- [ ] Unify mode/preset system - modes in `plugins/index.ts` and presets in `config/defaults.ts` are synchronized manually; make single source of truth
+- [x] Extract circular dependencies - removed phantom workarounds in `build.ts` and `dice/index.ts` (no actual cycles existed)
+- [x] Unify mode/preset system - `/config preset` now uses modes from `plugins/index.ts` as source of truth; legacy PRESETS in defaults.ts kept for backwards compat
 - [ ] Add extractor timeout - fire-and-forget extractors in `plugins/core/index.ts:177` have no cancellation/timeout mechanism
 - [ ] Type-safe plugin data - `ctx.data` Map uses string keys and casting; consider typed plugin data structure
 - [ ] Add structured logging - replace console.log/error with logger abstraction (pino or similar)
