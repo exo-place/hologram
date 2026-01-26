@@ -1,386 +1,159 @@
 import { getDb } from "./index";
 
-export type EntityType = "character" | "location" | "item" | "concept" | "faction";
+// =============================================================================
+// Entity Operations
+// =============================================================================
 
-export interface Entity<T = Record<string, unknown>> {
+export interface Entity {
   id: number;
-  worldId: number | null;  // Legacy: primary world (use entity_worlds for multi-world)
-  type: EntityType;
   name: string;
-  data: T;
-  creatorId: string | null;
-  createdAt: number;
+  created_by: string | null;
+  created_at: string;
 }
 
-export interface CharacterData {
-  persona: string;
-  scenario?: string;
-  exampleDialogue?: string;
-  systemPrompt?: string;
-
-  // Response behavior (overrides world defaults)
-  responseMode?: "always" | "mention" | "trigger" | "chance" | "llm" | "combined";
-  triggerPhrases?: string[]; // ["Hey Aria", "Aria,", "yo aria"]
-  responseChance?: number; // 0.0-1.0 for chance/combined mode
-  llmEvalPrompt?: string; // Custom "would I respond?" prompt
-
-  // Image generation
-  imagePrompt?: string; // Base prompt for generating character images
-  imageNegative?: string; // Negative prompt (things to avoid)
-
-  [key: string]: unknown;
-}
-
-export type LocationType = "location" | "region" | "zone" | "world";
-
-export interface LocationConnection {
-  targetId: number;
-  type?: string;            // "door", "path", "portal", "hidden", etc.
-  bidirectional?: boolean;  // Default true
-  travelTime?: number;      // Minutes
-  description?: string;     // "A narrow passage leads north"
-  hidden?: boolean;         // Not shown until discovered
-}
-
-export interface LocationData {
-  description: string;
-  connectedTo?: number[]; // IDs of connected locations (legacy)
-
-  // Hierarchy
-  parentId?: number;          // Region/zone this is inside
-  locationType?: LocationType;
-
-  // Connections (new format)
-  connections?: LocationConnection[];
-
-  // Properties
-  properties?: Record<string, boolean | string | number>;
-  // e.g., { indoor: true, lightLevel: "dim", temperature: "cold" }
-
-  // Ambience
-  ambience?: string;          // Default scene ambience when here
-  enterMessage?: string;      // Shown when arriving
-
-  [key: string]: unknown;
-}
-
-export type ItemType = "consumable" | "equipment" | "quest" | "currency" | "misc";
-
-export interface ItemData {
-  description: string;
-  stats?: Record<string, number>;
-
-  // Item type and properties
-  type?: ItemType;
-  weight?: number;
-  slots?: number;              // Inventory slots it takes
-
-  // Equipment properties
-  equipSlot?: string;          // Which slot it equips to
-  durability?: number;
-  maxDurability?: number;
-
-  // Consumable properties
-  uses?: number;
-  maxUses?: number;
-  effect?: string;             // Description of what it does
-
-  // Equipment requirements
-  requirements?: {
-    species?: string[];        // Must be one of these species
-    bodyType?: string[];       // Must have one of these body types
-    size?: string[];           // Must be one of these sizes
-    attributes?: Record<string, number>;  // Must have at least these attribute values
-    flags?: string[];          // Must have these flags
-    notFlags?: string[];       // Must NOT have these flags
-  };
-  incompatible?: "cannot_equip" | "reduced_stats" | "cosmetic_only" | "transforms";
-
-  // Transformation properties
-  transformation?: {
-    effects: Array<{
-      name: string;
-      type: string;
-      description?: string;
-      duration?: string;
-      modifiers?: Record<string, number>;
-      bodyChanges?: Record<string, unknown>;
-      flags?: string[];
-    }>;
-    target: "self" | "other" | "any";
-    reversible?: boolean;
-    reverseItem?: number;      // Item ID that reverses this
-  };
-
-  [key: string]: unknown;
-}
-
-export interface FactionData {
-  description: string;
-  parentFactionId?: number;    // For sub-factions
-  motto?: string;
-  alignment?: string;          // "lawful", "chaotic", etc.
-  headquarters?: number;       // Location entity ID
-  [key: string]: unknown;
-}
-
-/** Options for creating an entity */
-export interface CreateEntityOptions {
-  worldId?: number;
-  creatorId?: string;
-  /** Additional worlds this entity should be visible in (primary is worldId) */
-  additionalWorlds?: number[];
-}
-
-// Create
-export function createEntity<T extends Record<string, unknown>>(
-  type: EntityType,
-  name: string,
-  data: T,
-  worldIdOrOptions?: number | CreateEntityOptions
-): Entity<T> {
+export function createEntity(name: string, createdBy?: string): Entity {
   const db = getDb();
-
-  // Handle both old signature (worldId) and new signature (options)
-  const options: CreateEntityOptions =
-    typeof worldIdOrOptions === "number"
-      ? { worldId: worldIdOrOptions }
-      : worldIdOrOptions ?? {};
-
-  const { worldId, creatorId, additionalWorlds = [] } = options;
-
-  // Insert entity
-  const stmt = db.prepare(`
-    INSERT INTO entities (world_id, type, name, data, creator_id)
-    VALUES (?, ?, ?, ?, ?)
-    RETURNING id, world_id as worldId, type, name, data, creator_id as creatorId, created_at as createdAt
-  `);
-  const row = stmt.get(
-    worldId ?? null,
-    type,
-    name,
-    JSON.stringify(data),
-    creatorId ?? null
-  ) as {
-    id: number;
-    worldId: number | null;
-    type: EntityType;
-    name: string;
-    data: string;
-    creatorId: string | null;
-    createdAt: number;
-  };
-
-  // Create entity_worlds link for primary world
-  if (worldId !== undefined) {
-    db.prepare(
-      `INSERT INTO entity_worlds (entity_id, world_id, is_primary) VALUES (?, ?, 1)`
-    ).run(row.id, worldId);
-  }
-
-  // Create entity_worlds links for additional worlds
-  for (const additionalWorldId of additionalWorlds) {
-    db.prepare(
-      `INSERT OR IGNORE INTO entity_worlds (entity_id, world_id, is_primary) VALUES (?, ?, 0)`
-    ).run(row.id, additionalWorldId);
-  }
-
-  return {
-    ...row,
-    data: JSON.parse(row.data) as T,
-  };
+  const row = db.prepare(`
+    INSERT INTO entities (name, created_by)
+    VALUES (?, ?)
+    RETURNING id, name, created_by, created_at
+  `).get(name, createdBy ?? null) as Entity;
+  return row;
 }
 
-// Read
-export function getEntity<T = Record<string, unknown>>(
-  id: number
-): Entity<T> | null {
+export function getEntity(id: number): Entity | null {
   const db = getDb();
-  const stmt = db.prepare(`
-    SELECT id, world_id as worldId, type, name, data, creator_id as creatorId, created_at as createdAt
-    FROM entities WHERE id = ?
-  `);
-  const row = stmt.get(id) as {
-    id: number;
-    worldId: number | null;
-    type: EntityType;
-    name: string;
-    data: string;
-    creatorId: string | null;
-    createdAt: number;
-  } | null;
-  if (!row) return null;
-  return {
-    ...row,
-    data: JSON.parse(row.data) as T,
-  };
+  return db.prepare(`SELECT * FROM entities WHERE id = ?`).get(id) as Entity | null;
 }
 
-export function getEntitiesByType<T = Record<string, unknown>>(
-  type: EntityType,
-  worldId?: number
-): Entity<T>[] {
+export function getEntityByName(name: string): Entity | null {
   const db = getDb();
-  let stmt;
-  let rows;
-  if (worldId !== undefined) {
-    // Use entity_worlds for multi-world support, falling back to world_id for legacy
-    stmt = db.prepare(`
-      SELECT DISTINCT e.id, e.world_id as worldId, e.type, e.name, e.data,
-             e.creator_id as creatorId, e.created_at as createdAt
-      FROM entities e
-      LEFT JOIN entity_worlds ew ON e.id = ew.entity_id
-      WHERE e.type = ? AND (ew.world_id = ? OR e.world_id = ?)
-      ORDER BY e.name
-    `);
-    rows = stmt.all(type, worldId, worldId);
-  } else {
-    stmt = db.prepare(`
-      SELECT id, world_id as worldId, type, name, data,
-             creator_id as creatorId, created_at as createdAt
-      FROM entities WHERE type = ?
-      ORDER BY name
-    `);
-    rows = stmt.all(type);
-  }
-  return (rows as { data: string }[]).map((row) => ({
-    ...row,
-    data: JSON.parse(row.data) as T,
-  })) as Entity<T>[];
+  return db.prepare(`SELECT * FROM entities WHERE name = ? COLLATE NOCASE`).get(name) as Entity | null;
 }
 
-export function findEntityByName<T = Record<string, unknown>>(
-  name: string,
-  type?: EntityType,
-  worldId?: number
-): Entity<T> | null {
+export function updateEntity(id: number, name: string): Entity | null {
   const db = getDb();
-
-  // If worldId provided, use entity_worlds for multi-world support
-  if (worldId !== undefined) {
-    let query = `
-      SELECT DISTINCT e.id, e.world_id as worldId, e.type, e.name, e.data,
-             e.creator_id as creatorId, e.created_at as createdAt
-      FROM entities e
-      LEFT JOIN entity_worlds ew ON e.id = ew.entity_id
-      WHERE e.name = ? AND (ew.world_id = ? OR e.world_id = ?)
-    `;
-    const params: (string | number)[] = [name, worldId, worldId];
-
-    if (type) {
-      query += " AND e.type = ?";
-      params.push(type);
-    }
-
-    const stmt = db.prepare(query);
-    const row = stmt.get(...params) as {
-      id: number;
-      worldId: number | null;
-      type: EntityType;
-      name: string;
-      data: string;
-      creatorId: string | null;
-      createdAt: number;
-    } | null;
-    if (!row) return null;
-    return {
-      ...row,
-      data: JSON.parse(row.data) as T,
-    };
-  }
-
-  // No worldId, search globally
-  let query = `
-    SELECT id, world_id as worldId, type, name, data,
-           creator_id as creatorId, created_at as createdAt
-    FROM entities WHERE name = ?
-  `;
-  const params: (string | number)[] = [name];
-
-  if (type) {
-    query += " AND type = ?";
-    params.push(type);
-  }
-
-  const stmt = db.prepare(query);
-  const row = stmt.get(...params) as {
-    id: number;
-    worldId: number | null;
-    type: EntityType;
-    name: string;
-    data: string;
-    creatorId: string | null;
-    createdAt: number;
-  } | null;
-  if (!row) return null;
-  return {
-    ...row,
-    data: JSON.parse(row.data) as T,
-  };
+  return db.prepare(`
+    UPDATE entities SET name = ? WHERE id = ?
+    RETURNING id, name, created_by, created_at
+  `).get(name, id) as Entity | null;
 }
 
-// Update
-export function updateEntity<T extends Record<string, unknown>>(
-  id: number,
-  updates: { name?: string; data?: Partial<T> }
-): Entity<T> | null {
-  const db = getDb();
-  const existing = getEntity<T>(id);
-  if (!existing) return null;
-
-  const newName = updates.name ?? existing.name;
-  const newData = updates.data
-    ? { ...existing.data, ...updates.data }
-    : existing.data;
-
-  const stmt = db.prepare(`
-    UPDATE entities SET name = ?, data = ? WHERE id = ?
-    RETURNING id, world_id as worldId, type, name, data, creator_id as creatorId, created_at as createdAt
-  `);
-  const row = stmt.get(newName, JSON.stringify(newData), id) as {
-    id: number;
-    worldId: number | null;
-    type: EntityType;
-    name: string;
-    data: string;
-    creatorId: string | null;
-    createdAt: number;
-  };
-  return {
-    ...row,
-    data: JSON.parse(row.data) as T,
-  };
-}
-
-// Delete
 export function deleteEntity(id: number): boolean {
   const db = getDb();
-  const stmt = db.prepare("DELETE FROM entities WHERE id = ?");
-  const result = stmt.run(id);
+  const result = db.prepare(`DELETE FROM entities WHERE id = ?`).run(id);
   return result.changes > 0;
 }
 
-// Convenience functions for specific types
-export const createCharacter = (
-  name: string,
-  data: CharacterData,
-  worldId?: number
-) => createEntity("character", name, data, worldId);
+export function listEntities(limit = 100, offset = 0): Entity[] {
+  const db = getDb();
+  return db.prepare(`
+    SELECT * FROM entities ORDER BY created_at DESC LIMIT ? OFFSET ?
+  `).all(limit, offset) as Entity[];
+}
 
-export const getCharacters = (worldId?: number) =>
-  getEntitiesByType<CharacterData>("character", worldId);
+export function searchEntities(query: string, limit = 20): Entity[] {
+  const db = getDb();
+  return db.prepare(`
+    SELECT * FROM entities
+    WHERE name LIKE ? COLLATE NOCASE
+    ORDER BY name
+    LIMIT ?
+  `).all(`%${query}%`, limit) as Entity[];
+}
 
-export const createLocation = (
-  name: string,
-  data: LocationData,
-  worldId?: number
-) => createEntity("location", name, data, worldId);
+// =============================================================================
+// Fact Operations
+// =============================================================================
 
-export const getLocations = (worldId?: number) =>
-  getEntitiesByType<LocationData>("location", worldId);
+export interface Fact {
+  id: number;
+  entity_id: number;
+  content: string;
+  created_at: string;
+  updated_at: string;
+}
 
-export const createItem = (name: string, data: ItemData, worldId?: number) =>
-  createEntity("item", name, data, worldId);
+export function addFact(entityId: number, content: string): Fact {
+  const db = getDb();
+  return db.prepare(`
+    INSERT INTO facts (entity_id, content)
+    VALUES (?, ?)
+    RETURNING id, entity_id, content, created_at, updated_at
+  `).get(entityId, content) as Fact;
+}
 
-export const getItems = (worldId?: number) =>
-  getEntitiesByType<ItemData>("item", worldId);
+export function getFact(id: number): Fact | null {
+  const db = getDb();
+  return db.prepare(`SELECT * FROM facts WHERE id = ?`).get(id) as Fact | null;
+}
+
+export function getFactsForEntity(entityId: number): Fact[] {
+  const db = getDb();
+  return db.prepare(`
+    SELECT * FROM facts WHERE entity_id = ? ORDER BY created_at
+  `).all(entityId) as Fact[];
+}
+
+export function updateFact(id: number, content: string): Fact | null {
+  const db = getDb();
+  return db.prepare(`
+    UPDATE facts SET content = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+    RETURNING id, entity_id, content, created_at, updated_at
+  `).get(content, id) as Fact | null;
+}
+
+export function removeFact(id: number): boolean {
+  const db = getDb();
+  const result = db.prepare(`DELETE FROM facts WHERE id = ?`).run(id);
+  return result.changes > 0;
+}
+
+export function setFacts(entityId: number, contents: string[]): Fact[] {
+  const db = getDb();
+  // Clear existing facts
+  db.prepare(`DELETE FROM facts WHERE entity_id = ?`).run(entityId);
+  // Add new facts
+  const insert = db.prepare(`
+    INSERT INTO facts (entity_id, content)
+    VALUES (?, ?)
+    RETURNING id, entity_id, content, created_at, updated_at
+  `);
+  return contents.map(content => insert.get(entityId, content) as Fact);
+}
+
+// =============================================================================
+// Combined View
+// =============================================================================
+
+export interface EntityWithFacts extends Entity {
+  facts: Fact[];
+}
+
+export function getEntityWithFacts(id: number): EntityWithFacts | null {
+  const entity = getEntity(id);
+  if (!entity) return null;
+  const facts = getFactsForEntity(id);
+  return { ...entity, facts };
+}
+
+export function getEntityWithFactsByName(name: string): EntityWithFacts | null {
+  const entity = getEntityByName(name);
+  if (!entity) return null;
+  const facts = getFactsForEntity(entity.id);
+  return { ...entity, facts };
+}
+
+// =============================================================================
+// Context Formatting
+// =============================================================================
+
+export function formatEntityForContext(entity: EntityWithFacts): string {
+  const factLines = entity.facts.map(f => f.content).join("\n");
+  return `<facts entity="${entity.name}">\n${factLines}\n</facts>`;
+}
+
+export function formatEntitiesForContext(entities: EntityWithFacts[]): string {
+  return entities.map(formatEntityForContext).join("\n\n");
+}

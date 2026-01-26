@@ -1,374 +1,257 @@
 import {
-  type CreateApplicationCommand,
   InteractionTypes,
-  ApplicationCommandOptionTypes,
+  ApplicationCommandTypes,
+  InteractionResponseTypes,
+  MessageComponentTypes,
 } from "@discordeno/bot";
-import type { HologramBot, HologramInteraction } from "../types";
-export { USER_APP_INTEGRATION, GUILD_ONLY_INTEGRATION } from "./integration";
-import { characterCommand, handleCharacterCommand, handleCharacterAutocomplete } from "./character";
-import { worldCommand, handleWorldCommand } from "./world";
-import { memoryCommand, handleMemoryCommand } from "./memory";
-import { sessionCommand, handleSessionCommand } from "./session";
-import { configCommand, handleConfigCommand, handleConfigWizardComponent } from "./config";
-import { sceneCommand, handleSceneCommand } from "./scene";
-import { chronicleCommand, handleChronicleCommand } from "./chronicle";
-import { statusCommand, handleStatusCommand } from "./status";
-import { locationCommand, handleLocationCommand } from "./location";
-import { timeCommand, handleTimeCommand } from "./time";
-import { rollCommand, rCommand, handleRollCommand, handleRCommand } from "./roll";
-import { combatCommand, handleCombatCommand } from "./combat";
-import { relationshipCommand, handleRelationshipCommand } from "./relationship";
-import { factionCommand, handleFactionCommand } from "./faction";
-import { personaCommand, handlePersonaCommand } from "./persona";
-import { proxyCommand, handleProxyCommand } from "./proxy";
-import { buildCommand, handleBuildCommand, handleBuildWizardComponent } from "./build";
-import { setupCommand, handleSetupCommand, handleSetupComponent } from "./setup";
-import { tipsCommand, handleTipsCommand } from "./tips";
-import { helpCommand, handleHelpCommand, handleHelpComponent } from "./help";
-import { imagineCommand, handleImagineCommand } from "./imagine";
-import { quotaCommand, handleQuotaCommand } from "./quota";
-import { keysCommand, handleKeysCommand, handleKeysModal } from "./keys";
-import { exportCommand, handleExportCommand } from "./export";
-import { channelCommand, handleChannelCommand } from "./channel";
-import { rerollCommand, handleRerollCommand } from "./reroll";
-import { importCommand, handleImportCommand } from "./import";
-import { notesCommand, handleNotesCommand } from "./notes";
-import { debugCommand, handleDebugCommand } from "./debug";
-import { handleOnboardingComponent, handleOnboardingModal } from "../onboarding";
 
-// All slash commands
-export const commands: CreateApplicationCommand[] = [
-  characterCommand,
-  worldCommand,
-  memoryCommand,
-  sessionCommand,
-  configCommand,
-  sceneCommand,
-  chronicleCommand,
-  statusCommand,
-  locationCommand,
-  timeCommand,
-  rollCommand,
-  rCommand,
-  combatCommand,
-  relationshipCommand,
-  factionCommand,
-  personaCommand,
-  proxyCommand,
-  buildCommand,
-  setupCommand,
-  tipsCommand,
-  helpCommand,
-  imagineCommand,
-  quotaCommand,
-  keysCommand,
-  exportCommand,
-  channelCommand,
-  rerollCommand,
-  importCommand,
-  notesCommand,
-  debugCommand,
-];
+// Use loose types to avoid desiredProperties conflicts
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Bot = any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Interaction = any;
+import { info, error } from "../../logger";
 
-// Register commands with Discord
-export async function registerCommands(bot: HologramBot): Promise<void> {
-  console.log("Registering slash commands...");
+// =============================================================================
+// Types
+// =============================================================================
 
-  try {
-    // Register globally (takes up to an hour to propagate)
-    // For development, use guild-specific registration instead
-    await bot.helpers.upsertGlobalApplicationCommands(commands);
-    console.log(`Registered ${commands.length} global commands`);
-  } catch (error) {
-    console.error("Failed to register commands:", error);
+export interface CommandContext {
+  bot: Bot;
+  interaction: Interaction;
+  channelId: string;
+  guildId: string | undefined;
+  userId: string;
+  username: string;
+}
+
+export type CommandHandler = (ctx: CommandContext, options: Record<string, unknown>) => Promise<void>;
+
+interface Command {
+  name: string;
+  description: string;
+  options?: CommandOption[];
+  handler: CommandHandler;
+}
+
+interface CommandOption {
+  name: string;
+  description: string;
+  type: number;
+  required?: boolean;
+  choices?: { name: string; value: string }[];
+  autocomplete?: boolean;
+}
+
+// =============================================================================
+// Registry
+// =============================================================================
+
+const commands = new Map<string, Command>();
+
+export function registerCommand(command: Command) {
+  commands.set(command.name, command);
+  // Also register short alias if different
+  const alias = getAlias(command.name);
+  if (alias && alias !== command.name) {
+    commands.set(alias, command);
   }
 }
 
-// Register commands for a specific guild (instant, good for dev)
-export async function registerGuildCommands(
-  bot: HologramBot,
-  guildId: bigint
-): Promise<void> {
-  console.log(`Registering commands for guild ${guildId}...`);
-
-  try {
-    await bot.helpers.upsertGuildApplicationCommands(guildId, commands);
-    console.log(`Registered ${commands.length} guild commands`);
-  } catch (error) {
-    console.error("Failed to register guild commands:", error);
-  }
+function getAlias(name: string): string | null {
+  const aliases: Record<string, string> = {
+    create: "c",
+    view: "v",
+    edit: "e",
+    delete: "d",
+    bind: "b",
+    status: "s",
+    help: "h",
+  };
+  return aliases[name] ?? null;
 }
 
-// Handle incoming interactions
-export async function handleInteraction(
-  bot: HologramBot,
-  interaction: HologramInteraction
-): Promise<void> {
-  // Handle component interactions (buttons, selects)
-  if (interaction.type === InteractionTypes.MessageComponent) {
-    // Route to appropriate handler based on custom_id prefix
-    if (await handleOnboardingComponent(bot, interaction)) {
-      return;
-    }
-    if (await handleSetupComponent(bot, interaction)) {
-      return;
-    }
-    if (await handleConfigWizardComponent(bot, interaction)) {
-      return;
-    }
-    if (await handleBuildWizardComponent(bot, interaction)) {
-      return;
-    }
-    if (await handleHelpComponent(bot, interaction)) {
-      return;
-    }
-    // Unknown component, ignore
-    return;
-  }
+// =============================================================================
+// Response Helpers
+// =============================================================================
 
-  // Handle modal submissions
-  if (interaction.type === InteractionTypes.ModalSubmit) {
-    if (await handleKeysModal(bot, interaction)) {
-      return;
-    }
-    if (await handleBuildWizardComponent(bot, interaction)) {
-      return;
-    }
-    if (await handleOnboardingModal(bot, interaction)) {
-      return;
-    }
-    return;
-  }
-
-  // Handle autocomplete
-  if (interaction.type === InteractionTypes.ApplicationCommandAutocomplete) {
-    const commandName = interaction.data?.name;
-    switch (commandName) {
-      case "character":
-        await handleCharacterAutocomplete(bot, interaction);
-        break;
-      // Add more autocomplete handlers here as needed
-    }
-    return;
-  }
-
-  // Only handle slash commands
-  if (interaction.type !== InteractionTypes.ApplicationCommand) {
-    return;
-  }
-
-  const commandName = interaction.data?.name;
-  if (!commandName) return;
-
-  try {
-    switch (commandName) {
-      case "character":
-        await handleCharacterCommand(bot, interaction);
-        break;
-      case "world":
-        await handleWorldCommand(bot, interaction);
-        break;
-      case "memory":
-        await handleMemoryCommand(bot, interaction);
-        break;
-      case "session":
-        await handleSessionCommand(bot, interaction);
-        break;
-      case "config":
-        await handleConfigCommand(bot, interaction);
-        break;
-      case "scene":
-        await handleSceneCommand(bot, interaction);
-        break;
-      case "chronicle":
-        await handleChronicleCommand(bot, interaction);
-        break;
-      case "status":
-        await handleStatusCommand(bot, interaction);
-        break;
-      case "location":
-        await handleLocationCommand(bot, interaction);
-        break;
-      case "time":
-        await handleTimeCommand(bot, interaction);
-        break;
-      case "roll":
-        await handleRollCommand(bot, interaction);
-        break;
-      case "r":
-        await handleRCommand(bot, interaction);
-        break;
-      case "combat":
-        await handleCombatCommand(bot, interaction);
-        break;
-      case "relationship":
-        await handleRelationshipCommand(bot, interaction);
-        break;
-      case "faction":
-        await handleFactionCommand(bot, interaction);
-        break;
-      case "persona":
-        await handlePersonaCommand(bot, interaction);
-        break;
-      case "proxy":
-        await handleProxyCommand(bot, interaction);
-        break;
-      case "build":
-        await handleBuildCommand(bot, interaction);
-        break;
-      case "setup":
-        await handleSetupCommand(bot, interaction);
-        break;
-      case "tips":
-        await handleTipsCommand(bot, interaction);
-        break;
-      case "help":
-        await handleHelpCommand(bot, interaction);
-        break;
-      case "imagine":
-        await handleImagineCommand(bot, interaction);
-        break;
-      case "quota":
-        await handleQuotaCommand(bot, interaction);
-        break;
-      case "keys":
-        await handleKeysCommand(bot, interaction);
-        break;
-      case "export":
-        await handleExportCommand(bot, interaction);
-        break;
-      case "channel":
-        await handleChannelCommand(bot, interaction);
-        break;
-      case "reroll":
-        await handleRerollCommand(bot, interaction);
-        break;
-      case "import":
-        await handleImportCommand(bot, interaction);
-        break;
-      case "notes":
-        await handleNotesCommand(bot, interaction);
-        break;
-      case "debug":
-        await handleDebugCommand(bot, interaction);
-        break;
-      default:
-        await bot.helpers.sendInteractionResponse(interaction.id, interaction.token, {
-          type: 4, // ChannelMessageWithSource
-          data: {
-            content: `Unknown command: ${commandName}`,
-            flags: 64, // Ephemeral
-          },
-        });
-    }
-  } catch (error) {
-    console.error(`Error handling command ${commandName}:`, error);
-    try {
-      await bot.helpers.sendInteractionResponse(interaction.id, interaction.token, {
-        type: 4,
-        data: {
-          content: `Error executing command: ${error instanceof Error ? error.message : "Unknown error"}`,
-          flags: 64,
-        },
-      });
-    } catch {
-      // Interaction may have already been responded to
-    }
-  }
-}
-
-// Helper to get option value from interaction
-export function getOptionValue<T>(
-  interaction: HologramInteraction,
-  name: string
-): T | undefined {
-  const options = interaction.data?.options;
-  if (!options) return undefined;
-
-  // Check top-level options
-  for (const opt of options) {
-    if (opt.name === name) {
-      return opt.value as T;
-    }
-    // Check nested options (for subcommands)
-    if (opt.options) {
-      for (const subOpt of opt.options) {
-        if (subOpt.name === name) {
-          return subOpt.value as T;
-        }
-      }
-    }
-  }
-
-  return undefined;
-}
-
-// Get subcommand name
-export function getSubcommand(interaction: HologramInteraction): string | undefined {
-  const options = interaction.data?.options;
-  if (!options || options.length === 0) return undefined;
-
-  const first = options[0];
-  if (
-    first.type === ApplicationCommandOptionTypes.SubCommand ||
-    first.type === ApplicationCommandOptionTypes.SubCommandGroup
-  ) {
-    return first.name;
-  }
-
-  return undefined;
-}
-
-// Shared interaction response helpers
 export async function respond(
-  bot: HologramBot,
-  interaction: HologramInteraction,
+  bot: Bot,
+  interaction: Interaction,
   content: string,
   ephemeral = false
-): Promise<void> {
+) {
   await bot.helpers.sendInteractionResponse(interaction.id, interaction.token, {
-    type: 4,
+    type: InteractionResponseTypes.ChannelMessageWithSource,
     data: {
       content,
-      flags: ephemeral ? 64 : 0,
+      flags: ephemeral ? 64 : undefined, // 64 = ephemeral
     },
   });
 }
 
-export async function respondDeferred(
-  bot: HologramBot,
-  interaction: HologramInteraction
-): Promise<void> {
+export async function respondWithModal(
+  bot: Bot,
+  interaction: Interaction,
+  customId: string,
+  title: string,
+  components: Array<{
+    customId: string;
+    label: string;
+    style: number;
+    value?: string;
+    required?: boolean;
+    placeholder?: string;
+  }>
+) {
   await bot.helpers.sendInteractionResponse(interaction.id, interaction.token, {
-    type: 5, // DeferredChannelMessageWithSource
+    type: InteractionResponseTypes.Modal,
+    data: {
+      customId,
+      title,
+      components: components.map(c => ({
+        type: MessageComponentTypes.ActionRow,
+        components: [{
+          type: MessageComponentTypes.InputText,
+          customId: c.customId,
+          label: c.label,
+          style: c.style,
+          value: c.value,
+          required: c.required ?? true,
+          placeholder: c.placeholder,
+        }],
+      })),
+    },
   });
 }
 
-export async function editResponse(
-  bot: HologramBot,
-  interaction: HologramInteraction,
-  content: string
-): Promise<void> {
+export async function defer(bot: Bot, interaction: Interaction, ephemeral = false) {
+  await bot.helpers.sendInteractionResponse(interaction.id, interaction.token, {
+    type: InteractionResponseTypes.DeferredChannelMessageWithSource,
+    data: {
+      flags: ephemeral ? 64 : undefined,
+    },
+  });
+}
+
+export async function followUp(bot: Bot, interaction: Interaction, content: string) {
   await bot.helpers.editOriginalInteractionResponse(interaction.token, {
     content,
   });
 }
 
-// Get nested subcommand (for subcommand groups)
-export function getNestedSubcommand(
-  interaction: HologramInteraction
-): string | undefined {
-  const options = interaction.data?.options;
-  if (!options || options.length === 0) return undefined;
+// =============================================================================
+// Registration
+// =============================================================================
 
-  const first = options[0];
-  if (
-    first.type === ApplicationCommandOptionTypes.SubCommandGroup &&
-    first.options &&
-    first.options.length > 0
-  ) {
-    return first.options[0].name;
+export async function registerCommands(bot: Bot) {
+  // Build command definitions for Discord
+  const defs = [];
+  const seen = new Set<string>();
+
+  for (const [_name, cmd] of commands) {
+    // Skip aliases, only register primary names
+    if (seen.has(cmd.name)) continue;
+    seen.add(cmd.name);
+
+    defs.push({
+      name: cmd.name,
+      description: cmd.description,
+      type: ApplicationCommandTypes.ChatInput,
+      options: cmd.options,
+    });
+
+    // Also register alias as separate command
+    const alias = getAlias(cmd.name);
+    if (alias) {
+      defs.push({
+        name: alias,
+        description: cmd.description,
+        type: ApplicationCommandTypes.ChatInput,
+        options: cmd.options,
+      });
+    }
   }
 
-  return undefined;
+  await bot.helpers.upsertGlobalApplicationCommands(defs);
+  info("Registered commands", { count: defs.length });
+}
+
+// =============================================================================
+// Interaction Handler
+// =============================================================================
+
+export async function handleInteraction(bot: Bot, interaction: Interaction) {
+  // Handle slash commands
+  if (interaction.type === InteractionTypes.ApplicationCommand) {
+    const name = interaction.data?.name;
+    if (!name) return;
+
+    const command = commands.get(name);
+    if (!command) {
+      await respond(bot, interaction, `Unknown command: ${name}`, true);
+      return;
+    }
+
+    const ctx: CommandContext = {
+      bot,
+      interaction,
+      channelId: interaction.channelId?.toString() ?? "",
+      guildId: interaction.guildId?.toString(),
+      userId: interaction.user?.id?.toString() ?? "",
+      username: interaction.user?.username ?? "unknown",
+    };
+
+    // Parse options
+    const options: Record<string, unknown> = {};
+    for (const opt of interaction.data?.options ?? []) {
+      options[opt.name] = opt.value;
+    }
+
+    try {
+      await command.handler(ctx, options);
+    } catch (err) {
+      error("Command error", err, { command: name });
+      await respond(bot, interaction, `Error: ${err}`, true);
+    }
+  }
+
+  // Handle modal submissions
+  if (interaction.type === InteractionTypes.ModalSubmit) {
+    const customId = interaction.data?.customId;
+    if (!customId) return;
+
+    // Parse modal data
+    const values: Record<string, string> = {};
+    for (const row of interaction.data?.components ?? []) {
+      for (const component of row.components ?? []) {
+        if (component.customId && component.value !== undefined) {
+          values[component.customId] = component.value;
+        }
+      }
+    }
+
+    // Route to appropriate handler based on customId prefix
+    await handleModalSubmit(bot, interaction, customId, values);
+  }
+
+  // Handle autocomplete
+  if (interaction.type === InteractionTypes.ApplicationCommandAutocomplete) {
+    // TODO: Implement autocomplete for entity names
+  }
+}
+
+// Modal submit handlers
+const modalHandlers = new Map<string, (bot: Bot, interaction: Interaction, values: Record<string, string>) => Promise<void>>();
+
+export function registerModalHandler(prefix: string, handler: (bot: Bot, interaction: Interaction, values: Record<string, string>) => Promise<void>) {
+  modalHandlers.set(prefix, handler);
+}
+
+async function handleModalSubmit(bot: Bot, interaction: Interaction, customId: string, values: Record<string, string>) {
+  const prefix = customId.split(":")[0];
+  const handler = modalHandlers.get(prefix);
+  if (handler) {
+    await handler(bot, interaction, values);
+  }
 }

@@ -1,6 +1,5 @@
 import { Database } from "bun:sqlite";
 import { load } from "sqlite-vec";
-import { initSchema, initVectorTable, runMigrations } from "./schema";
 
 let db: Database | null = null;
 
@@ -15,8 +14,6 @@ export function getDb(): Database {
 
     // Initialize schema
     initSchema(db);
-    initVectorTable(db);
-    runMigrations(db);
   }
   return db;
 }
@@ -26,4 +23,65 @@ export function closeDb() {
     db.close();
     db = null;
   }
+}
+
+function initSchema(db: Database) {
+  // Entities - the core of everything
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS entities (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      created_by TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Facts - attached to entities
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS facts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      entity_id INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+      content TEXT NOT NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Discord ID to entity mapping (scoped)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS discord_entities (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      discord_id TEXT NOT NULL,
+      discord_type TEXT NOT NULL CHECK (discord_type IN ('user', 'channel', 'guild')),
+      scope_guild_id TEXT,
+      scope_channel_id TEXT,
+      entity_id INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+      UNIQUE (discord_id, discord_type, scope_guild_id, scope_channel_id)
+    )
+  `);
+
+  // Fact embeddings for semantic search
+  db.exec(`
+    CREATE VIRTUAL TABLE IF NOT EXISTS fact_embeddings USING vec0(
+      fact_id INTEGER PRIMARY KEY,
+      embedding FLOAT[384]
+    )
+  `);
+
+  // Message history per channel (simple buffer)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      channel_id TEXT NOT NULL,
+      author_id TEXT NOT NULL,
+      author_name TEXT NOT NULL,
+      content TEXT NOT NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Indexes
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_facts_entity ON facts(entity_id)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_discord_entities_lookup ON discord_entities(discord_id, discord_type)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_messages_channel ON messages(channel_id, created_at DESC)`);
 }
