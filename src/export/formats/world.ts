@@ -7,7 +7,6 @@
 import { getDb } from "../../db";
 import {
   getEntitiesByType,
-  type Entity,
   type CharacterData,
   type LocationData,
   type ItemData,

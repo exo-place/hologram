@@ -253,8 +253,8 @@ function getCharacterImages(characterId: number): GeneratedImageExport[] {
  */
 export function importCharacter(
   data: HologramCharacterExport,
-  worldId?: number,
-  creatorId?: string
+  _worldId?: number,
+  _creatorId?: string
 ): Entity<CharacterData> | null {
   // This would be used for import functionality
   // For now, just validate the format

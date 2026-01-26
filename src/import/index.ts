@@ -79,7 +79,6 @@ export async function importFromUrl(
     }
 
     const contentType = response.headers.get("content-type") || "";
-    const contentDisposition = response.headers.get("content-disposition") || "";
 
     // Determine format from URL/content type
     let format = options.format || "auto";
@@ -278,7 +277,7 @@ function extractCardJsonFromZip(buffer: Buffer): string | null {
       // Parse local file header
       const compressionMethod = buffer.readUInt16LE(offset + 8);
       const compressedSize = buffer.readUInt32LE(offset + 18);
-      const uncompressedSize = buffer.readUInt32LE(offset + 22);
+      const _uncompressedSize = buffer.readUInt32LE(offset + 22);
       const fileNameLength = buffer.readUInt16LE(offset + 26);
       const extraFieldLength = buffer.readUInt16LE(offset + 28);
 

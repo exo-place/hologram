@@ -15,7 +15,6 @@ import {
   ROLE_PERMISSIONS,
 } from "./types";
 import {
-  getEntityAccessGrants,
   getEntityAccessGrant,
   grantEntityAccess as grantEntityAccessDb,
   revokeEntityAccess as revokeEntityAccessDb,
