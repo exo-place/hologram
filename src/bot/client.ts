@@ -4,6 +4,9 @@ import { handleMessage } from "../plugins/handler";
 import { registerCommands, handleInteraction } from "./commands";
 import { startEventScheduler } from "../events/scheduler";
 import { sendMultiCharResponse } from "./webhooks";
+import { sendWelcomeMessage, checkAndOfferSetup } from "./onboarding";
+import { checkForTip, buildTipContext, incrementMessageCount } from "./tips";
+import { getWorldState } from "../world/state";
 import { info, error, debug } from "../logger";
 
 const token = process.env.DISCORD_TOKEN;
@@ -53,6 +56,11 @@ export const bot = createBot({
       token: true,
       member: true,
     },
+    guild: {
+      id: true,
+      name: true,
+      systemChannelId: true,
+    },
   },
 });
 
@@ -77,6 +85,21 @@ bot.events.ready = async (payload) => {
   });
 };
 
+// Handle guild join - send welcome message
+bot.events.guildCreate = async (guild) => {
+  info("Joined guild", { guildId: guild.id.toString(), name: guild.name });
+
+  // Send welcome message to system channel if available
+  if (guild.systemChannelId) {
+    try {
+      await sendWelcomeMessage(bot, guild.systemChannelId, guild.name ?? "your server");
+      info("Sent welcome message", { guildId: guild.id.toString() });
+    } catch (err) {
+      error("Failed to send welcome message", err, { guildId: guild.id.toString() });
+    }
+  }
+};
+
 bot.events.messageCreate = async (message) => {
   // Ignore bot messages
   if (message.author.bot) return;
@@ -93,6 +116,19 @@ bot.events.messageCreate = async (message) => {
     author: message.author.username,
     content: message.content.slice(0, 100),
   });
+
+  // If bot is mentioned but no setup exists, offer setup instead of generic response
+  if (isBotMentioned && message.guildId) {
+    const setupOffered = await checkAndOfferSetup(
+      bot,
+      message.channelId.toString(),
+      message.guildId.toString()
+    );
+    if (setupOffered) {
+      // We offered setup, don't proceed with normal handling
+      return;
+    }
+  }
 
   // Handle the message
   const result = await handleMessage(
@@ -114,18 +150,38 @@ bot.events.messageCreate = async (message) => {
         });
       }
 
+      // Track message for tips
+      const channelIdStr = message.channelId.toString();
+      incrementMessageCount(channelIdStr);
+
+      // Check for tips to append
+      const worldState = getWorldState(channelIdStr);
+      const tipContext = buildTipContext(channelIdStr, worldState?.id ?? null);
+      const tip = checkForTip(channelIdStr, message.content, tipContext);
+
       // Route response through multi-char delivery when available
       const mode = result.multiCharMode ?? "tagged";
       if (result.segments && result.segments.length > 0 && mode !== "tagged") {
         await sendMultiCharResponse(
           bot,
-          message.channelId.toString(),
+          channelIdStr,
           result.segments,
           mode
         );
+        // Send tip separately for multi-char responses
+        if (tip) {
+          await bot.helpers.sendMessage(message.channelId, {
+            content: `\n-# ${tip}`,
+          });
+        }
       } else {
+        // Append tip to response as small text footer
+        let responseContent = result.response;
+        if (tip) {
+          responseContent += `\n\n-# ${tip}`;
+        }
         await bot.helpers.sendMessage(message.channelId, {
-          content: result.response,
+          content: responseContent,
         });
       }
     } catch (err) {

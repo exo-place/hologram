@@ -16,12 +16,13 @@ describe("mergeConfig", () => {
   test("returns defaults when partial is null", () => {
     const result = mergeConfig(null);
     expect(result.multiCharMode).toBe(DEFAULT_CONFIG.multiCharMode);
-    expect(result.chronicle.enabled).toBe(true);
+    // Default is now minimal (chronicle disabled)
+    expect(result.chronicle.enabled).toBe(false);
   });
 
   test("returns defaults when partial is undefined", () => {
     const result = mergeConfig(undefined);
-    expect(result.chronicle.autoExtract).toBe(true);
+    expect(result.chronicle.autoExtract).toBe(true); // autoExtract default is still true
   });
 
   test("overrides top-level properties", () => {
@@ -35,7 +36,7 @@ describe("mergeConfig", () => {
     });
     expect(result.chronicle.autoExtract).toBe(false);
     // Other chronicle fields should be preserved from defaults
-    expect(result.chronicle.enabled).toBe(true);
+    expect(result.chronicle.enabled).toBe(false); // Default is now false
     expect(result.chronicle.periodicSummary).toBe(true);
   });
 
@@ -49,11 +50,11 @@ describe("mergeConfig", () => {
   });
 
   test("preserves unrelated sections", () => {
-    const result = mergeConfig({ inventory: { enabled: false } });
-    expect(result.inventory.enabled).toBe(false);
-    // Chronicle should be untouched
-    expect(result.chronicle.enabled).toBe(true);
-    expect(result.time.enabled).toBe(true);
+    const result = mergeConfig({ inventory: { enabled: true } });
+    expect(result.inventory.enabled).toBe(true);
+    // Chronicle should be untouched (default is false now)
+    expect(result.chronicle.enabled).toBe(false);
+    expect(result.time.enabled).toBe(false); // Default is now false
   });
 });
 
@@ -146,9 +147,15 @@ describe("parseConfigValue", () => {
 // --- isFeatureEnabled ---
 
 describe("isFeatureEnabled", () => {
-  test("returns true for enabled features", () => {
-    expect(isFeatureEnabled(DEFAULT_CONFIG, "chronicle")).toBe(true);
-    expect(isFeatureEnabled(DEFAULT_CONFIG, "scenes")).toBe(true);
+  test("returns false for disabled features (minimal defaults)", () => {
+    // Default is now minimal - most features disabled
+    expect(isFeatureEnabled(DEFAULT_CONFIG, "chronicle")).toBe(false);
+    expect(isFeatureEnabled(DEFAULT_CONFIG, "scenes")).toBe(false);
+  });
+
+  test("returns true for explicitly enabled features", () => {
+    const config = mergeConfig({ chronicle: { enabled: true } });
+    expect(isFeatureEnabled(config, "chronicle")).toBe(true);
   });
 
   test("returns false for disabled features", () => {
@@ -187,16 +194,18 @@ describe("applyPreset", () => {
 
 describe("features helpers", () => {
   test("chronicle checks enabled flag", () => {
-    expect(features.chronicle(DEFAULT_CONFIG)).toBe(true);
-    const disabled = mergeConfig({ chronicle: { enabled: false } });
-    expect(features.chronicle(disabled)).toBe(false);
+    // Default is now minimal - chronicle disabled
+    expect(features.chronicle(DEFAULT_CONFIG)).toBe(false);
+    const enabled = mergeConfig({ chronicle: { enabled: true } });
+    expect(features.chronicle(enabled)).toBe(true);
   });
 
   test("autoExtract requires chronicle + autoExtract", () => {
-    expect(features.autoExtract(DEFAULT_CONFIG)).toBe(true);
-    const noChronicle = mergeConfig({ chronicle: { enabled: false } });
-    expect(features.autoExtract(noChronicle)).toBe(false);
-    const noExtract = mergeConfig({ chronicle: { autoExtract: false } });
+    // Default chronicle is disabled, so autoExtract is false
+    expect(features.autoExtract(DEFAULT_CONFIG)).toBe(false);
+    const withChronicle = mergeConfig({ chronicle: { enabled: true, autoExtract: true } });
+    expect(features.autoExtract(withChronicle)).toBe(true);
+    const noExtract = mergeConfig({ chronicle: { enabled: true, autoExtract: false } });
     expect(features.autoExtract(noExtract)).toBe(false);
   });
 

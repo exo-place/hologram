@@ -13,7 +13,7 @@
 
 ### Test Coverage
 
-Current: 314 tests across 16 files. Pure-logic modules tested:
+Current: 292 tests across 15 files. Pure-logic modules tested:
 - `src/ai/budget.ts` - token estimation, budget allocation
 - `src/ai/context.ts` - message formatting, timestamp injection
 - `src/ai/debug.ts` - context debugging, trace formatting, export
@@ -38,6 +38,82 @@ Remaining modules (DB-dependent, need mocking to test):
 - [ ] `src/world/locations.ts` - location graph traversal, hierarchy
 - [ ] `src/world/inventory.ts` - capacity checks, equipment slot validation
 - [ ] `src/memory/graph.ts` - knowledge graph queries
+
+---
+
+## Onboarding & Barrier to Entry
+
+Goal: Turn 4-command setup (`/world create` → `/world init` → `/character create` → `/session enable`) into one button click.
+
+### Phase 1: Guild Join Experience ✓
+
+- [x] Add `guildCreate` event handler in `src/bot/client.ts`
+- [x] Create welcome embed with:
+  - Quick Start button → triggers guided setup
+  - Choose Mode button → preset picker (minimal/sillytavern/tabletop/etc)
+  - Documentation link
+- [x] Send to system channel on join
+
+### Phase 2: Interactive Setup Command ✓
+
+- [x] Add `/setup` slash command (`src/bot/commands/setup.ts`)
+- [x] Implement guided flow:
+  - `/setup quick` - Auto-create world, apply sillytavern preset, enable session
+  - `/setup guided` - Step-by-step with buttons for each action
+  - `/setup status` - Show current setup state
+  - `/setup reset` - Reset channel setup
+- [x] World auto-named after guild
+
+### Phase 3: Smart First-Mention Handling ✓
+
+- [x] In `src/bot/client.ts`, detect first mention with no setup
+- [x] Show setup prompt with:
+  - [Quick Setup] button → runs setup flow
+  - [Just Chat] button → creates minimal world, enables session
+- [x] Track "offered setup" per channel to avoid spamming (10 min cooldown)
+
+### Phase 4: Default to Minimal ✓
+
+- [x] Changed `DEFAULT_CONFIG` in `src/config/defaults.ts`:
+  - All subsystems disabled by default (chronicle, scenes, inventory, locations, time, relationships)
+  - Only core LLM response working out of the box
+- [x] Tests updated for new defaults
+- [x] Progressive disclosure suggests features via tips
+
+### Phase 5: Zero-Config Quick Start ✓
+
+- [x] Implement "Just Chat" flow in `src/bot/onboarding.ts`:
+  - Auto-create world named `{guild_name}` with minimal config
+  - Auto-enable session
+  - Responds immediately with tip about `/build character`
+
+### Phase 6: Progressive Disclosure ✓
+
+- [x] Added `src/bot/tips.ts` with milestone-based tips:
+  - 10 messages → suggest `/build character` if no character
+  - 50 messages → suggest enabling chronicle
+  - Keyword triggers for locations, dice, inventory
+- [x] Tips shown as subtle footer text (`-# Tip: ...`)
+- [x] Add `/tips disable|enable|reset|status` command
+- [x] Tips tracked per-channel with 20-message cooldown between tips
+
+### Phase 7: Help & Documentation ✓
+
+- [x] Add `/help` command with:
+  - Overview of current setup state
+  - Feature status summary
+  - Essential and feature commands
+- [x] Add `/help <topic>` for deep dives:
+  - `start`, `characters`, `worlds`, `memory`, `locations`, `inventory`, `combat`, `config`, `commands`
+
+### Phase 8: Mode Descriptions in Discord ✓
+
+- [x] Rich embeds in mode selection showing:
+  - Mode name and description
+  - Features enabled
+  - Example use cases
+- [x] Shown in onboarding flow (`onboarding:choose_mode`)
+- [x] Config preset command already has descriptions in choices
 
 ---
 

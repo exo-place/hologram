@@ -41,6 +41,10 @@ import { factionCommand, handleFactionCommand } from "./faction";
 import { personaCommand, handlePersonaCommand } from "./persona";
 import { proxyCommand, handleProxyCommand } from "./proxy";
 import { buildCommand, handleBuildCommand, handleBuildWizardComponent } from "./build";
+import { setupCommand, handleSetupCommand, handleSetupComponent } from "./setup";
+import { tipsCommand, handleTipsCommand } from "./tips";
+import { helpCommand, handleHelpCommand } from "./help";
+import { handleOnboardingComponent } from "../onboarding";
 
 // All slash commands
 export const commands: CreateApplicationCommand[] = [
@@ -62,6 +66,9 @@ export const commands: CreateApplicationCommand[] = [
   personaCommand,
   proxyCommand,
   buildCommand,
+  setupCommand,
+  tipsCommand,
+  helpCommand,
 ];
 
 // Register commands with Discord
@@ -101,6 +108,12 @@ export async function handleInteraction(
   // Handle component interactions (buttons, selects)
   if (interaction.type === InteractionTypes.MessageComponent) {
     // Route to appropriate handler based on custom_id prefix
+    if (await handleOnboardingComponent(bot, interaction)) {
+      return;
+    }
+    if (await handleSetupComponent(bot, interaction)) {
+      return;
+    }
     if (await handleConfigWizardComponent(bot, interaction)) {
       return;
     }
@@ -182,6 +195,15 @@ export async function handleInteraction(
         break;
       case "build":
         await handleBuildCommand(bot, interaction);
+        break;
+      case "setup":
+        await handleSetupCommand(bot, interaction);
+        break;
+      case "tips":
+        await handleTipsCommand(bot, interaction);
+        break;
+      case "help":
+        await handleHelpCommand(bot, interaction);
         break;
       default:
         await bot.helpers.sendInteractionResponse(interaction.id, interaction.token, {

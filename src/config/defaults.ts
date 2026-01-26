@@ -15,8 +15,10 @@ import { getDb } from "../db";
 
 // === Default Configurations ===
 
+// NOTE: Defaults are now minimal to lower barrier to entry.
+// Use /config preset or modes to enable features.
 export const DEFAULT_CHRONICLE: ChronicleConfig = {
-  enabled: true,
+  enabled: false,
   autoExtract: true,
   extractImportance: 6,
   periodicSummary: true,
@@ -26,7 +28,7 @@ export const DEFAULT_CHRONICLE: ChronicleConfig = {
 };
 
 export const DEFAULT_SCENES: SceneConfig = {
-  enabled: true,
+  enabled: false,
   autoPause: true,
   pauseAfterMinutes: 60,
   boundaries: {
@@ -37,7 +39,7 @@ export const DEFAULT_SCENES: SceneConfig = {
 };
 
 export const DEFAULT_INVENTORY: InventoryConfig = {
-  enabled: true,
+  enabled: false,
   useCapacity: false,
   useEquipment: false,
   equipmentSlots: ["mainhand", "offhand", "head", "body", "hands", "feet", "accessory"],
@@ -45,7 +47,7 @@ export const DEFAULT_INVENTORY: InventoryConfig = {
 };
 
 export const DEFAULT_LOCATIONS: LocationConfig = {
-  enabled: true,
+  enabled: false,
   useRegions: false,
   useZones: false,
   useConnections: true,
@@ -57,7 +59,7 @@ export const DEFAULT_LOCATIONS: LocationConfig = {
 };
 
 export const DEFAULT_TIME: TimeConfig = {
-  enabled: true,
+  enabled: false,
   mode: "narrative",
   realtimeRatio: 1,
   useCalendar: false,
@@ -105,7 +107,7 @@ export const DEFAULT_DICE: DiceConfig = {
 };
 
 export const DEFAULT_RELATIONSHIPS: RelationshipConfig = {
-  enabled: true,
+  enabled: false,
   useAffinity: false,
   affinityRange: [-100, 100],
   affinityLabels: {
