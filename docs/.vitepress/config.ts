@@ -30,6 +30,12 @@ export default defineConfig({
           { text: 'Triggers', link: '/reference/triggers' },
           { text: 'Fact Patterns', link: '/reference/facts' },
         ]
+      },
+      {
+        text: 'Architecture',
+        items: [
+          { text: 'Design Philosophy', link: '/philosophy' },
+        ]
       }
     ],
 

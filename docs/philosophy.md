@@ -1,0 +1,267 @@
+# Design Philosophy
+
+This document captures the reasoning behind Hologram's architecture decisions.
+
+## Core Premise: Everything is an Entity
+
+There is no fundamental distinction between characters, locations, items, or concepts. All are entities with attached facts. The "type" of something emerges from its facts, not from a schema.
+
+```
+Entity: Aria
+Facts:
+  - is a character
+  - has silver hair
+```
+
+```
+Entity: The Tavern
+Facts:
+  - is a location
+  - smells of ale and woodsmoke
+```
+
+**Why?** Rigid schemas create friction. What if something is both a character and an item (a sentient sword)? What if a location can move (a ship)? The entity-facts model handles edge cases naturally - just add the relevant facts.
+
+## Facts are Prose, Not Structure
+
+Facts are freeform natural language, not structured data.
+
+```
+# Good - prose the LLM can read naturally
+has large fluffy fox ears (orange fur with white tips)
+has a bushy fox tail, about 3 feet long
+
+# Bad - structured syntax adds parsing overhead
+body:ears: type=fox, color=orange, size=large, fluffy=true
+body:tail: type=fox, length=3ft
+```
+
+**Why?** LLMs work best with prose. Structured syntax requires the model to parse format AND understand meaning. Prose lets it focus on meaning. The model reads "has fluffy orange fox ears" the same way a human would.
+
+## Colocation Over Fragmentation
+
+Keep related information together on one entity rather than splitting across multiple linked entities.
+
+```
+# Good - all body facts on the character
+Entity: Aria
+Facts:
+  - has fox ears
+  - has a fox tail
+  - has fur on arms
+
+# Bad - body parts as separate entities
+Entity: Aria
+Facts:
+  - has body part [entity:20]
+  - has body part [entity:21]
+
+Entity: Aria's Ears (id: 20)
+Facts:
+  - type: fox
+  - color: orange
+```
+
+**Why?** The fragmented approach requires multiple "leaps in logic" - the LLM must fetch multiple entities, understand their relationships, then coordinate changes across them. The colocated approach shows everything in one context. The LLM sees all body facts together, reasons about them together, modifies them in place.
+
+This isn't about engineering complexity - the nested approach isn't "overengineered". It's about cognitive load for the LLM. Fragmented data is harder to reason about.
+
+## Composable Primitives Over Enums
+
+Configuration uses composable boolean/numeric facts rather than enum modes.
+
+```
+# Good - composable triggers
+trigger: mention -> respond
+trigger: random 0.1 -> respond
+trigger: llm -> respond
+
+# Bad - enum modes
+response_mode: mention_or_random_or_llm
+```
+
+**Why?** Enums force predefined combinations. "What if you want mention + llm decided?" With composable primitives, you just add both triggers. New combinations emerge without code changes.
+
+## Dogfooding
+
+Use the system to build the system. Help is an entity with facts, not special-cased code.
+
+```
+Entity: help
+Facts:
+  - is the help system
+  - topics: start, commands, triggers...
+
+Entity: help:triggers
+Facts:
+  - is help for triggers
+  - trigger: <condition> -> <action>
+  ...
+```
+
+**Why?** If the abstraction is good enough, it should be good enough for our own use. Dogfooding validates the design and keeps us honest about ergonomics.
+
+## No Cutting Corners
+
+If state needs to persist, use the database. No "resets on restart is fine" or in-memory shortcuts.
+
+```
+# Bad - in-memory tracking
+const welcomedUsers = new Set<string>();
+// "resets on restart, that's fine"
+
+# Good - database table
+CREATE TABLE welcomed_users (
+  discord_id TEXT PRIMARY KEY,
+  welcomed_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+**Why?** Shortcuts accumulate. Each one is "fine" in isolation, but together they create a fragile system that behaves differently after restarts, loses user state, and is hard to reason about. Do it right the first time.
+
+## Flexibility in Expression
+
+Support multiple styles for the same thing. Don't force one "correct" way.
+
+```
+# Discrete facts - easy to modify piece by piece
+is a character
+has silver hair
+has violet eyes
+is cautious around strangers
+
+# Prose description - faster to write, SillyTavern style
+is a character
+Aria is a traveling merchant with silver hair and violet eyes. She's cautious around strangers but warms up quickly once trust is established.
+```
+
+**Why?** Users have different preferences and existing content. Some have character cards written as prose. Some prefer structured facts. Both should work. The system shouldn't impose style preferences.
+
+## LLM as Actor, Not Parser
+
+The LLM's job is to understand and respond, not to parse structured formats or follow complex protocols.
+
+- Give it prose it can read naturally
+- Give it tools with clear semantics
+- Let it decide what to do based on understanding, not format matching
+
+**Why?** LLMs are good at language understanding and generation. They're mediocre at following rigid syntactic rules. Play to their strengths.
+
+## Randomness Requires System Support
+
+LLMs can't generate true randomness. For chance-based mechanics (TF item effects, random events), the system must provide randomness via tools.
+
+```typescript
+roll_effects({ effects: [
+  { chance: 1.0, desc: "fox ears" },
+  { chance: 0.3, desc: "digitigrade legs" },
+]}) -> { results: [true, false] }
+```
+
+**Why?** If you tell an LLM "roll for 30% chance", it will either always succeed, always fail, or pick based on narrative preference - not true randomness. The system rolls, the LLM applies the results.
+
+### Two Timing Contexts
+
+Randomness appears in two places with different timing:
+
+1. **Triggers** (before LLM): `trigger: random 0.1 -> respond`
+   - System evaluates before deciding to invoke LLM
+   - LLM never sees this - it either gets called or doesn't
+
+2. **In-response rolls** (during LLM): TF effects, loot drops, skill checks
+   - LLM is generating a response and needs a random outcome
+   - Must call a tool to get true randomness
+
+Same random mechanic, different entry points. Triggers gate LLM invocation; tools provide randomness during generation.
+
+## Triggers are Evaluated, Not Interpreted
+
+Trigger conditions are evaluated by the system, not left to LLM interpretation.
+
+```
+trigger: random 0.1 -> respond
+```
+
+The system rolls the 10% chance, not the LLM. The LLM doesn't see "maybe respond 10% of the time" - it either gets asked to respond or it doesn't.
+
+**Why?** Consistency and predictability. If the LLM interprets "10% chance", you get varying behavior based on mood, context, and model. System evaluation gives consistent behavior.
+
+## Logic via $if Expressions
+
+Facts are data. But sometimes facts are conditional - they only apply when certain conditions are true. Rather than a custom DSL or embedded scripting, we use restricted JavaScript boolean expressions.
+
+```
+is a character
+has silver hair
+$if random(0.3): has fox ears
+$if random(0.1) && !hasFact("digitigrade legs"): gains digitigrade legs
+$if time.isNight: glows faintly
+```
+
+### Why JS Expressions?
+
+- **Known syntax** - not a custom DSL to learn
+- **Composable** - `&&`, `||`, `!` combine naturally
+- **Safe** - restricted to boolean expressions, no loops/assignment
+- **Performant** - compiled once, cached, fast evaluation
+
+### The Problem We're Solving
+
+We need logic. Options considered:
+
+1. **LLM as logic layer** - describe intent, LLM executes. *Rejected: indirection causes hallucination when deterministic logic is available.*
+
+2. **Custom DSL** - invent syntax for conditions. *Rejected: another language to learn and maintain.*
+
+3. **Full scripting (Lua/JS)** - powerful but sandbox security is hard. *Rejected: complexity and risk.*
+
+4. **Structured data** - enums for condition types. *Rejected: opaque, doesn't nest, hard to fit in facts.*
+
+5. **Restricted JS expressions** - boolean expressions with safe globals. *Chosen.*
+
+### Implementation
+
+Expressions are sanitized (whitelist allowed patterns), compiled with `new Function()`, and cached. Context provides safe globals:
+
+```typescript
+interface ExprContext {
+  random: (chance: number) => boolean;
+  hasFact: (pattern: string) => boolean;
+  roll: (dice: string) => number;
+  time: { hour: number; isNight: boolean };
+  interactionType?: string;
+}
+```
+
+### What $if Replaces
+
+- Facts without `$if` are prose (LLM interprets)
+- Facts with `$if` are conditional (system evaluates, includes if true)
+
+This separates concerns:
+- **What** (the text after `:`) is content
+- **When** (the expression after `$if`) is logic
+
+## Progressive Complexity
+
+Simple things should be simple. Complex things should be possible.
+
+```
+# Simple - create and bind a character
+/c character Aria
+/b channel Aria
+
+# Complex - detailed TF-capable character with custom triggers
+/c character Aria
+/e Aria
+  is a character
+  has human ears
+  has no tail
+  trigger: mention -> respond
+  trigger: pattern "aria|merchant" -> respond
+  trigger: llm -> respond
+  delay_ms: 5000
+  throttle_ms: 30000
+```
+
+**Why?** New users shouldn't face a wall of configuration. Start simple, add complexity as needed. The same system handles both cases.
