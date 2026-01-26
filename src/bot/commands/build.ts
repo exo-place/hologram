@@ -14,6 +14,7 @@ import {
   getWizardSession,
   updateWizardSession,
   cancelWizard,
+  cancelUserSession,
   getCurrentStep,
   formatWizardProgress,
   encodeWizardAction,
@@ -22,6 +23,7 @@ import {
   type WizardSession,
   type WizardType,
 } from "../../wizards";
+import { getDb } from "../../db";
 
 export const buildCommand = {
   name: "build",
@@ -75,8 +77,6 @@ export async function handleBuildCommand(
   const worldId = scene?.worldId;
 
   if (subcommand === "cancel") {
-    // Import dynamically to avoid circular dep
-    const { cancelUserSession } = await import("../../wizards");
     const cancelled = cancelUserSession(userId, channelId);
     await bot.helpers.sendInteractionResponse(interaction.id, interaction.token, {
       type: InteractionResponseTypes.ChannelMessageWithSource,
@@ -412,7 +412,6 @@ async function createFromWizard(session: WizardSession): Promise<string> {
     }
 
     case "world": {
-      const { getDb } = await import("../../db");
       const db = getDb();
       const desc = String(data.description ?? "");
       const lore = data.lore ? String(data.lore) : null;

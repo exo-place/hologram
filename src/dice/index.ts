@@ -1,3 +1,5 @@
+import { getComputedAttributes } from "../state";
+
 /**
  * Dice rolling system with expression parser.
  *
@@ -397,9 +399,7 @@ export function rollWithAttributes(
   characterId: number,
   sceneId: number | null
 ): DiceRoll {
-  // Lazy import to avoid circular dependency
-  const { getComputedAttributes } = require("../state");
-  const attrs = getComputedAttributes(characterId, sceneId) as Record<string, number>;
+  const attrs = getComputedAttributes(characterId, sceneId);
 
   // Convert attribute names to lowercase for matching
   const variables: Record<string, number> = {};
