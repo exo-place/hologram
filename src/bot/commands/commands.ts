@@ -14,6 +14,7 @@ import {
   deleteEntity,
   addFact,
   setFacts,
+  ensureSystemEntity,
   type EntityWithFacts,
 } from "../../db/entities";
 import {
@@ -398,37 +399,165 @@ registerCommand({
 });
 
 // =============================================================================
-// /help (/h) - Help
+// /help (/h) - Help (via entities!)
 // =============================================================================
+
+const HELP_ENTITY_FACTS: Record<string, string[]> = {
+  help: [
+    "is the help system",
+    "topics: commands, triggers, facts, bindings, models",
+    "select a topic from the dropdown or use /help topic:<name>",
+    "---",
+    "**Hologram** - Collaborative worldbuilding and roleplay",
+    "Everything is an **entity** with **facts**. Characters, locations, items - all entities.",
+    "---",
+    "**Quick Start:**",
+    "1. `/create character Aria` - Create a character",
+    "2. `/edit Aria` - Add personality facts",
+    "3. `/bind channel Aria` - Bind to this channel",
+    "4. Chat - Aria responds based on her facts",
+  ],
+  "help:commands": [
+    "is help for commands",
+    "---",
+    "**Commands**",
+    "`/create` (`/c`) - Create entity (character, location, item)",
+    "`/view` (`/v`) - View entity facts",
+    "`/edit` (`/e`) - Edit entity facts",
+    "`/delete` (`/d`) - Delete entity (owner only)",
+    "`/bind` (`/b`) - Bind channel/user to entity",
+    "`/status` (`/s`) - View channel state",
+    "`/help` (`/h`) - This help",
+    "---",
+    "**Type shortcuts:** `c`/`char` → character, `l`/`loc` → location, `i` → item",
+    "---",
+    "**Examples:**",
+    "`/c c Aria` - Create character",
+    "`/v Aria` - View facts",
+    "`/e Aria` - Edit facts",
+    "`/b channel Aria` - Bind to channel",
+  ],
+  "help:triggers": [
+    "is help for triggers",
+    "---",
+    "**Triggers** - Control when the bot responds",
+    "Format: `trigger: <condition> -> <action>`",
+    "---",
+    "**Conditions:**",
+    "• `mention` - Bot is @mentioned",
+    "• `pattern \"regex\"` - Message matches pattern",
+    "• `random 0.1` - 10% chance",
+    "• `llm` - LLM decides if response fits",
+    "• `always` - Always trigger",
+    "---",
+    "**Config facts:**",
+    "• `delay_ms: 5000` - Wait before evaluating",
+    "• `throttle_ms: 30000` - Min time between responses",
+    "---",
+    "**Examples:**",
+    "`trigger: mention -> respond`",
+    "`trigger: random 0.1 -> respond`",
+    "`trigger: llm -> respond`",
+  ],
+  "help:facts": [
+    "is help for facts",
+    "---",
+    "**Facts** - Define entities",
+    "Facts are freeform text. Some patterns have special meaning.",
+    "---",
+    "**Special patterns:**",
+    "• `is a character` / `is a location` / `is a item` - Type",
+    "• `is in [entity:12]` - Containment",
+    "• `trigger: ...` - Response triggers",
+    "---",
+    "**Tips:**",
+    "• Use present tense: \"is friendly\"",
+    "• Be specific: \"has a scar above left eye\"",
+    "• Include personality: \"speaks formally\"",
+    "• Note relationships: \"distrusts strangers\"",
+  ],
+  "help:bindings": [
+    "is help for bindings",
+    "---",
+    "**Bindings** - Connect Discord to entities",
+    "---",
+    "**Channel:** `/bind channel <entity>`",
+    "Makes an entity respond in this channel.",
+    "---",
+    "**User (persona):** `/bind me <entity>`",
+    "Speak as this entity.",
+    "---",
+    "**Scopes:**",
+    "• `channel` - This channel only (default)",
+    "• `guild` - This server",
+    "• `global` - Everywhere",
+    "---",
+    "**Examples:**",
+    "`/bind channel Aria` - Aria responds here",
+    "`/bind me Traveler scope:guild` - You're Traveler in this server",
+  ],
+  "help:models": [
+    "is help for models",
+    "---",
+    "**Models** - LLM configuration",
+    "Format: `provider:model`",
+    "---",
+    "**Google:**",
+    "• `google:gemini-3-flash-preview` (default)",
+    "• `google:gemini-2.5-flash-lite-preview-06-2025` (fast)",
+    "---",
+    "**Anthropic:**",
+    "• `anthropic:claude-sonnet-4-20250514`",
+    "---",
+    "**OpenAI:**",
+    "• `openai:gpt-4o`",
+    "---",
+    "Set `llm_decide_model: <model>` for trigger decisions",
+  ],
+};
+
+function getHelpEntity(topic: string): string {
+  const entityName = topic === "overview" ? "help" : `help:${topic}`;
+  const facts = HELP_ENTITY_FACTS[entityName];
+
+  if (!facts) {
+    return getHelpEntity("overview");
+  }
+
+  // Ensure the system entity exists (dogfooding!)
+  const entity = ensureSystemEntity(entityName, facts);
+
+  // Format facts for display, skipping metadata facts
+  const displayFacts = entity.facts
+    .map(f => f.content)
+    .filter(c => !c.startsWith("is ") && c !== "---")
+    .join("\n");
+
+  return displayFacts || entity.facts.map(f => f.content).join("\n");
+}
 
 registerCommand({
   name: "help",
-  description: "Get help with commands",
-  options: [],
-  async handler(ctx, _options) {
-    const help = `**Hologram Commands**
-
-\`/create\` (\`/c\`) - Create entity
-  \`/c character\` or \`/c c\` - Create character
-  \`/c location\` or \`/c l\` - Create location
-  \`/c item\` or \`/c i\` - Create item
-
-\`/view\` (\`/v\`) - View entity facts
-  \`/v Aria\` - View entity by name
-
-\`/edit\` (\`/e\`) - Edit entity facts
-  \`/e Aria\` - Edit facts (opens modal)
-
-\`/delete\` (\`/d\`) - Delete entity (owner only)
-
-\`/bind\` (\`/b\`) - Bind Discord channel/user to entity
-  \`/b channel Tavern\` - Bind this channel to location
-  \`/b me Aria\` - Bind yourself to persona
-
-\`/status\` (\`/s\`) - View current channel state
-
-**Core Concept:** Everything is an entity with facts. Characters, locations, items - all entities.`;
-
+  description: "Get help with Hologram",
+  options: [
+    {
+      name: "topic",
+      description: "Help topic",
+      type: ApplicationCommandOptionTypes.String,
+      required: false,
+      choices: [
+        { name: "Overview", value: "overview" },
+        { name: "Commands", value: "commands" },
+        { name: "Triggers", value: "triggers" },
+        { name: "Facts", value: "facts" },
+        { name: "Bindings", value: "bindings" },
+        { name: "Models", value: "models" },
+      ],
+    },
+  ],
+  async handler(ctx, options) {
+    const topic = (options.topic as string) ?? "overview";
+    const help = getHelpEntity(topic);
     await respond(ctx.bot, ctx.interaction, help, true);
   },
 });

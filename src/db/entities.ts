@@ -157,3 +157,26 @@ export function formatEntityForContext(entity: EntityWithFacts): string {
 export function formatEntitiesForContext(entities: EntityWithFacts[]): string {
   return entities.map(formatEntityForContext).join("\n\n");
 }
+
+// =============================================================================
+// System Entities
+// =============================================================================
+
+export function getSystemEntity(name: string): Entity | null {
+  const db = getDb();
+  return db.prepare(`
+    SELECT * FROM entities
+    WHERE name = ? COLLATE NOCASE AND created_by = 'system'
+  `).get(name) as Entity | null;
+}
+
+export function ensureSystemEntity(name: string, facts: string[]): EntityWithFacts {
+  let entity = getSystemEntity(name);
+  if (!entity) {
+    entity = createEntity(name, "system");
+    for (const fact of facts) {
+      addFact(entity.id, fact);
+    }
+  }
+  return getEntityWithFacts(entity.id)!;
+}

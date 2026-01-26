@@ -2,6 +2,20 @@ import { createBot, Intents } from "@discordeno/bot";
 import { info, debug, error } from "../logger";
 import { registerCommands, handleInteraction } from "./commands";
 import { handleMessage } from "../ai/handler";
+import {
+  parseTriggerConfig,
+  evaluateTriggers,
+  addToBuffer,
+  getBufferedMessages,
+  setBufferTimer,
+  hasActiveTimer,
+  canRespondThrottle,
+  markResponseTime,
+  getThrottleRemainingMs,
+  type TriggerAction,
+} from "../ai/response-decision";
+import { resolveDiscordEntity } from "../db/discord";
+import { getEntityWithFacts } from "../db/entities";
 import "./commands/commands"; // Register all commands
 
 const token = process.env.DISCORD_TOKEN;
@@ -81,6 +95,7 @@ bot.events.messageCreate = async (message) => {
 
   const isMentioned = botUserId !== null && message.mentionedUserIds?.includes(botUserId);
   const channelId = message.channelId.toString();
+  const guildId = message.guildId?.toString();
 
   debug("Message", {
     channel: channelId,
@@ -89,24 +104,147 @@ bot.events.messageCreate = async (message) => {
     mentioned: isMentioned,
   });
 
-  // Check if we should respond before starting typing
-  const channelEntityId = await import("../db/discord").then(m =>
-    m.resolveDiscordEntity(channelId, "channel", message.guildId?.toString(), channelId)
-  );
-  const shouldRespond = isMentioned || channelEntityId !== null;
+  // Get channel entity and config
+  const channelEntityId = resolveDiscordEntity(channelId, "channel", guildId, channelId);
 
-  if (!shouldRespond) {
-    debug("Not responding - not mentioned and no channel binding");
+  // No binding = no response (unless mentioned and we want to offer setup, but skip for now)
+  if (!channelEntityId) {
+    if (isMentioned) {
+      debug("Mentioned but no channel binding - ignoring");
+    }
     return;
   }
 
+  const channelEntity = getEntityWithFacts(channelEntityId);
+  if (!channelEntity) return;
+
+  // Parse trigger config from channel facts
+  const config = parseTriggerConfig(channelEntity.facts);
+
+  // Always add to buffer for context
+  addToBuffer(channelId, message.author.username, message.content);
+
+  // Check throttle
+  if (!canRespondThrottle(channelId, config.throttleMs)) {
+    const remaining = getThrottleRemainingMs(channelId, config.throttleMs);
+    debug("Throttled", { channelId, remainingMs: remaining });
+    return;
+  }
+
+  // Build trigger context
+  const triggerCtx = {
+    isMentioned: isMentioned ?? false,
+    content: message.content,
+    characterName: channelEntity.name,
+    recentMessages: getBufferedMessages(channelId).slice(-10),
+  };
+
+  // If delay is configured, use buffering for non-immediate triggers
+  if (config.delayMs > 0) {
+    // Mentions bypass delay
+    if (isMentioned) {
+      const action = await evaluateTriggers(config, triggerCtx);
+      if (action) {
+        await executeAction(action, channelId, guildId, message.author.username, message.content, true);
+      }
+      return;
+    }
+
+    // Buffer other messages
+    if (hasActiveTimer(channelId)) {
+      debug("Delay timer already active, buffering message");
+      return;
+    }
+
+    debug("Starting delay timer", { delayMs: config.delayMs });
+    setBufferTimer(channelId, async () => {
+      await processDelayedTriggers(channelId, guildId, channelEntity.name, config);
+    }, config.delayMs);
+    return;
+  }
+
+  // No delay - evaluate triggers immediately
+  const action = await evaluateTriggers(config, triggerCtx);
+  if (!action) {
+    debug("No trigger matched");
+    return;
+  }
+
+  await executeAction(action, channelId, guildId, message.author.username, message.content, isMentioned ?? false);
+};
+
+async function processDelayedTriggers(
+  channelId: string,
+  guildId: string | undefined,
+  characterName: string,
+  config: ReturnType<typeof parseTriggerConfig>
+) {
+  // Check throttle again
+  if (!canRespondThrottle(channelId, config.throttleMs)) {
+    debug("Throttled after delay");
+    return;
+  }
+
+  const bufferedMessages = getBufferedMessages(channelId);
+  if (bufferedMessages.length === 0) {
+    debug("No messages in buffer after delay");
+    return;
+  }
+
+  // Get the last message for context
+  const lastMsg = bufferedMessages[bufferedMessages.length - 1];
+
+  // Evaluate triggers with buffered context
+  const triggerCtx = {
+    isMentioned: false, // Mentions bypassed delay
+    content: lastMsg.content,
+    characterName,
+    recentMessages: bufferedMessages.slice(-10),
+  };
+
+  const action = await evaluateTriggers(config, triggerCtx);
+  if (!action) {
+    debug("No trigger matched after delay");
+    return;
+  }
+
+  await executeAction(action, channelId, guildId, lastMsg.authorName, lastMsg.content, false);
+}
+
+async function executeAction(
+  action: TriggerAction,
+  channelId: string,
+  guildId: string | undefined,
+  username: string,
+  content: string,
+  isMentioned: boolean
+) {
+  switch (action.type) {
+    case "respond":
+      await sendResponse(channelId, guildId, username, content, isMentioned);
+      break;
+
+    case "narrate":
+      // TODO: Implement narration (system message injection)
+      debug("Narrate action not yet implemented", { template: action.template });
+      break;
+  }
+}
+
+async function sendResponse(
+  channelId: string,
+  guildId: string | undefined,
+  username: string,
+  content: string,
+  isMentioned: boolean
+) {
   // Start typing indicator
   let typingInterval: ReturnType<typeof setInterval> | null = null;
   try {
-    await bot.helpers.triggerTypingIndicator(message.channelId);
+    await bot.helpers.triggerTypingIndicator(BigInt(channelId));
     typingInterval = setInterval(async () => {
       try {
-        await bot.helpers.triggerTypingIndicator(message.channelId);
+        await bot.helpers.triggerTypingIndicator(BigInt(channelId));
       } catch {
         // Ignore typing errors
       }
@@ -118,11 +256,11 @@ bot.events.messageCreate = async (message) => {
   // Handle message via LLM
   const result = await handleMessage({
     channelId,
-    guildId: message.guildId?.toString(),
-    userId: message.author.id.toString(),
-    username: message.author.username,
-    content: message.content,
-    isMentioned: isMentioned ?? false,
+    guildId,
+    userId: "", // We don't have this in delayed context, but handler will resolve from buffer
+    username,
+    content,
+    isMentioned,
   });
 
   // Stop typing
@@ -130,16 +268,19 @@ bot.events.messageCreate = async (message) => {
     clearInterval(typingInterval);
   }
 
+  // Mark response time for throttling
+  markResponseTime(channelId);
+
   if (result) {
     try {
-      await bot.helpers.sendMessage(message.channelId, {
+      await bot.helpers.sendMessage(BigInt(channelId), {
         content: result.response,
       });
     } catch (err) {
       error("Failed to send message", err);
     }
   }
-};
+}
 
 bot.events.interactionCreate = async (interaction) => {
   await handleInteraction(bot, interaction);
