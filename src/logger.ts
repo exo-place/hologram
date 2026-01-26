@@ -23,12 +23,32 @@ interface LoggerConfig {
   timestamps: boolean;
   /** JSON output for production, pretty for dev */
   json: boolean;
+  /** Colorize output (auto-detected from TTY by default) */
+  colors: boolean;
 }
 
 const config: LoggerConfig = {
   level: (process.env.LOG_LEVEL as LogLevel) ?? "info",
   timestamps: true,
   json: process.env.NODE_ENV === "production",
+  colors: process.stdout.isTTY ?? false,
+};
+
+// ANSI color codes
+const COLORS = {
+  reset: "\x1b[0m",
+  dim: "\x1b[2m",
+  red: "\x1b[31m",
+  yellow: "\x1b[33m",
+  blue: "\x1b[34m",
+  gray: "\x1b[90m",
+} as const;
+
+const LEVEL_COLORS: Record<LogLevel, string> = {
+  debug: COLORS.gray,
+  info: COLORS.blue,
+  warn: COLORS.yellow,
+  error: COLORS.red,
 };
 
 /** Configure the logger */
@@ -52,11 +72,16 @@ function formatEntry(
   }
 
   // Pretty format for dev
+  const c = config.colors;
   const timestamp = config.timestamps
-    ? `[${new Date().toISOString().slice(11, 23)}] `
+    ? `${c ? COLORS.dim : ""}[${new Date().toISOString().slice(11, 23)}]${c ? COLORS.reset : ""} `
     : "";
-  const levelTag = `[${level.toUpperCase().padEnd(5)}]`;
-  const contextStr = context ? ` ${JSON.stringify(context)}` : "";
+  const color = c ? LEVEL_COLORS[level] : "";
+  const reset = c ? COLORS.reset : "";
+  const levelTag = `${color}[${level.toUpperCase().padEnd(5)}]${reset}`;
+  const contextStr = context
+    ? ` ${c ? COLORS.dim : ""}${JSON.stringify(context)}${reset}`
+    : "";
 
   return `${timestamp}${levelTag} ${message}${contextStr}`;
 }
