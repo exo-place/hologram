@@ -43,7 +43,7 @@ import { proxyCommand, handleProxyCommand } from "./proxy";
 import { buildCommand, handleBuildCommand, handleBuildWizardComponent } from "./build";
 import { setupCommand, handleSetupCommand, handleSetupComponent } from "./setup";
 import { tipsCommand, handleTipsCommand } from "./tips";
-import { helpCommand, handleHelpCommand } from "./help";
+import { helpCommand, handleHelpCommand, handleHelpComponent } from "./help";
 import { handleOnboardingComponent } from "../onboarding";
 
 // All slash commands
@@ -118,6 +118,9 @@ export async function handleInteraction(
       return;
     }
     if (await handleBuildWizardComponent(bot, interaction)) {
+      return;
+    }
+    if (await handleHelpComponent(bot, interaction)) {
       return;
     }
     // Unknown component, ignore
