@@ -25,7 +25,6 @@ export const bot = createBot({
     user: {
       id: true,
       username: true,
-      bot: true as const,
     },
     message: {
       id: true,
@@ -142,10 +141,7 @@ bot.events.guildCreate = async (guild) => {
 };
 
 bot.events.messageCreate = async (message) => {
-  // Ignore bot messages (includes webhook messages from other bots)
-  if (message.author.bot) return;
-
-  // Ignore our own messages (in case bot flag isn't set correctly)
+  // Ignore our own messages
   if (botUserId && message.author.id === botUserId) return;
 
   // Ignore messages without content
