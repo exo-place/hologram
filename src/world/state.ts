@@ -100,7 +100,53 @@ export function getWorldForGuild(guildId: string): number | null {
 
 // Session state management (in-memory, keyed by channel)
 export function getWorldState(channelId: string): WorldState | null {
-  return channelWorldStates.get(channelId) ?? null;
+  // Check cache first
+  const cached = channelWorldStates.get(channelId);
+  if (cached) return cached;
+
+  // Try to restore from active scene in DB
+  const db = getDb();
+  const sceneRow = db.prepare(`
+    SELECT s.world_id, s.time_day, s.time_hour, s.time_minute, s.weather, s.location_id,
+           w.name, w.description, w.data
+    FROM scenes s
+    JOIN worlds w ON s.world_id = w.id
+    WHERE s.channel_id = ? AND s.status = 'active'
+    ORDER BY s.last_active_at DESC
+    LIMIT 1
+  `).get(channelId) as {
+    world_id: number;
+    time_day: number;
+    time_hour: number;
+    time_minute: number;
+    weather: string | null;
+    location_id: number | null;
+    name: string;
+    description: string | null;
+    data: string | null;
+  } | null;
+
+  if (!sceneRow) return null;
+
+  // Restore world state from scene
+  const state: WorldState = {
+    id: sceneRow.world_id,
+    name: sceneRow.name,
+    description: sceneRow.description,
+    time: {
+      day: sceneRow.time_day,
+      hour: sceneRow.time_hour,
+      minute: sceneRow.time_minute,
+    },
+    weather: sceneRow.weather,
+    currentLocationId: sceneRow.location_id,
+    activeCharacterIds: [], // Will be populated by scene plugin
+    custom: sceneRow.data ? JSON.parse(sceneRow.data) : {},
+  };
+
+  // Cache it
+  channelWorldStates.set(channelId, state);
+  return state;
 }
 
 export function setWorldState(channelId: string, state: WorldState): void {
