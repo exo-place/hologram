@@ -145,6 +145,9 @@ bot.events.messageCreate = async (message) => {
   // Ignore bot messages (includes webhook messages from other bots)
   if (message.author.bot) return;
 
+  // Ignore our own messages (in case bot flag isn't set correctly)
+  if (botUserId && message.author.id === botUserId) return;
+
   // Ignore messages without content
   if (!message.content) return;
 
