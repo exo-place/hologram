@@ -11,6 +11,7 @@ import type {
   RelationshipConfig,
   ContextConfig,
   ImageConfig,
+  QuotaConfig,
 } from "./types";
 import { getDb } from "../db";
 
@@ -144,6 +145,12 @@ export const DEFAULT_IMAGES: ImageConfig = {
   storage: "discord",
 };
 
+export const DEFAULT_QUOTA: QuotaConfig = {
+  enabled: false,
+  period: { type: "rolling", days: 1 },
+  limits: {},
+};
+
 export const DEFAULT_CONFIG: WorldConfig = {
   multiCharMode: "auto",
   chronicle: DEFAULT_CHRONICLE,
@@ -156,6 +163,7 @@ export const DEFAULT_CONFIG: WorldConfig = {
   relationships: DEFAULT_RELATIONSHIPS,
   context: DEFAULT_CONTEXT,
   images: DEFAULT_IMAGES,
+  quota: DEFAULT_QUOTA,
 };
 
 // === Presets (Legacy) ===
@@ -266,6 +274,7 @@ export function mergeConfig(
     relationships: { ...base.relationships, ...partial.relationships },
     context: { ...base.context, ...partial.context },
     images: { ...base.images, ...partial.images },
+    quota: { ...base.quota, ...partial.quota },
   };
 }
 
@@ -362,6 +371,7 @@ export const features = {
   dice: (config: WorldConfig) => config.dice.enabled,
   relationships: (config: WorldConfig) => config.relationships.enabled,
   images: (config: WorldConfig) => config.images.enabled,
+  quota: (config: WorldConfig) => config.quota.enabled,
 
   // Sub-features
   autoExtract: (config: WorldConfig) =>

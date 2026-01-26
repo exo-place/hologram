@@ -427,6 +427,22 @@ export function initSchema(db: Database) {
     );
 
     CREATE INDEX IF NOT EXISTS idx_img_workflows_world ON image_workflows(world_id);
+
+    -- Usage tracking (quotas)
+    CREATE TABLE IF NOT EXISTS usage (
+      id INTEGER PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      guild_id TEXT,              -- nullable for DMs
+      type TEXT NOT NULL,         -- 'llm' | 'image'
+      model TEXT NOT NULL,
+      tokens_in INTEGER,          -- LLM only
+      tokens_out INTEGER,         -- LLM only
+      cost_millicents INTEGER,    -- normalized cost (1/1000 cent)
+      created_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_usage_user_window ON usage(user_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_usage_guild ON usage(guild_id, created_at);
   `);
 }
 

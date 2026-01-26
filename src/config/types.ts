@@ -2,6 +2,24 @@
  * World configuration - all features are optional
  */
 
+// === Quotas ===
+export type QuotaPeriod =
+  | { type: "rolling"; days: number }
+  | { type: "fixed"; days: number };
+
+export interface QuotaLimits {
+  llm_tokens?: number;     // output tokens per period
+  image_count?: number;    // images per period
+  total_cost?: number;     // millicents per period
+}
+
+export interface QuotaConfig {
+  enabled: boolean;
+  period: QuotaPeriod;
+  limits: QuotaLimits;
+  guild_overrides?: Record<string, Partial<QuotaLimits>>;
+}
+
 // === Chronicle/Memory ===
 export interface ChronicleConfig {
   enabled: boolean;
@@ -186,6 +204,7 @@ export interface WorldConfig {
   relationships: RelationshipConfig;
   context: ContextConfig;
   images: ImageConfig;
+  quota: QuotaConfig;
 }
 
 // Partial scene config with deep partial boundaries (matches mergeConfig behavior)

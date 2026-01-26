@@ -45,6 +45,7 @@ import { setupCommand, handleSetupCommand, handleSetupComponent } from "./setup"
 import { tipsCommand, handleTipsCommand } from "./tips";
 import { helpCommand, handleHelpCommand, handleHelpComponent } from "./help";
 import { imagineCommand, handleImagineCommand } from "./imagine";
+import { quotaCommand, handleQuotaCommand } from "./quota";
 import { handleOnboardingComponent } from "../onboarding";
 
 // All slash commands
@@ -71,6 +72,7 @@ export const commands: CreateApplicationCommand[] = [
   tipsCommand,
   helpCommand,
   imagineCommand,
+  quotaCommand,
 ];
 
 // Register commands with Discord
@@ -212,6 +214,9 @@ export async function handleInteraction(
         break;
       case "imagine":
         await handleImagineCommand(bot, interaction);
+        break;
+      case "quota":
+        await handleQuotaCommand(bot, interaction);
         break;
       default:
         await bot.helpers.sendInteractionResponse(interaction.id, interaction.token, {

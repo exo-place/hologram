@@ -8,6 +8,7 @@
  */
 
 import type { Plugin, Extractor } from "../types";
+import type { QuotaConfig } from "../../config/types";
 import { features } from "../../config";
 import {
   generateImage,
@@ -17,6 +18,12 @@ import {
 } from "../../images";
 import { getDb } from "../../db";
 import { debug, error, warn } from "../../logger";
+import {
+  enforceQuota,
+  logUsage,
+  calculateImageCost,
+  QuotaExceededError,
+} from "../../quota";
 
 // =============================================================================
 // Marker Parsing
@@ -118,12 +125,22 @@ const imageMarkerExtractor: Extractor = {
 
     // Process each marker (fire-and-forget, don't block response)
     for (const marker of markers) {
-      generateImageFromMarker(marker, ctx.scene.worldId, imageCtx, db).catch((err) => {
+      generateImageFromMarker(marker, ctx.scene.worldId, imageCtx, db, {
+        userId: ctx.authorId,
+        guildId: ctx.guildId,
+        quotaConfig: ctx.config.quota,
+      }).catch((err) => {
         error("Failed to generate image from marker", err);
       });
     }
   },
 };
+
+interface UserContext {
+  userId: string;
+  guildId?: string;
+  quotaConfig?: QuotaConfig;
+}
 
 /**
  * Generate image from a parsed marker
@@ -133,8 +150,22 @@ async function generateImageFromMarker(
   marker: ImageMarker,
   worldId: number,
   imageCtx: NonNullable<ReturnType<typeof createImageContext>>,
-  db: ReturnType<typeof getDb>
+  db: ReturnType<typeof getDb>,
+  userCtx: UserContext
 ): Promise<void> {
+  // Check quota before generating
+  if (userCtx.quotaConfig?.enabled) {
+    try {
+      enforceQuota(userCtx.userId, userCtx.quotaConfig, "image", userCtx.guildId);
+    } catch (err) {
+      if (err instanceof QuotaExceededError) {
+        warn(`Image quota exceeded for user ${userCtx.userId}: ${err.message}`);
+        return; // Silently skip - user was already notified about quota on LLM if applicable
+      }
+      throw err;
+    }
+  }
+
   try {
     // Determine workflow based on marker type
     const workflow = marker.type === "scene" ? "scene" : "portrait";
@@ -173,6 +204,18 @@ async function generateImageFromMarker(
       result.width,
       result.height
     );
+
+    // Log usage after successful generation
+    if (userCtx.quotaConfig?.enabled) {
+      const model = `comfyui:${result.workflow}`;
+      logUsage({
+        user_id: userCtx.userId,
+        guild_id: userCtx.guildId,
+        type: "image",
+        model,
+        cost_millicents: calculateImageCost(model),
+      });
+    }
 
     debug(`Generated image from marker: ${result.url}`);
 

@@ -17,7 +17,13 @@ import { getLanguageModel, DEFAULT_MODEL } from "../../ai/models";
 import { runFormatters, runExtractors } from "../registry";
 import { formatMessagesForAI, type Message } from "../../ai/context";
 import { allocateBudget } from "../../ai/budget";
-import { error } from "../../logger";
+import { error, warn } from "../../logger";
+import {
+  enforceQuota,
+  logUsage,
+  calculateLLMCost,
+  QuotaExceededError,
+} from "../../quota";
 
 // =============================================================================
 // In-memory state
@@ -144,7 +150,23 @@ const llmMiddleware: Middleware = {
   name: "core:llm",
   priority: MiddlewarePriority.LLM,
   fn: async (ctx, next) => {
-    const model = getLanguageModel(process.env.DEFAULT_MODEL || DEFAULT_MODEL);
+    const modelSpec = process.env.DEFAULT_MODEL || DEFAULT_MODEL;
+    const model = getLanguageModel(modelSpec);
+
+    // Check quota before LLM call
+    if (ctx.config?.quota?.enabled) {
+      try {
+        enforceQuota(ctx.authorId, ctx.config.quota, "llm", ctx.guildId);
+      } catch (err) {
+        if (err instanceof QuotaExceededError) {
+          ctx.response = err.toUserMessage();
+          warn(`Quota exceeded for user ${ctx.authorId}: ${err.message}`);
+          await next();
+          return;
+        }
+        throw err;
+      }
+    }
 
     const historyMessages = ctx.config?.context.historyMessages ?? 20;
     const messages = formatMessagesForAI(ctx.history.slice(-historyMessages));
@@ -156,6 +178,21 @@ const llmMiddleware: Middleware = {
     });
 
     ctx.response = result.text;
+
+    // Log usage after successful call
+    if (ctx.config?.quota?.enabled && result.usage) {
+      const tokensIn = result.usage.inputTokens ?? 0;
+      const tokensOut = result.usage.outputTokens ?? 0;
+      logUsage({
+        user_id: ctx.authorId,
+        guild_id: ctx.guildId,
+        type: "llm",
+        model: modelSpec,
+        tokens_in: tokensIn,
+        tokens_out: tokensOut,
+        cost_millicents: calculateLLMCost(modelSpec, tokensIn, tokensOut),
+      });
+    }
 
     // Add response to history
     const gameTime = ctx.scene ? { ...ctx.scene.time } : undefined;
