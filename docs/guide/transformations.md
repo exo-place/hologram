@@ -128,8 +128,17 @@ Facts:
   is a private testing room
   contains a Vulpine Elixir dispenser (infinite supply)
   contains a Feline Serum fountain (infinite supply)
-  items here regenerate after use
-  transformations here are temporary (revert on exit)
+```
+
+Stock it with items that aren't consumed:
+
+```
+Entity: Vulpine Elixir (test)
+Facts:
+  is a transformation potion
+  grants fox ears (orange with white tips)
+  $if random(0.3): grants fox tail
+  is not consumed on use
 ```
 
 ## Tips
