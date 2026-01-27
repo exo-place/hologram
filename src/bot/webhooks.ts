@@ -214,9 +214,12 @@ export async function executeWebhook(
     }
     error("Failed to execute webhook", err, {
       errorProps: allProps,
+      channelId,
       webhookId: webhook.webhookId,
       username: safeUsername,
+      avatarUrl: avatarUrl ?? DEFAULT_AVATAR,
       contentLength: content.length,
+      contentPreview: content.slice(0, 200) + (content.length > 200 ? "..." : ""),
     });
     // Webhook may have been deleted - clear cache and try once more
     webhookCache.delete(channelId);
