@@ -461,7 +461,7 @@ const HELP_ENTITY_FACTS: Record<string, string[]> = {
     "• `$respond` - Always respond",
     "• `$respond false` - Never respond",
     "• `$if mentioned: $respond` - When @mentioned",
-    "• `$if random(0.1): $respond` - 10% chance",
+    "• `$if random() < 0.1: $respond` - 10% chance",
     "---",
     "**Context variables:**",
     "• `mentioned`, `content`, `author`",

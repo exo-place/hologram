@@ -88,7 +88,7 @@ Response behavior is controlled via `$respond` directives and `$if` conditionals
 $respond                           # Always respond
 $respond false                     # Never respond
 $if mentioned: $respond            # Respond when @mentioned
-$if random(0.1): $respond          # 10% chance to respond
+$if random() < 0.1: $respond          # 10% chance to respond
 $if dt_ms > 30000: $respond        # Rate limit: 30s between responses
 ```
 

@@ -17,7 +17,7 @@ import {
 function makeContext(overrides: Partial<ExprContext> = {}): ExprContext {
   return {
     self: Object.create(null),
-    random: () => false,
+    random: () => 0,
     has_fact: () => false,
     roll: () => 7,
     time: Object.assign(Object.create(null), {
@@ -143,11 +143,11 @@ describe("parser", () => {
 
   test("function calls", () => {
     const ctx = makeContext({
-      random: (n: number) => n > 0.5,
+      random: () => 0.5, // Always returns 0.5
       has_fact: (p: string) => p === "poisoned",
     });
-    expect(evalExpr("random(0.6)", ctx)).toBe(true);
-    expect(evalExpr("random(0.4)", ctx)).toBe(false);
+    expect(evalExpr("random() < 0.6", ctx)).toBe(true);
+    expect(evalExpr("random() < 0.4", ctx)).toBe(false);
     expect(evalExpr('has_fact("poisoned")', ctx)).toBe(true);
     expect(evalExpr('has_fact("healthy")', ctx)).toBe(false);
   });
@@ -288,7 +288,7 @@ describe("parseSelfContext", () => {
 
   test("ignores $if directives", () => {
     const self = parseSelfContext([
-      "$if random(0.5): has wings",
+      "$if random() < 0.5: has wings",
       "speed: 10",
     ]);
     expect(Object.keys(self)).toEqual(["speed"]);
@@ -322,10 +322,10 @@ describe("parseFact", () => {
   });
 
   test("parses $if facts", () => {
-    const result = parseFact("$if random(0.5): has wings");
+    const result = parseFact("$if random() < 0.5: has wings");
     expect(result.content).toBe("has wings");
     expect(result.conditional).toBe(true);
-    expect(result.expression).toBe("random(0.5)");
+    expect(result.expression).toBe("random() < 0.5");
   });
 
   test("parses $respond directive", () => {
@@ -354,7 +354,7 @@ describe("parseFact", () => {
   });
 
   test("throws on invalid $if (missing colon)", () => {
-    expect(() => parseFact("$if random(0.5) has wings")).toThrow("missing colon");
+    expect(() => parseFact("$if random() < 0.5 has wings")).toThrow("missing colon");
   });
 });
 

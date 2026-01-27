@@ -35,7 +35,7 @@ Conditions are JavaScript-like expressions with access to context variables.
 | `author` | string | Message author name |
 | `dt_ms` | number | Milliseconds since last response |
 | `elapsed_ms` | number | Milliseconds since message (for retries) |
-| `random(n)` | function | Returns true with probability n (0.0-1.0) |
+| `random()` | function | Random float in [0,1). Also `random(max)` or `random(min,max)` |
 | `has_fact(pattern)` | function | Check if entity has matching fact |
 | `time.hour` | number | Current hour (0-23) |
 | `time.is_day` | boolean | 6am-6pm |
@@ -51,7 +51,7 @@ $if mentioned: $respond
 
 Respond 10% of the time:
 ```
-$if random(0.1): $respond
+$if random() < 0.1: $respond
 ```
 
 Respond to keywords:
@@ -90,7 +90,7 @@ Multiple `$if` lines are evaluated in order. The last matching `$respond` wins.
 ```
 $respond false
 $if mentioned: $respond
-$if random(0.1): $respond
+$if random() < 0.1: $respond
 ```
 
 This suppresses responses by default, but responds if mentioned OR 10% randomly.
@@ -126,7 +126,7 @@ Responds to mentions, name patterns, and occasionally randomly:
 ```
 $if mentioned: $respond
 $if content.match(/bartender|barkeep/i): $respond
-$if random(0.05): $respond
+$if random() < 0.05: $respond
 ```
 
 ### Rate-limited responses
@@ -140,7 +140,7 @@ $if dt_ms > 60000: $respond
 
 Small chance to respond, with minimum spacing:
 ```
-$if random(0.05) && dt_ms > 120000: $respond
+$if random() < 0.05 && dt_ms > 120000: $respond
 ```
 
 ### Night owl

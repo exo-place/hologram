@@ -50,7 +50,7 @@ Facts:
   - is a transformation potion
   - grants fox ears (orange with white tips)
   - grants a fluffy fox tail
-  - $if random(0.3): grants soft fur on arms
+  - $if random() < 0.3: grants soft fur on arms
   - is consumed on use
 ```
 

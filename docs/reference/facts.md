@@ -34,7 +34,7 @@ Control when the entity responds (see [Response Control](/reference/triggers)):
 $respond
 $respond false
 $if mentioned: $respond
-$if random(0.1): $respond
+$if random() < 0.1: $respond
 $if content.match(/hello/i): $respond
 ```
 
@@ -44,7 +44,7 @@ Facts can be conditional using `$if`:
 
 ```
 $if time.is_night: glows faintly
-$if random(0.3): is in a good mood
+$if random() < 0.3: is in a good mood
 $if self.energy > 0.5: seems energetic
 ```
 

@@ -2,8 +2,8 @@
  * Restricted JavaScript expression evaluator for $if conditional facts.
  *
  * Expressions are boolean JS with safe globals:
- *   $if random(0.3): has fox ears
- *   $if has_fact("poisoned") && random(0.5): takes damage
+ *   $if random() < 0.3: has fox ears
+ *   $if has_fact("poisoned") && random() < 0.5: takes damage
  *   $if time.is_night: glows faintly
  *   $if self.fox_tf >= 0.5: has full fur
  */
@@ -18,8 +18,8 @@ export type SelfContext = Record<string, string | number | boolean>;
 export interface ExprContext {
   /** Entity's own parsed fact values (from "key: value" facts) */
   self: SelfContext;
-  /** Returns true with given probability (0.0-1.0) */
-  random: (chance: number) => boolean;
+  /** Returns random float in [0,1), [0,max), or [min,max). Use roll() for dice. */
+  random: (min?: number, max?: number) => number;
   /** Check if entity has a fact matching pattern */
   has_fact: (pattern: string) => boolean;
   /** Roll dice expression (e.g. "2d6+3"), returns total */
@@ -713,7 +713,11 @@ export function createBaseContext(options: BaseContextOptions): ExprContext {
 
   return {
     self: parseSelfContext(options.facts ?? []),
-    random: (chance: number) => Math.random() < chance,
+    random: (min?: number, max?: number) => {
+      if (min === undefined) return Math.random();
+      if (max === undefined) return Math.random() * min;
+      return min + Math.random() * (max - min);
+    },
     has_fact: options.has_fact,
     roll: (dice: string) => rollDice(dice),
     time: Object.assign(Object.create(null), {

@@ -41,8 +41,8 @@ Facts:
   smells faintly of cinnamon
   grants fox ears (orange fur with white tips)
   grants a bushy fox tail (3ft, fluffy)
-  $if random(0.3): grants soft fur on arms and legs
-  $if random(0.1): grants digitigrade legs with paw pads
+  $if random() < 0.3: grants soft fur on arms and legs
+  $if random() < 0.1: grants digitigrade legs with paw pads
   is consumed on use
 ```
 
@@ -139,8 +139,8 @@ Facts:
   cannot be taken or moved
   dispenses transformation elixir when used
   grants fox ears (orange with white tips)
-  $if random(0.3): grants fox tail
-  $if random(0.1): grants digitigrade legs
+  $if random() < 0.3: grants fox tail
+  $if random() < 0.1: grants digitigrade legs
 ```
 
 ```
@@ -150,8 +150,8 @@ Facts:
   cannot be taken or moved
   a stone basin filled with shimmering liquid
   grants cat ears (soft gray fur)
-  $if random(0.3): grants a cat tail
-  $if random(0.2): grants retractable claws
+  $if random() < 0.3: grants a cat tail
+  $if random() < 0.2: grants retractable claws
 ```
 
 The LLM understands "is a fixture" and "cannot be taken" - no special system needed.

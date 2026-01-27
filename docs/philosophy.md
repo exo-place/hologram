@@ -73,7 +73,7 @@ Configuration uses composable boolean/numeric conditions rather than enum modes.
 ```
 # Good - composable conditions
 $if mentioned: $respond
-$if random(0.1): $respond
+$if random() < 0.1: $respond
 
 # Bad - enum modes
 response_mode: mention_or_random
@@ -187,7 +187,7 @@ roll_effects({ effects: [
 
 Randomness appears in two places with different timing:
 
-1. **Response control** (before LLM): `$if random(0.1): $respond`
+1. **Response control** (before LLM): `$if random() < 0.1: $respond`
    - System evaluates before deciding to invoke LLM
    - LLM never sees this - it either gets called or doesn't
 
@@ -202,7 +202,7 @@ Same random mechanic, different entry points. Response control gates LLM invocat
 Response conditions are evaluated by the system, not left to LLM interpretation.
 
 ```
-$if random(0.1): $respond
+$if random() < 0.1: $respond
 ```
 
 The system rolls the 10% chance, not the LLM. The LLM doesn't see "maybe respond 10% of the time" - it either gets asked to respond or it doesn't.
@@ -219,12 +219,12 @@ is a character
 has silver hair
 
 # Conditional traits
-$if random(0.3): has fox ears
+$if random() < 0.3: has fox ears
 $if time.is_night: eyes glow faintly
 
 # Response control
 $if mentioned: $respond
-$if dt_ms >= 30000 && random(0.1): $respond
+$if dt_ms >= 30000 && random() < 0.1: $respond
 $if elapsed_ms < 1000: $respond false
 ```
 
@@ -302,7 +302,7 @@ $if mentioned: $respond
 
 # Respond to mentions OR randomly, but not too fast
 $if mentioned: $respond
-$if random(0.1): $respond
+$if random() < 0.1: $respond
 $if elapsed_ms < 1000: $respond false
 
 # Respect mute
@@ -336,7 +336,7 @@ throttle_ms: 30000
 
 # New
 $if mentioned: $respond
-$if random(0.1): $respond
+$if random() < 0.1: $respond
 $if elapsed_ms < 5000: $respond false
 $if elapsed_ms < 5000: $retry 5000
 $if dt_ms < 30000: $respond false
@@ -384,7 +384,7 @@ Simple things should be simple. Complex things should be possible.
   has no tail
   $if mentioned: $respond
   $if content.match(/aria|merchant/i): $respond
-  $if random(0.1) && dt_ms > 30000: $respond
+  $if random() < 0.1 && dt_ms > 30000: $respond
 ```
 
 **Why?** New users shouldn't face a wall of configuration. Start simple, add complexity as needed. The same system handles both cases.

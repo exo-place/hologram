@@ -60,7 +60,7 @@ $if content.match(/bartender/i): $respond
 ### Random Chance
 
 ```
-$if random(0.1): $respond
+$if random() < 0.1: $respond
 ```
 
 The character has a 10% chance to respond to any message.
@@ -72,7 +72,7 @@ You can combine conditions - they're evaluated in order, last match wins:
 ```
 $if mentioned: $respond
 $if content.match(/bartender/i): $respond
-$if random(0.05): $respond
+$if random() < 0.05: $respond
 ```
 
 ## Rate Limiting
@@ -115,7 +115,7 @@ is grumpy but fair
 responds to questions about items and prices
 $if mentioned: $respond
 $if content.match(/shop|buy|sell|price/i): $respond
-$if random(0.05) && dt_ms > 60000: $respond
+$if random() < 0.05 && dt_ms > 60000: $respond
 ```
 
 ## Example: Narrator
@@ -133,7 +133,7 @@ is a narrator
 describes the scene and atmosphere
 speaks in third person
 only interjects when something interesting happens
-$if random(0.05) && dt_ms > 120000: $respond
+$if random() < 0.05 && dt_ms > 120000: $respond
 ```
 
 ## Checking Status
