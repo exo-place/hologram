@@ -25,8 +25,18 @@ function checkMentionedInDialogue(content: string, name: string): boolean {
     quotedParts.push(match[1]);
   }
 
-  // If there are quoted parts, only check within them
-  const textToCheck = quotedParts.length > 0 ? quotedParts.join(" ") : content;
+  // Check if content has multiple paragraphs (contains newlines)
+  const hasMultipleParagraphs = content.includes("\n");
+  const hasQuotes = quotedParts.length > 0;
+
+  // If there are quotes OR multiple paragraphs, only check within quoted parts
+  let textToCheck: string;
+  if (hasQuotes || hasMultipleParagraphs) {
+    if (!hasQuotes) return false;
+    textToCheck = quotedParts.join(" ");
+  } else {
+    textToCheck = content;
+  }
 
   // Word boundary check for the name
   const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -693,6 +703,26 @@ describe("integration", () => {
     });
     expect(ctx.mentioned_in_dialogue("Bob")).toBe(true);
     expect(ctx.mentioned_in_dialogue("Alice")).toBe(false);
+  });
+
+  test("mentioned_in_dialogue with multiple paragraphs requires quotes", () => {
+    // Multiple paragraphs without quotes - name should NOT match
+    const ctx = createBaseContext({
+      facts: [],
+      has_fact: () => false,
+      content: "Alice walked into the room.\nShe looked around.",
+    });
+    expect(ctx.mentioned_in_dialogue("Alice")).toBe(false);
+    expect(ctx.mentioned_in_dialogue("She")).toBe(false);
+
+    // Multiple paragraphs with quotes - only check within quotes
+    const ctx2 = createBaseContext({
+      facts: [],
+      has_fact: () => false,
+      content: 'Alice walked in.\n"Hey Bob!" she said.',
+    });
+    expect(ctx2.mentioned_in_dialogue("Bob")).toBe(true);
+    expect(ctx2.mentioned_in_dialogue("Alice")).toBe(false); // Outside quotes
   });
 
   test("is_self and mentioned_in_dialogue combined", () => {

@@ -869,8 +869,8 @@ export interface BaseContextOptions {
 
 /**
  * Check if a name is mentioned in dialogue (quoted text).
- * Only checks within quoted portions ("..." or '...').
- * If no quotes are found, checks the full content.
+ * If content has quotation marks OR multiple paragraphs, only checks within quotes.
+ * Otherwise checks the full content (simple single-line messages).
  */
 function checkMentionedInDialogue(content: string, name: string): boolean {
   if (!name) return false;
@@ -883,8 +883,19 @@ function checkMentionedInDialogue(content: string, name: string): boolean {
     quotedParts.push(match[1]);
   }
 
-  // If there are quoted parts, only check within them
-  const textToCheck = quotedParts.length > 0 ? quotedParts.join(" ") : content;
+  // Check if content has multiple paragraphs (contains newlines)
+  const hasMultipleParagraphs = content.includes("\n");
+  const hasQuotes = quotedParts.length > 0;
+
+  // If there are quotes OR multiple paragraphs, only check within quoted parts
+  // (If there are multiple paragraphs but no quotes, nothing to check → return false)
+  let textToCheck: string;
+  if (hasQuotes || hasMultipleParagraphs) {
+    if (!hasQuotes) return false; // Multiple paragraphs but no quotes
+    textToCheck = quotedParts.join(" ");
+  } else {
+    textToCheck = content;
+  }
 
   // Word boundary check for the name
   const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

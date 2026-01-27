@@ -38,7 +38,7 @@ Conditions are JavaScript-like expressions with access to context variables.
 | `elapsed_ms` | number | Milliseconds since message (for retries) |
 | `random()` | function | Float [0,1), or int with `random(max)` [1,max] / `random(min,max)` [min,max] |
 | `has_fact(pattern)` | function | Check if entity has matching fact |
-| `mentioned_in_dialogue(name)` | function | Check if name appears in dialogue (excludes XML tags) |
+| `mentioned_in_dialogue(name)` | function | Check if name appears in quoted dialogue |
 | `time.hour` | number | Current hour (0-23) |
 | `time.is_day` | boolean | 6am-6pm |
 | `time.is_night` | boolean | 6pm-6am |
