@@ -109,6 +109,47 @@ function checkFactLocked(entityId: number, factContent: string): { locked: false
 }
 
 // =============================================================================
+// Entity Reference Expansion
+// =============================================================================
+
+/** Pattern for entity references: {{entity:ID}} */
+const ENTITY_REF_PATTERN = /\{\{entity:(\d+)\}\}/g;
+
+/**
+ * Expand all {{entity:ID}} references in an entity's facts.
+ * Replaces references with entity names and collects referenced entities.
+ *
+ * @param entity - The entity whose facts to process (mutates facts in place)
+ * @param seenIds - Set of entity IDs already in context (modified in place)
+ * @returns Array of newly referenced entities to add to context
+ */
+function expandEntityRefs(
+  entity: { facts: string[] },
+  seenIds: Set<number>
+): EntityWithFacts[] {
+  const referencedEntities: EntityWithFacts[] = [];
+
+  for (let i = 0; i < entity.facts.length; i++) {
+    entity.facts[i] = entity.facts[i].replace(ENTITY_REF_PATTERN, (match, idStr) => {
+      const refId = parseInt(idStr);
+      const refEntity = getEntityWithFacts(refId);
+      if (refEntity) {
+        // Add to context if not already seen
+        if (!seenIds.has(refId)) {
+          referencedEntities.push(refEntity);
+          seenIds.add(refId);
+        }
+        // Keep ID so LLM can use it in tool calls (add_fact, update_fact, etc.)
+        return `${refEntity.name} [${refId}]`;
+      }
+      return match; // Keep original if entity not found
+    });
+  }
+
+  return referencedEntities;
+}
+
+// =============================================================================
 // Tool Definitions
 // =============================================================================
 
@@ -293,43 +334,10 @@ export async function handleMessage(ctx: MessageContext): Promise<ResponseResult
   const evaluated: EvaluatedEntity[] = respondingEntities ?? [];
   const other: EntityWithFacts[] = [];
 
-  // Add location and item entities for each responding character, transform refs
+  // Expand {{entity:ID}} refs in facts and collect referenced entities
   const seenIds = new Set(evaluated.map(e => e.id));
   for (const entity of evaluated) {
-    // Location: "is in [entity:ID]"
-    const locationPattern = /^is in \[entity:(\d+)\]/;
-    const locIndex = entity.facts.findIndex(f => locationPattern.test(f));
-    if (locIndex !== -1) {
-      const match = entity.facts[locIndex].match(locationPattern);
-      if (match) {
-        const locationId = parseInt(match[1]);
-        const locationEntity = getEntityWithFacts(locationId);
-        if (locationEntity) {
-          entity.facts[locIndex] = `is in ${locationEntity.name} [${locationId}]`;
-          if (!seenIds.has(locationId)) {
-            other.push(locationEntity);
-            seenIds.add(locationId);
-          }
-        }
-      }
-    }
-
-    // Items: "has [entity:ID]"
-    const itemPattern = /^has \[entity:(\d+)\]/;
-    for (let i = 0; i < entity.facts.length; i++) {
-      const match = entity.facts[i].match(itemPattern);
-      if (match) {
-        const itemId = parseInt(match[1]);
-        const itemEntity = getEntityWithFacts(itemId);
-        if (itemEntity) {
-          entity.facts[i] = `has ${itemEntity.name} [${itemId}]`;
-          if (!seenIds.has(itemId)) {
-            other.push(itemEntity);
-            seenIds.add(itemId);
-          }
-        }
-      }
-    }
+    other.push(...expandEntityRefs(entity, seenIds));
   }
 
   // Add user entity if bound
@@ -464,45 +472,11 @@ export async function* handleMessageStreaming(
 ): AsyncGenerator<StreamEvent, void, unknown> {
   const { channelId, guildId, entities, streamMode, delimiter } = ctx;
 
-  // Build context (resolve entity references)
+  // Expand {{entity:ID}} refs in facts and collect referenced entities
   const other: EntityWithFacts[] = [];
   const seenIds = new Set(entities.map(e => e.id));
-
   for (const entity of entities) {
-    // Location: "is in [entity:ID]"
-    const locationPattern = /^is in \[entity:(\d+)\]/;
-    const locIndex = entity.facts.findIndex(f => locationPattern.test(f));
-    if (locIndex !== -1) {
-      const match = entity.facts[locIndex].match(locationPattern);
-      if (match) {
-        const locationId = parseInt(match[1]);
-        const locationEntity = getEntityWithFacts(locationId);
-        if (locationEntity) {
-          entity.facts[locIndex] = `is in ${locationEntity.name} [${locationId}]`;
-          if (!seenIds.has(locationId)) {
-            other.push(locationEntity);
-            seenIds.add(locationId);
-          }
-        }
-      }
-    }
-
-    // Items: "has [entity:ID]"
-    const itemPattern = /^has \[entity:(\d+)\]/;
-    for (let i = 0; i < entity.facts.length; i++) {
-      const match = entity.facts[i].match(itemPattern);
-      if (match) {
-        const itemId = parseInt(match[1]);
-        const itemEntity = getEntityWithFacts(itemId);
-        if (itemEntity) {
-          entity.facts[i] = `has ${itemEntity.name} [${itemId}]`;
-          if (!seenIds.has(itemId)) {
-            other.push(itemEntity);
-            seenIds.add(itemId);
-          }
-        }
-      }
-    }
+    other.push(...expandEntityRefs(entity, seenIds));
   }
 
   // Add user entity if bound

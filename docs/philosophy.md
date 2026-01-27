@@ -53,8 +53,8 @@ Facts:
 # Bad - body parts as separate entities
 Entity: Aria
 Facts:
-  - has body part [entity:20]
-  - has body part [entity:21]
+  - has body part {{entity:20}}
+  - has body part {{entity:21}}
 
 Entity: Aria's Ears (id: 20)
 Facts:

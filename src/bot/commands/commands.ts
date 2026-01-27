@@ -852,7 +852,7 @@ const HELP_ENTITY_FACTS: Record<string, string[]> = {
     "Both work fine!",
     "---",
     "**Special patterns:**",
-    "• `is in [entity:12]` - location reference",
+    "• `{{entity:12}}` - entity reference (expands anywhere)",
     "• `$if condition: $respond` - response control",
     "---",
     "**Permissions:** See `/view help:permissions`",

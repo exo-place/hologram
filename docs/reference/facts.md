@@ -20,11 +20,11 @@ These are conventions - the system doesn't enforce types.
 Describe where something is:
 
 ```
-is in [entity:12]
-is in [entity:12] (The Tavern)
+is in {{entity:12}}
+is in {{entity:12}} (The Tavern)
 ```
 
-The `[entity:N]` syntax references another entity by ID. The parenthetical note is optional but helpful for readability.
+The `{{entity:N}}` syntax references another entity by ID. The parenthetical note is optional but helpful for readability.
 
 ## Response Control
 
@@ -93,10 +93,10 @@ avoids eye contact with authority figures
 ### Note Relationships
 
 ```
-is friends with [entity:5] (Marcus)
+is friends with {{entity:5}} (Marcus)
 distrusts the city guard
 is loyal to the merchant guild
-owes a debt to [entity:8]
+owes a debt to {{entity:8}}
 ```
 
 ### Describe Appearance
@@ -139,7 +139,7 @@ carries a worn leather satchel full of trinkets
 knows the value of most trade goods by sight
 remembers the war that destroyed her hometown
 is looking for her lost brother
-is currently staying at [entity:12] (The Crossroads Inn)
+is currently staying at {{entity:12}} (The Crossroads Inn)
 ```
 
 ## Example: Complete Character (SillyTavern Style)
@@ -162,7 +162,7 @@ is a tavern on the harbor district
 smells of salt air and spilled ale
 is dimly lit by oil lamps
 has a reputation for discretion
-is owned by [entity:15] (One-Eyed Pete)
+is owned by {{entity:15}} (One-Eyed Pete)
 is where sailors gather to trade rumors
 has a secret room in the cellar
 ```
@@ -175,7 +175,7 @@ is named Moonblade
 is an ancient elven sword
 glows faintly in darkness
 was forged during the Second Age
-is currently carried by [entity:3] (Aria)
+is currently carried by {{entity:3}} (Aria)
 is said to reveal hidden truths
 ```
 

@@ -49,7 +49,7 @@ Entity: Aria
 Facts:
   - is a character
   - has silver hair
-  - is in [entity:12]
+  - is in {{entity:12}}
   - $if mentioned: $respond
 ```
 

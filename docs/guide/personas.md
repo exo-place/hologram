@@ -112,7 +112,7 @@ The Shopkeeper responds differently because they know they're talking to a knigh
 
 - **Keep facts current**: Update your character as they change
 - **Be consistent**: Facts shape how others see you
-- **Use relationships**: Add facts like "is friends with [entity:5]" to establish connections
+- **Use relationships**: Add facts like "is friends with {{entity:5}}" to establish connections
 
 ## Checking Your Persona
 
