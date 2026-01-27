@@ -86,24 +86,24 @@ $locked is loyal to the queen
 
 The fact content (without the `$locked` prefix) is shown to the LLM, but tool calls targeting that fact will fail.
 
-### `$edit @everyone` / `$edit <user_ids>`
+### `$edit @everyone` / `$edit <usernames>`
 
 Control which Discord users can edit this entity via `/edit`.
 
 ```
 $edit @everyone           # Anyone can edit
-$edit 123456, 789012      # Only these user IDs
+$edit alice, bob          # Only these usernames
 ```
 
 **Default:** Owner only (the user who created the entity).
 
-### `$view @everyone` / `$view <user_ids>`
+### `$view @everyone` / `$view <usernames>`
 
 Control which Discord users can view this entity via `/view`.
 
 ```
 $view @everyone           # Anyone can view (default)
-$view 123456, 789012      # Only these user IDs
+$view alice, bob          # Only these usernames
 ```
 
 **Default:** Everyone can view.

@@ -60,10 +60,10 @@ By default, only the owner can edit an entity. Use `$edit` to grant access to ot
 $edit @everyone
 ```
 
-Or specify user IDs:
+Or specify usernames:
 
 ```
-$edit 123456789, 987654321
+$edit alice, bob
 ```
 
 ### View Permissions
@@ -71,7 +71,7 @@ $edit 123456789, 987654321
 By default, everyone can view entities (public). Use `$view` to restrict viewing:
 
 ```
-$view 123456789, 987654321
+$view alice, bob
 ```
 
 Or keep it public explicitly:
@@ -84,8 +84,8 @@ $view @everyone
 
 | Check | Default | Override |
 |-------|---------|----------|
-| Edit | Owner only | `$edit @everyone` or `$edit <ids>` |
-| View | Everyone | `$view <ids>` (restricts to listed users) |
+| Edit | Owner only | `$edit @everyone` or `$edit <usernames>` |
+| View | Everyone | `$view <usernames>` (restricts to listed users) |
 | LLM Modify | Allowed | `$locked` (entity) or `$locked <fact>` |
 
 ## Examples
@@ -116,7 +116,7 @@ personality is cheerful
 Only owner can see and edit:
 
 ```
-$view 123456789
+$view myusername
 is my private character
 has secrets
 ```

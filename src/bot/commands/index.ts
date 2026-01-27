@@ -218,6 +218,7 @@ async function handleAutocomplete(bot: Bot, interaction: Interaction) {
   const query = (focused.value as string) || "";
   const commandName = interaction.data?.name;
   const userId = interaction.user?.id?.toString() ?? "";
+  const username = interaction.user?.username ?? "";
 
   // Import here to avoid circular deps
   const { searchEntities, searchEntitiesOwnedBy, getEntityWithFacts } = await import("../../db/entities");
@@ -233,7 +234,7 @@ async function handleAutocomplete(bot: Bot, interaction: Interaction) {
     const facts = entityWithFacts.facts.map(f => f.content);
     const permissions = parsePermissionDirectives(facts);
     if (permissions.editList === "everyone") return true;
-    if (permissions.editList && permissions.editList.includes(userId)) return true;
+    if (permissions.editList && permissions.editList.some(u => u.toLowerCase() === username.toLowerCase())) return true;
     return false;
   };
 
@@ -247,7 +248,7 @@ async function handleAutocomplete(bot: Bot, interaction: Interaction) {
     // No $view directive = public by default
     if (permissions.viewList === null) return true;
     if (permissions.viewList === "everyone") return true;
-    if (permissions.viewList.includes(userId)) return true;
+    if (permissions.viewList.some(u => u.toLowerCase() === username.toLowerCase())) return true;
     return false;
   };
 

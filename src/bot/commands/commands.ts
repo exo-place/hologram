@@ -37,7 +37,7 @@ import { parsePermissionDirectives } from "../../logic/expr";
  * Owner always can. Otherwise check $edit directive.
  * Default (no $edit directive) = owner-only.
  */
-function canUserEdit(entity: EntityWithFacts, userId: string): boolean {
+function canUserEdit(entity: EntityWithFacts, userId: string, username: string): boolean {
   // Owner always can
   if (entity.owned_by === userId) return true;
 
@@ -45,9 +45,9 @@ function canUserEdit(entity: EntityWithFacts, userId: string): boolean {
   const facts = entity.facts.map(f => f.content);
   const permissions = parsePermissionDirectives(facts);
 
-  // Check $edit directive
+  // Check $edit directive (case-insensitive username match)
   if (permissions.editList === "everyone") return true;
-  if (permissions.editList && permissions.editList.includes(userId)) return true;
+  if (permissions.editList && permissions.editList.some(u => u.toLowerCase() === username.toLowerCase())) return true;
 
   // No $edit directive = owner only
   return false;
@@ -58,7 +58,7 @@ function canUserEdit(entity: EntityWithFacts, userId: string): boolean {
  * Owner always can. Otherwise check $view directive.
  * Default (no $view directive) = everyone can view (public by default).
  */
-function canUserView(entity: EntityWithFacts, userId: string): boolean {
+function canUserView(entity: EntityWithFacts, userId: string, username: string): boolean {
   // Owner always can
   if (entity.owned_by === userId) return true;
 
@@ -69,9 +69,9 @@ function canUserView(entity: EntityWithFacts, userId: string): boolean {
   // If no $view directive, default to public (everyone can view)
   if (permissions.viewList === null) return true;
 
-  // Check $view directive
+  // Check $view directive (case-insensitive username match)
   if (permissions.viewList === "everyone") return true;
-  if (permissions.viewList.includes(userId)) return true;
+  if (permissions.viewList.some(u => u.toLowerCase() === username.toLowerCase())) return true;
 
   return false;
 }
@@ -171,7 +171,7 @@ registerCommand({
     }
 
     // Check view permission
-    if (!canUserView(entity, ctx.userId)) {
+    if (!canUserView(entity, ctx.userId, ctx.username)) {
       await respond(ctx.bot, ctx.interaction, "You don't have permission to view this entity", true);
       return;
     }
@@ -221,7 +221,7 @@ registerCommand({
     }
 
     // Check edit permission
-    if (!canUserEdit(entity, ctx.userId)) {
+    if (!canUserEdit(entity, ctx.userId, ctx.username)) {
       await respond(ctx.bot, ctx.interaction, "You don't have permission to edit this entity", true);
       return;
     }
@@ -328,7 +328,8 @@ registerModalHandler("edit", async (bot, interaction, values) => {
 
   // Check edit permission (defense in depth)
   const userId = interaction.user?.id?.toString() ?? "";
-  if (!canUserEdit(entity, userId)) {
+  const username = interaction.user?.username ?? "";
+  if (!canUserEdit(entity, userId, username)) {
     await respond(bot, interaction, "You don't have permission to edit this entity", true);
     return;
   }
@@ -864,9 +865,9 @@ const HELP_ENTITY_FACTS: Record<string, string[]> = {
     "---",
     "**User Access** - Control who can edit/view",
     "• `$edit @everyone` - Anyone can edit",
-    "• `$edit 123, 456` - Specific user IDs",
+    "• `$edit alice, bob` - Specific usernames",
     "• `$view @everyone` - Anyone can view",
-    "• `$view 123, 456` - Specific user IDs",
+    "• `$view alice, bob` - Specific usernames",
     "---",
     "**Defaults:**",
     "• Edit: owner only",
