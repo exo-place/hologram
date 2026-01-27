@@ -69,7 +69,7 @@ registerCommand({
       const entity = createEntity(name, ctx.userId);
       // Add type as a fact
       addFact(entity.id, `is a ${type}`);
-      await respond(ctx.bot, ctx.interaction, `Created ${type} "${name}" (id: ${entity.id})`);
+      await respond(ctx.bot, ctx.interaction, `Created ${type} "${name}" (id: ${entity.id})`, true);
     } else {
       // Open modal for details
       await respondWithModal(ctx.bot, ctx.interaction, `create:${type}`, `Create ${type}`, [
@@ -110,7 +110,7 @@ registerModalHandler("create", async (bot, interaction, values) => {
     addFact(entity.id, fact);
   }
 
-  await respond(bot, interaction, `Created ${type} "${name}" (id: ${entity.id}) with ${facts.length + 1} facts`);
+  await respond(bot, interaction, `Created ${type} "${name}" (id: ${entity.id}) with ${facts.length + 1} facts`, true);
 });
 
 // =============================================================================
@@ -152,7 +152,8 @@ registerCommand({
       : "(no facts)";
 
     await respond(ctx.bot, ctx.interaction,
-      `**${entity.name}** (id: ${entity.id})\n\n${factsDisplay}`
+      `**${entity.name}** (id: ${entity.id})\n\n${factsDisplay}`,
+      true
     );
   },
 });
@@ -220,7 +221,7 @@ registerModalHandler("edit", async (bot, interaction, values) => {
   const facts = factsText.split("\n").map(f => f.trim()).filter(f => f);
   setFacts(entityId, facts);
 
-  await respond(bot, interaction, `Updated "${entity.name}" with ${facts.length} facts`);
+  await respond(bot, interaction, `Updated "${entity.name}" with ${facts.length} facts`, true);
 });
 
 // =============================================================================
@@ -263,7 +264,7 @@ registerCommand({
     }
 
     deleteEntity(entity.id);
-    await respond(ctx.bot, ctx.interaction, `Deleted "${entity.name}"`);
+    await respond(ctx.bot, ctx.interaction, `Deleted "${entity.name}"`, true);
   },
 });
 
@@ -349,7 +350,7 @@ registerCommand({
 
     const scopeDesc = scope === "global" ? "globally" : scope === "guild" ? "in this server" : "in this channel";
     const targetDesc = target === "channel" ? "This channel" : "You";
-    await respond(ctx.bot, ctx.interaction, `${targetDesc} bound to "${entity.name}" ${scopeDesc}`);
+    await respond(ctx.bot, ctx.interaction, `${targetDesc} bound to "${entity.name}" ${scopeDesc}`, true);
   },
 });
 
@@ -394,7 +395,7 @@ registerCommand({
     const messages = getMessages(ctx.channelId, 10);
     lines.push(`**Recent messages:** ${messages.length}`);
 
-    await respond(ctx.bot, ctx.interaction, lines.join("\n"));
+    await respond(ctx.bot, ctx.interaction, lines.join("\n"), true);
   },
 });
 
