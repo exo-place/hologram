@@ -9,6 +9,9 @@ interface CachedWebhook {
 // In-memory cache for hot path
 const webhookCache = new Map<string, CachedWebhook>();
 
+// Default avatar when entity doesn't have $avatar
+const DEFAULT_AVATAR = "https://cdn.discordapp.com/embed/avatars/0.png";
+
 // Bot instance set by client.ts to avoid circular import
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let bot: any = null;
@@ -119,7 +122,7 @@ export async function executeWebhook(
       {
         content,
         username,
-        avatarUrl,
+        avatarUrl: avatarUrl ?? DEFAULT_AVATAR,
         wait: true, // Wait for confirmation to get better error messages
       }
     );
