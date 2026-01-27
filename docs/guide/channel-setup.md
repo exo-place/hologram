@@ -90,6 +90,30 @@ $if content.match(/bartender/i): $respond
 $if random() < 0.05: $respond
 ```
 
+## Streaming Responses
+
+By default, the AI generates a complete response and sends it as a single message. You can enable **line-based streaming** to send each line as it's generated:
+
+```
+$stream
+```
+
+With streaming enabled, the character's response appears line-by-line in real-time. This creates a more natural, conversational feel.
+
+### Conditional Streaming
+
+You can make streaming conditional:
+
+```
+$if mentioned: $stream
+```
+
+### Notes
+
+- Streaming only works for single-entity channels (not multi-character)
+- Each line becomes a separate Discord message
+- Useful for longer responses or dramatic effect
+
 ## Rate Limiting
 
 ### Minimum Time Between Responses

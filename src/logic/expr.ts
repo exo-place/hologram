@@ -556,6 +556,7 @@ const AVATAR_SIGIL = "$avatar ";
 const LOCKED_SIGIL = "$locked";
 const EDIT_SIGIL = "$edit ";
 const VIEW_SIGIL = "$view ";
+const STREAM_SIGIL = "$stream";
 
 export interface ProcessedFact {
   content: string;
@@ -577,6 +578,10 @@ export interface ProcessedFact {
   isLockedDirective: boolean;
   /** True if this fact has $locked prefix (fact is locked but still visible) */
   isLockedFact: boolean;
+  /** True if this fact is a $stream directive */
+  isStream: boolean;
+  /** For $stream directives, the mode (currently only "lines") */
+  streamMode?: "lines";
 }
 
 /** Parse expression, expect ':', return position after ':' */
@@ -612,6 +617,7 @@ export function parseFact(fact: string): ProcessedFact {
         isAvatar: false,
         isLockedDirective: true,
         isLockedFact: false,
+        isStream: false,
       };
     } else {
       // $locked prefix - recursively parse the rest, then mark as locked
@@ -640,6 +646,7 @@ export function parseFact(fact: string): ProcessedFact {
         isAvatar: false,
         isLockedDirective: false,
         isLockedFact: false,
+        isStream: false,
       };
     }
 
@@ -656,10 +663,28 @@ export function parseFact(fact: string): ProcessedFact {
         isAvatar: false,
         isLockedDirective: false,
         isLockedFact: false,
+        isStream: false,
       };
     }
 
-    return { content, conditional: true, expression, isRespond: false, isRetry: false, isAvatar: false, isLockedDirective: false, isLockedFact: false };
+    // Check if content is a $stream directive
+    const streamResultCond = parseStreamDirective(content);
+    if (streamResultCond !== null) {
+      return {
+        content,
+        conditional: true,
+        expression,
+        isRespond: false,
+        isRetry: false,
+        isAvatar: false,
+        isLockedDirective: false,
+        isLockedFact: false,
+        isStream: true,
+        streamMode: streamResultCond,
+      };
+    }
+
+    return { content, conditional: true, expression, isRespond: false, isRetry: false, isAvatar: false, isLockedDirective: false, isLockedFact: false, isStream: false };
   }
 
   // Check for unconditional $respond
@@ -674,6 +699,7 @@ export function parseFact(fact: string): ProcessedFact {
       isAvatar: false,
       isLockedDirective: false,
       isLockedFact: false,
+      isStream: false,
     };
   }
 
@@ -689,6 +715,7 @@ export function parseFact(fact: string): ProcessedFact {
       isAvatar: false,
       isLockedDirective: false,
       isLockedFact: false,
+      isStream: false,
     };
   }
 
@@ -704,10 +731,27 @@ export function parseFact(fact: string): ProcessedFact {
       avatarUrl: avatarResult,
       isLockedDirective: false,
       isLockedFact: false,
+      isStream: false,
     };
   }
 
-  return { content: trimmed, conditional: false, isRespond: false, isRetry: false, isAvatar: false, isLockedDirective: false, isLockedFact: false };
+  // Check for unconditional $stream
+  const streamResult = parseStreamDirective(trimmed);
+  if (streamResult !== null) {
+    return {
+      content: trimmed,
+      conditional: false,
+      isRespond: false,
+      isRetry: false,
+      isAvatar: false,
+      isLockedDirective: false,
+      isLockedFact: false,
+      isStream: true,
+      streamMode: streamResult,
+    };
+  }
+
+  return { content: trimmed, conditional: false, isRespond: false, isRetry: false, isAvatar: false, isLockedDirective: false, isLockedFact: false, isStream: false };
 }
 
 /**
@@ -783,6 +827,24 @@ function parseLockedDirective(content: string): { isDirective: true } | { isDire
   return null;
 }
 
+/**
+ * Parse a $stream directive.
+ * Returns null if not a stream directive, or the stream mode.
+ * "$stream" or "$stream lines" → "lines" mode (one line = one message)
+ */
+function parseStreamDirective(content: string): "lines" | null {
+  if (!content.startsWith(STREAM_SIGIL)) {
+    return null;
+  }
+  const rest = content.slice(STREAM_SIGIL.length).trim().toLowerCase();
+  // Default to "lines" mode, or explicit "lines"
+  if (rest === "" || rest === "lines") {
+    return "lines";
+  }
+  // Not a valid $stream directive
+  return null;
+}
+
 export interface EvaluatedFacts {
   /** Facts that apply (excluding directives) */
   facts: string[];
@@ -798,6 +860,8 @@ export interface EvaluatedFacts {
   isLocked: boolean;
   /** Set of fact content strings that are locked (from $locked prefix) */
   lockedFacts: Set<string>;
+  /** Stream mode if $stream directive present (e.g., "lines" for line-based streaming) */
+  streamMode: "lines" | null;
 }
 
 /**
@@ -822,6 +886,7 @@ export function evaluateFacts(
   let avatarUrl: string | null = null;
   let isLocked = false;
   const lockedFacts = new Set<string>();
+  let streamMode: "lines" | null = null;
 
   // Strip comments first
   const uncommented = stripComments(facts);
@@ -869,10 +934,16 @@ export function evaluateFacts(
       continue;
     }
 
+    // Handle $stream directives - last one wins
+    if (parsed.isStream) {
+      streamMode = parsed.streamMode ?? null;
+      continue;
+    }
+
     results.push(parsed.content);
   }
 
-  return { facts: results, shouldRespond, respondSource, retryMs, avatarUrl, isLocked, lockedFacts };
+  return { facts: results, shouldRespond, respondSource, retryMs, avatarUrl, isLocked, lockedFacts, streamMode };
 }
 
 // =============================================================================

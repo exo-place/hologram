@@ -96,6 +96,18 @@ $if content.includes("hello"): $respond  # String matching (note quotes)
 $if messages(10).includes("help"): $respond  # Check last 10 messages
 ```
 
+### Streaming
+
+Line-based streaming sends each line of the LLM response as a separate Discord message as it's generated:
+
+```
+$stream                            # Enable line-based streaming (default: lines mode)
+$stream lines                      # Explicit lines mode
+$if mentioned: $stream             # Conditional streaming
+```
+
+When streaming is enabled, responses appear line-by-line in real-time rather than as a single message. Only supported for single-entity responses (not multi-character).
+
 **Context variables:** `mentioned`, `replied`, `is_forward`, `is_self`, `content`, `author`, `dt_ms`, `elapsed_ms`, `time.is_night`, `self.*`
 
 ### Stickers

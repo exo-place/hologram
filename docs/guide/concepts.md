@@ -45,6 +45,8 @@ Facts are freeform text. You can write anything. Some patterns have special mean
 | `is a item` | Entity type |
 | `is in [entity:12]` | Location/containment |
 | `$if condition: fact` | Conditional fact |
+| `$respond` | Control when entity responds |
+| `$stream` | Enable line-based streaming |
 | `$locked` | Prevent AI from modifying entity |
 | `$edit @everyone` | Allow anyone to edit |
 

@@ -1,7 +1,7 @@
 import { createBot, Intents } from "@discordeno/bot";
 import { info, debug, warn, error } from "../logger";
 import { registerCommands, handleInteraction } from "./commands";
-import { handleMessage, type EvaluatedEntity } from "../ai/handler";
+import { handleMessage, handleMessageStreaming, type EvaluatedEntity } from "../ai/handler";
 import { resolveDiscordEntity, resolveDiscordEntities, isNewUser, markUserWelcomed, addMessage, trackWebhookMessage, getWebhookMessageEntity, getMessages, formatMessagesForContext, recordEvalError } from "../db/discord";
 import { getEntity, getEntityWithFacts, getSystemEntity, getFactsForEntity, type EntityWithFacts } from "../db/entities";
 import { evaluateFacts, createBaseContext, parsePermissionDirectives } from "../logic/expr";
@@ -343,6 +343,7 @@ bot.events.messageCreate = async (message) => {
           name: entity.name,
           facts: result.facts,
           avatarUrl: result.avatarUrl,
+          streamMode: result.streamMode,
         });
       }
     }
@@ -455,6 +456,7 @@ async function processEntityRetry(
     name: entity.name,
     facts: result.facts,
     avatarUrl: result.avatarUrl,
+    streamMode: result.streamMode,
   }]);
 }
 
@@ -490,6 +492,54 @@ async function sendResponse(
 
   // Handle message via LLM
   try {
+    // Check for single-entity streaming mode
+    const useStreaming = respondingEntities?.length === 1 &&
+      respondingEntities[0].streamMode === "lines";
+
+    if (useStreaming) {
+      const entity = respondingEntities![0];
+      debug("Using streaming mode", { entity: entity.name });
+
+      // Stop typing - we'll be sending messages as we stream
+      stopTyping();
+
+      const messageIds: string[] = [];
+      let lineCount = 0;
+
+      for await (const line of handleMessageStreaming({
+        channelId,
+        guildId,
+        userId: "",
+        username,
+        content,
+        isMentioned,
+        entity,
+      })) {
+        lineCount++;
+        const ids = await executeWebhook(
+          channelId,
+          line,
+          entity.name,
+          entity.avatarUrl ?? undefined
+        );
+        if (ids) {
+          messageIds.push(...ids);
+        } else {
+          await sendFallbackMessage(channelId, entity.name, line);
+        }
+      }
+
+      if (messageIds.length > 0) {
+        trackWebhookMessages(messageIds, entity.id, entity.name);
+      }
+
+      // Mark response time
+      lastResponseTime.set(channelId, Date.now());
+      debug("Streaming complete", { entity: entity.name, lines: lineCount });
+      return;
+    }
+
+    // Non-streaming path
     const result = await handleMessage({
       channelId,
       guildId,
