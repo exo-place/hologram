@@ -31,7 +31,7 @@ function initSchema(db: Database) {
     CREATE TABLE IF NOT EXISTS entities (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
-      created_by TEXT,
+      owned_by TEXT,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )
   `);
@@ -119,8 +119,24 @@ function initSchema(db: Database) {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_effects_expires ON effects(expires_at)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_webhooks_channel ON webhooks(channel_id)`);
 
-  // Migration: Update discord_entities UNIQUE constraint to allow multiple entities per channel
+  // Migrations
+  migrateCreatedByToOwnedBy(db);
   migrateDiscordEntitiesConstraint(db);
+}
+
+/**
+ * Migrate entities table: rename created_by column to owned_by.
+ * SQLite supports ALTER TABLE RENAME COLUMN since 3.25.0.
+ */
+function migrateCreatedByToOwnedBy(db: Database) {
+  // Check if old column exists
+  const columns = db.prepare(`PRAGMA table_info(entities)`).all() as Array<{ name: string }>;
+  const hasOldColumn = columns.some((c) => c.name === "created_by");
+  const hasNewColumn = columns.some((c) => c.name === "owned_by");
+
+  if (hasOldColumn && !hasNewColumn) {
+    db.exec(`ALTER TABLE entities RENAME COLUMN created_by TO owned_by`);
+  }
 }
 
 /**

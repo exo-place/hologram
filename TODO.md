@@ -179,6 +179,23 @@ Allow users and guilds to provide their own API keys for LLM and image providers
 
 **Environment:** Set `BYOK_MASTER_KEY` (32-byte hex) to enable.
 
+### Entity Permissions
+
+**Design decisions made:**
+- Default: creator-only access (no `$edit`/`$view` = only creator can edit/view)
+- Creator always has edit access regardless of `$edit` list
+- `$locked` (LLM modification) and `$edit` (user modification) are orthogonal
+
+**Open questions:**
+- [ ] Should channel-bound entities inherit permissions from the channel entity?
+
+**Implementation:**
+- [ ] `$locked` - prevent LLM tool calls from modifying entity
+- [ ] `$locked` prefix on fact - prevent LLM from modifying that specific fact
+- [ ] `$edit @everyone` / `$edit user1, user2` - Discord users who can edit
+- [ ] `$view @everyone` / `$view user1, user2` - Discord users who can view
+- [ ] `/transfer <entity> <user>` - transfer entity ownership
+
 ### Architecture Rethink (High Priority)
 
 See `docs/postmortem/2026-01-26-ux-critique.md` for full analysis.

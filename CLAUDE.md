@@ -56,7 +56,7 @@ Facts:
 ### Database (6 tables)
 
 ```sql
-entities        -- id, name, created_by, created_at
+entities        -- id, name, owned_by, created_at
 facts           -- id, entity_id, content, created_at, updated_at
 discord_entities -- discord_id, discord_type, entity_id, scope_guild_id, scope_channel_id
 fact_embeddings -- (planned) vector search

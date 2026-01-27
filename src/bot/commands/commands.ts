@@ -260,8 +260,8 @@ registerCommand({
     }
 
     // Check ownership
-    if (entity.created_by !== ctx.userId) {
-      await respond(ctx.bot, ctx.interaction, "You can only delete entities you created", true);
+    if (entity.owned_by !== ctx.userId) {
+      await respond(ctx.bot, ctx.interaction, "You can only delete entities you own", true);
       return;
     }
 

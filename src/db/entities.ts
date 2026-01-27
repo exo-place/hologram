@@ -8,17 +8,17 @@ import { getActiveEffectFacts } from "./effects";
 export interface Entity {
   id: number;
   name: string;
-  created_by: string | null;
+  owned_by: string | null;
   created_at: string;
 }
 
-export function createEntity(name: string, createdBy?: string): Entity {
+export function createEntity(name: string, ownedBy?: string): Entity {
   const db = getDb();
   const row = db.prepare(`
-    INSERT INTO entities (name, created_by)
+    INSERT INTO entities (name, owned_by)
     VALUES (?, ?)
-    RETURNING id, name, created_by, created_at
-  `).get(name, createdBy ?? null) as Entity;
+    RETURNING id, name, owned_by, created_at
+  `).get(name, ownedBy ?? null) as Entity;
   return row;
 }
 
@@ -36,7 +36,7 @@ export function updateEntity(id: number, name: string): Entity | null {
   const db = getDb();
   return db.prepare(`
     UPDATE entities SET name = ? WHERE id = ?
-    RETURNING id, name, created_by, created_at
+    RETURNING id, name, owned_by, created_at
   `).get(name, id) as Entity | null;
 }
 
@@ -192,7 +192,7 @@ export function getSystemEntity(name: string): Entity | null {
   const db = getDb();
   return db.prepare(`
     SELECT * FROM entities
-    WHERE name = ? COLLATE NOCASE AND created_by = 'system'
+    WHERE name = ? COLLATE NOCASE AND owned_by = 'system'
   `).get(name) as Entity | null;
 }
 
@@ -205,4 +205,15 @@ export function ensureSystemEntity(name: string, facts: string[]): EntityWithFac
     }
   }
   return getEntityWithFacts(entity.id)!;
+}
+
+/**
+ * Transfer ownership of an entity to a new user.
+ */
+export function transferOwnership(entityId: number, newOwnerId: string): Entity | null {
+  const db = getDb();
+  return db.prepare(`
+    UPDATE entities SET owned_by = ? WHERE id = ?
+    RETURNING id, name, owned_by, created_at
+  `).get(newOwnerId, entityId) as Entity | null;
 }
