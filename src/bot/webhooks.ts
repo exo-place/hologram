@@ -37,7 +37,17 @@ async function resolveWebhookChannel(
 ): Promise<{ webhookChannelId: string; threadId: string | null } | null> {
   try {
     const channel = await bot.helpers.getChannel(BigInt(channelId));
+    debug("Resolving webhook channel", {
+      channelId,
+      channelType: channel?.type,
+      parentId: channel?.parentId?.toString(),
+      isThread: channel ? THREAD_TYPES.has(channel.type) : false,
+    });
     if (channel && THREAD_TYPES.has(channel.type) && channel.parentId) {
+      debug("Channel is thread, using parent", {
+        threadId: channelId,
+        webhookChannelId: channel.parentId.toString(),
+      });
       return {
         webhookChannelId: channel.parentId.toString(),
         threadId: channelId,
@@ -79,6 +89,7 @@ export async function getOrCreateWebhook(channelId: string): Promise<CachedWebho
   }
 
   // Create new webhook
+  debug("Attempting to create/find webhook", { channelId });
   try {
     // Check if we can find an existing Hologram webhook
     const existingWebhooks = await bot.helpers.getChannelWebhooks(BigInt(channelId));
