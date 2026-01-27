@@ -163,7 +163,8 @@ function buildUserMessage(messages: Array<{ author_name: string; content: string
 }
 
 /**
- * Parse LLM response into per-character segments using [CharName]: markers.
+ * Parse LLM response into per-character segments.
+ * Handles both [CharName]: and **CharName**: formats.
  * Returns undefined if no markers found (single character response).
  */
 function parseMultiCharacterResponse(
@@ -178,8 +179,9 @@ function parseMultiCharacterResponse(
     entityMap.set(entity.name.toLowerCase(), entity);
   }
 
-  // Pattern: [CharName]: at start of line
-  const pattern = /^\[([^\]]+)\]:\s*/gm;
+  // Pattern: various markdown formats at start of line
+  // [Name]: **Name**: *Name*: __Name__: _Name_: Name:
+  const pattern = /^(?:\[([^\]]+)\]|\*\*([^*]+)\*\*|\*([^*]+)\*|__([^_]+)__|_([^_]+)_|([A-Za-z][A-Za-z0-9 ]*)):\s*/gm;
   const results: CharacterResponse[] = [];
 
   let lastIndex = 0;
@@ -200,8 +202,9 @@ function parseMultiCharacterResponse(
       }
     }
 
-    // Find entity for this marker
-    const charName = match[1].toLowerCase();
+    // Find entity for this marker (check all capture groups)
+    const charName = (match[1] ?? match[2] ?? match[3] ?? match[4] ?? match[5] ?? match[6])
+      .toLowerCase().trim();
     lastEntity = entityMap.get(charName) ?? null;
     lastIndex = match.index + match[0].length;
   }
