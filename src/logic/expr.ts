@@ -451,6 +451,7 @@ export function stripComments(facts: string[]): string[] {
 const IF_SIGIL = "$if ";
 const RESPOND_SIGIL = "$respond";
 const RETRY_SIGIL = "$retry ";
+const AVATAR_SIGIL = "$avatar ";
 
 export interface ProcessedFact {
   content: string;
@@ -464,6 +465,10 @@ export interface ProcessedFact {
   isRetry: boolean;
   /** For $retry directives, the delay in milliseconds */
   retryMs?: number;
+  /** True if this fact is a $avatar directive */
+  isAvatar: boolean;
+  /** For $avatar directives, the URL */
+  avatarUrl?: string;
 }
 
 /**
@@ -491,6 +496,7 @@ export function parseFact(fact: string): ProcessedFact {
         isRespond: true,
         respondValue: respondResult,
         isRetry: false,
+        isAvatar: false,
       };
     }
 
@@ -504,10 +510,11 @@ export function parseFact(fact: string): ProcessedFact {
         isRespond: false,
         isRetry: true,
         retryMs: retryResult,
+        isAvatar: false,
       };
     }
 
-    return { content, conditional: true, expression, isRespond: false, isRetry: false };
+    return { content, conditional: true, expression, isRespond: false, isRetry: false, isAvatar: false };
   }
 
   // Check for unconditional $respond
@@ -519,6 +526,7 @@ export function parseFact(fact: string): ProcessedFact {
       isRespond: true,
       respondValue: respondResult,
       isRetry: false,
+      isAvatar: false,
     };
   }
 
@@ -531,10 +539,24 @@ export function parseFact(fact: string): ProcessedFact {
       isRespond: false,
       isRetry: true,
       retryMs: retryResult,
+      isAvatar: false,
     };
   }
 
-  return { content: trimmed, conditional: false, isRespond: false, isRetry: false };
+  // Check for $avatar
+  const avatarResult = parseAvatarDirective(trimmed);
+  if (avatarResult !== null) {
+    return {
+      content: trimmed,
+      conditional: false,
+      isRespond: false,
+      isRetry: false,
+      isAvatar: true,
+      avatarUrl: avatarResult,
+    };
+  }
+
+  return { content: trimmed, conditional: false, isRespond: false, isRetry: false, isAvatar: false };
 }
 
 /**
@@ -572,13 +594,32 @@ function parseRetryDirective(content: string): number | null {
   return ms;
 }
 
+/**
+ * Parse a $avatar directive.
+ * Returns null if not an avatar directive, or the URL.
+ */
+function parseAvatarDirective(content: string): string | null {
+  if (!content.startsWith(AVATAR_SIGIL)) {
+    return null;
+  }
+  const url = content.slice(AVATAR_SIGIL.length).trim();
+  if (!url) {
+    return null;
+  }
+  return url;
+}
+
 export interface EvaluatedFacts {
   /** Facts that apply (excluding directives) */
   facts: string[];
   /** Whether to respond. null means no $respond directives were present (default true). */
   shouldRespond: boolean | null;
+  /** The fact/directive that set shouldRespond (for debugging) */
+  respondSource: string | null;
   /** If set, re-evaluate after this many milliseconds. Last fired $retry wins. */
   retryMs: number | null;
+  /** Avatar URL if $avatar directive was present */
+  avatarUrl: string | null;
 }
 
 /**
@@ -596,7 +637,9 @@ export function evaluateFacts(
 ): EvaluatedFacts {
   const results: string[] = [];
   let shouldRespond: boolean | null = null;
+  let respondSource: string | null = null;
   let retryMs: number | null = null;
+  let avatarUrl: string | null = null;
 
   // Strip comments first
   const uncommented = stripComments(facts);
@@ -615,6 +658,7 @@ export function evaluateFacts(
     // Handle $respond directives - last one wins
     if (parsed.isRespond) {
       shouldRespond = parsed.respondValue ?? true;
+      respondSource = fact;
       continue;
     }
 
@@ -624,10 +668,16 @@ export function evaluateFacts(
       break;
     }
 
+    // Handle $avatar directives - last one wins
+    if (parsed.isAvatar) {
+      avatarUrl = parsed.avatarUrl ?? null;
+      continue;
+    }
+
     results.push(parsed.content);
   }
 
-  return { facts: results, shouldRespond, retryMs };
+  return { facts: results, shouldRespond, respondSource, retryMs, avatarUrl };
 }
 
 // =============================================================================

@@ -1,10 +1,11 @@
 import { createBot, Intents } from "@discordeno/bot";
 import { info, debug, error } from "../logger";
 import { registerCommands, handleInteraction } from "./commands";
-import { handleMessage } from "../ai/handler";
+import { handleMessage, type EvaluatedEntity } from "../ai/handler";
 import { resolveDiscordEntity, resolveDiscordEntities, isNewUser, markUserWelcomed, addMessage } from "../db/discord";
 import { getEntity, getEntityWithFacts, getSystemEntity, getFactsForEntity, type EntityWithFacts } from "../db/entities";
 import { evaluateFacts, createBaseContext } from "../logic/expr";
+import { executeWebhook, setBot } from "./webhooks";
 import "./commands/commands"; // Register all commands
 import { ensureHelpEntities } from "./commands/commands";
 
@@ -50,8 +51,16 @@ export const bot = createBot({
       id: true,
       name: true,
     },
+    webhook: {
+      id: true,
+      name: true,
+      token: true,
+    },
   },
 });
+
+// Initialize webhook module with bot instance
+setBot(bot);
 
 let botUserId: bigint | null = null;
 
@@ -175,7 +184,7 @@ bot.events.messageCreate = async (message) => {
   if (channelEntities.length === 0) return;
 
   // Evaluate each entity's facts independently
-  const respondingEntities: EntityWithFacts[] = [];
+  const respondingEntities: EvaluatedEntity[] = [];
   const retryEntities: { entity: EntityWithFacts; retryMs: number }[] = [];
   const lastResponse = lastResponseTime.get(channelId) ?? 0;
 
@@ -212,6 +221,7 @@ bot.events.messageCreate = async (message) => {
     debug("Fact evaluation", {
       entity: entity.name,
       shouldRespond: result.shouldRespond,
+      respondSource: result.respondSource,
       retryMs: result.retryMs,
       factsCount: result.facts.length,
     });
@@ -224,12 +234,27 @@ bot.events.messageCreate = async (message) => {
       // 1. If only one character: respond to mentions or replies
       // 2. Always respond if entity's name is mentioned in content
       const namePattern = new RegExp(`\\b${entity.name}\\b`, "i");
+      const nameMentioned = namePattern.test(message.content);
       const defaultRespond =
         (channelEntities.length === 1 && (isMentioned || isReplied)) ||
-        namePattern.test(message.content);
+        nameMentioned;
       const shouldRespond = result.shouldRespond ?? defaultRespond;
+
       if (shouldRespond) {
-        respondingEntities.push(entity);
+        // Log the trigger source
+        const source = result.respondSource
+          ?? (nameMentioned ? `name mentioned in: "${message.content.slice(0, 50)}"`
+            : isMentioned ? "bot @mentioned"
+            : isReplied ? "reply to bot"
+            : "unknown");
+        debug("Entity responding", { entity: entity.name, source });
+
+        respondingEntities.push({
+          id: entity.id,
+          name: entity.name,
+          facts: result.facts,
+          avatarUrl: result.avatarUrl,
+        });
       }
     }
   }
@@ -308,8 +333,13 @@ async function processEntityRetry(
     return;
   }
 
-  // Respond with just this entity
-  await sendResponse(channelId, guildId, username, content, false, [entity]);
+  // Respond with just this entity (as EvaluatedEntity)
+  await sendResponse(channelId, guildId, username, content, false, [{
+    id: entity.id,
+    name: entity.name,
+    facts: result.facts,
+    avatarUrl: result.avatarUrl,
+  }]);
 }
 
 async function sendResponse(
@@ -318,7 +348,7 @@ async function sendResponse(
   username: string,
   content: string,
   isMentioned: boolean,
-  respondingEntities?: EntityWithFacts[]
+  respondingEntities?: EvaluatedEntity[]
 ) {
   // Start typing indicator
   let typingInterval: ReturnType<typeof setInterval> | null = null;
@@ -350,28 +380,78 @@ async function sendResponse(
     // Mark response time
     lastResponseTime.set(channelId, Date.now());
 
-    if (result) {
-      try {
-        const sent = await bot.helpers.sendMessage(BigInt(channelId), {
-          content: result.response,
-        });
-        // Track bot message for reply detection
-        botMessageIds.add(sent.id.toString());
-        if (botMessageIds.size > MAX_BOT_MESSAGES) {
-          const iter = botMessageIds.values();
-          for (let i = 0; i < MAX_BOT_MESSAGES / 2; i++) {
-            const v = iter.next().value;
-            if (v) botMessageIds.delete(v);
+    if (!result) return;
+
+    // Use webhooks when we have responding entities (custom name/avatar)
+    if (respondingEntities && respondingEntities.length > 0) {
+      if (result.characterResponses && result.characterResponses.length > 0) {
+        // Multi-character: send separate webhook message for each
+        for (const charResponse of result.characterResponses) {
+          const success = await executeWebhook(
+            channelId,
+            charResponse.content,
+            charResponse.name,
+            charResponse.avatarUrl
+          );
+          if (!success) {
+            await sendFallbackMessage(channelId, charResponse.name, charResponse.content);
           }
         }
-      } catch (err) {
-        error("Failed to send message", err);
+      } else {
+        // Single entity: send via webhook with entity's name
+        const entity = respondingEntities[0];
+        const success = await executeWebhook(
+          channelId,
+          result.response,
+          entity.name,
+          entity.avatarUrl ?? undefined
+        );
+        if (!success) {
+          await sendFallbackMessage(channelId, entity.name, result.response);
+        }
       }
+    } else {
+      // No entities - use regular message
+      await sendRegularMessage(channelId, result.response);
     }
   } finally {
     // Always stop typing
     if (typingInterval) {
       clearInterval(typingInterval);
+    }
+  }
+}
+
+/** Send a regular message (no webhook) and track for reply detection */
+async function sendRegularMessage(channelId: string, content: string): Promise<void> {
+  try {
+    const sent = await bot.helpers.sendMessage(BigInt(channelId), { content });
+    trackBotMessage(sent.id);
+  } catch (err) {
+    error("Failed to send message", err);
+  }
+}
+
+/** Send fallback message with character name prefix */
+async function sendFallbackMessage(channelId: string, name: string, content: string): Promise<void> {
+  try {
+    const sent = await bot.helpers.sendMessage(BigInt(channelId), {
+      content: `**${name}:** ${content}`,
+    });
+    trackBotMessage(sent.id);
+  } catch (err) {
+    error("Failed to send fallback message", err);
+  }
+}
+
+/** Track bot message ID for reply detection */
+function trackBotMessage(messageId: bigint): void {
+  botMessageIds.add(messageId.toString());
+  if (botMessageIds.size > MAX_BOT_MESSAGES) {
+    const iter = botMessageIds.values();
+    for (let i = 0; i < MAX_BOT_MESSAGES / 2; i++) {
+      const v = iter.next().value;
+      if (v) botMessageIds.delete(v);
     }
   }
 }

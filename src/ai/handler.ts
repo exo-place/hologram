@@ -7,7 +7,6 @@ import {
   addFact,
   updateFactByContent,
   removeFactByContent,
-  formatEntitiesForContext,
   type EntityWithFacts,
 } from "../db/entities";
 import {
@@ -19,6 +18,16 @@ import {
 // Types
 // =============================================================================
 
+/** Entity with pre-evaluated facts (directives processed and removed) */
+export interface EvaluatedEntity {
+  id: number;
+  name: string;
+  /** Facts with directives ($if, $respond, $avatar, etc.) processed and removed */
+  facts: string[];
+  /** Avatar URL from $avatar directive, if present */
+  avatarUrl: string | null;
+}
+
 export interface MessageContext {
   channelId: string;
   guildId?: string;
@@ -26,11 +35,20 @@ export interface MessageContext {
   username: string;
   content: string;
   isMentioned: boolean;
-  respondingEntities?: EntityWithFacts[];
+  /** Pre-evaluated responding entities (facts already processed) */
+  respondingEntities?: EvaluatedEntity[];
+}
+
+export interface CharacterResponse {
+  entityId: number;
+  name: string;
+  content: string;
+  avatarUrl?: string;
 }
 
 export interface ResponseResult {
   response: string;
+  characterResponses?: CharacterResponse[];
   factsAdded: number;
   factsUpdated: number;
   factsRemoved: number;
@@ -86,27 +104,53 @@ const tools = {
 // Context Building
 // =============================================================================
 
-function buildSystemPrompt(entities: EntityWithFacts[]): string {
-  if (entities.length === 0) {
+/** Format an evaluated entity for LLM context */
+function formatEvaluatedEntity(entity: EvaluatedEntity): string {
+  const factLines = entity.facts.join("\n");
+  return `<facts entity="${entity.name}" id="${entity.id}">\n${factLines}\n</facts>`;
+}
+
+/** Format a raw entity for LLM context (used for locations, etc.) */
+function formatRawEntity(entity: EntityWithFacts): string {
+  const factLines = entity.facts.map(f => f.content).join("\n");
+  return `<facts entity="${entity.name}" id="${entity.id}">\n${factLines}\n</facts>`;
+}
+
+function buildSystemPrompt(
+  respondingEntities: EvaluatedEntity[],
+  otherEntities: EntityWithFacts[]
+): string {
+  if (respondingEntities.length === 0 && otherEntities.length === 0) {
     return "You are a helpful assistant. Respond naturally to the user.";
   }
 
-  const context = formatEntitiesForContext(entities);
+  const contextParts: string[] = [];
+  for (const e of respondingEntities) {
+    contextParts.push(formatEvaluatedEntity(e));
+  }
+  for (const e of otherEntities) {
+    contextParts.push(formatRawEntity(e));
+  }
+  const context = contextParts.join("\n\n");
 
   // Identify character entities for multi-char guidance
-  const characters = entities.filter(e =>
-    e.facts.some(f => f.content.includes("is a character"))
+  const characters = respondingEntities.filter(e =>
+    e.facts.some(f => f.includes("is a character"))
   );
 
   let multiCharGuidance = "";
   if (characters.length > 1) {
     const names = characters.map(c => c.name).join(", ");
-    multiCharGuidance = `\n\nMultiple characters are present: ${names}. Write a combined response incorporating all characters naturally. Use dialogue format when characters interact.`;
+    multiCharGuidance = `\n\nMultiple characters are present: ${names}. Format your response with character markers like this:
+[${characters[0]?.name ?? "Name"}]: *waves* Hello there!
+[${characters[1]?.name ?? "Other"}]: Nice to meet you.
+
+Each character's response starts with [CharacterName]: on its own line. Characters may interact naturally.`;
   }
 
   return `${context}
 
-You have access to tools to modify facts about entities. Use them when:
+You have access to tools to modify facts about entities. Use them sparingly:
 - Something new is learned (add_fact)
 - A fact changes (update_fact)
 - A fact is no longer true (remove_fact)
@@ -118,6 +162,71 @@ function buildUserMessage(messages: Array<{ author_name: string; content: string
   return messages.map(m => `${m.author_name}: ${m.content}`).join("\n");
 }
 
+/**
+ * Parse LLM response into per-character segments using [CharName]: markers.
+ * Returns undefined if no markers found (single character response).
+ */
+function parseMultiCharacterResponse(
+  response: string,
+  entities: EvaluatedEntity[]
+): CharacterResponse[] | undefined {
+  if (entities.length <= 1) return undefined;
+
+  // Build case-insensitive name to entity map
+  const entityMap = new Map<string, EvaluatedEntity>();
+  for (const entity of entities) {
+    entityMap.set(entity.name.toLowerCase(), entity);
+  }
+
+  // Pattern: [CharName]: at start of line
+  const pattern = /^\[([^\]]+)\]:\s*/gm;
+  const results: CharacterResponse[] = [];
+
+  let lastIndex = 0;
+  let lastEntity: EvaluatedEntity | null = null;
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(response)) !== null) {
+    // Save content for previous character
+    if (lastEntity !== null) {
+      const content = response.slice(lastIndex, match.index).trim();
+      if (content) {
+        results.push({
+          entityId: lastEntity.id,
+          name: lastEntity.name,
+          content,
+          avatarUrl: lastEntity.avatarUrl ?? undefined,
+        });
+      }
+    }
+
+    // Find entity for this marker
+    const charName = match[1].toLowerCase();
+    lastEntity = entityMap.get(charName) ?? null;
+    lastIndex = match.index + match[0].length;
+  }
+
+  // Handle remaining content after last marker
+  if (lastEntity !== null) {
+    const content = response.slice(lastIndex).trim();
+    if (content) {
+      results.push({
+        entityId: lastEntity.id,
+        name: lastEntity.name,
+        content,
+        avatarUrl: lastEntity.avatarUrl ?? undefined,
+      });
+    }
+  }
+
+  // No markers found - return undefined to use single response
+  if (results.length === 0) {
+    return undefined;
+  }
+
+  return results;
+}
+
 // =============================================================================
 // Main Handler
 // =============================================================================
@@ -125,41 +234,23 @@ function buildUserMessage(messages: Array<{ author_name: string; content: string
 export async function handleMessage(ctx: MessageContext): Promise<ResponseResult | null> {
   const { channelId, guildId, userId, isMentioned, respondingEntities } = ctx;
 
-  // Gather entities for context
-  const entities: EntityWithFacts[] = [];
+  // Separate evaluated responding entities from other raw entities
+  const evaluated: EvaluatedEntity[] = respondingEntities ?? [];
+  const other: EntityWithFacts[] = [];
 
-  // Use pre-evaluated responding entities if provided (multi-character support)
-  if (respondingEntities && respondingEntities.length > 0) {
-    entities.push(...respondingEntities);
-
-    // Add location entities for each responding character
-    for (const entity of respondingEntities) {
-      const locationFact = entity.facts.find(f => f.content.match(/^is in \[entity:(\d+)\]/));
-      if (locationFact) {
-        const match = locationFact.content.match(/^is in \[entity:(\d+)\]/);
-        if (match) {
-          const locationEntity = getEntityWithFacts(parseInt(match[1]));
-          if (locationEntity && !entities.some(e => e.id === locationEntity.id)) {
-            entities.push(locationEntity);
-          }
-        }
-      }
-    }
-  } else {
-    // Fallback: resolve channel entity (backward compatibility)
-    const channelEntityId = resolveDiscordEntity(channelId, "channel", guildId, channelId);
-    if (channelEntityId) {
-      const channelEntity = getEntityWithFacts(channelEntityId);
-      if (channelEntity) {
-        entities.push(channelEntity);
-
-        // Check if channel is in a location, add that too
-        const locationFact = channelEntity.facts.find(f => f.content.match(/^is in \[entity:(\d+)\]/));
-        if (locationFact) {
-          const match = locationFact.content.match(/^is in \[entity:(\d+)\]/);
-          if (match) {
-            const locationEntity = getEntityWithFacts(parseInt(match[1]));
-            if (locationEntity) entities.push(locationEntity);
+  // Add location entities for each responding character
+  const seenIds = new Set(evaluated.map(e => e.id));
+  for (const entity of evaluated) {
+    const locationFact = entity.facts.find(f => /^is in \[entity:(\d+)\]/.test(f));
+    if (locationFact) {
+      const match = locationFact.match(/^is in \[entity:(\d+)\]/);
+      if (match) {
+        const locationId = parseInt(match[1]);
+        if (!seenIds.has(locationId)) {
+          const locationEntity = getEntityWithFacts(locationId);
+          if (locationEntity) {
+            other.push(locationEntity);
+            seenIds.add(locationId);
           }
         }
       }
@@ -168,13 +259,16 @@ export async function handleMessage(ctx: MessageContext): Promise<ResponseResult
 
   // Add user entity if bound
   const userEntityId = resolveDiscordEntity(userId, "user", guildId, channelId);
-  if (userEntityId) {
+  if (userEntityId && !seenIds.has(userEntityId)) {
     const userEntity = getEntityWithFacts(userEntityId);
-    if (userEntity) entities.push(userEntity);
+    if (userEntity) {
+      other.push(userEntity);
+      seenIds.add(userEntityId);
+    }
   }
 
   // Decide whether to respond
-  const shouldRespond = isMentioned || entities.length > 0;
+  const shouldRespond = isMentioned || evaluated.length > 0 || other.length > 0;
   if (!shouldRespond) {
     debug("Not responding - not mentioned and no entities");
     return null;
@@ -184,13 +278,14 @@ export async function handleMessage(ctx: MessageContext): Promise<ResponseResult
   const history = getMessages(channelId, 20);
 
   // Build prompts
-  const systemPrompt = buildSystemPrompt(entities);
+  const systemPrompt = buildSystemPrompt(evaluated, other);
   const userMessage = buildUserMessage(
     history.slice().reverse().map(m => ({ author_name: m.author_name, content: m.content }))
   );
 
   debug("Calling LLM", {
-    entities: entities.length,
+    respondingEntities: evaluated.length,
+    otherEntities: other.length,
     historyMessages: history.length,
     systemPromptLength: systemPrompt.length,
   });
@@ -225,8 +320,12 @@ export async function handleMessage(ctx: MessageContext): Promise<ResponseResult
       factsRemoved,
     });
 
+    // Parse multi-character response if multiple entities
+    const characterResponses = parseMultiCharacterResponse(result.text, evaluated);
+
     return {
       response: result.text,
+      characterResponses,
       factsAdded,
       factsUpdated,
       factsRemoved,
