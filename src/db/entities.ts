@@ -63,6 +63,20 @@ export function searchEntities(query: string, limit = 20): Entity[] {
   `).all(`%${query}%`, limit) as Entity[];
 }
 
+/**
+ * Search entities owned by a specific user.
+ * Used for commands that require ownership (delete, transfer).
+ */
+export function searchEntitiesOwnedBy(query: string, userId: string, limit = 20): Entity[] {
+  const db = getDb();
+  return db.prepare(`
+    SELECT * FROM entities
+    WHERE name LIKE ? COLLATE NOCASE AND owned_by = ?
+    ORDER BY name
+    LIMIT ?
+  `).all(`%${query}%`, userId, limit) as Entity[];
+}
+
 // =============================================================================
 // Fact Operations
 // =============================================================================

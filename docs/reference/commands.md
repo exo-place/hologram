@@ -127,6 +127,32 @@ Bind a Discord channel or yourself to an entity.
 
 ---
 
+### `/unbind` (alias: `/ub`)
+
+Remove an entity binding from a channel or yourself.
+
+```
+/ub <target> <entity> [scope]
+```
+
+**Targets:**
+- `channel` - Unbind from this channel
+- `me` - Unbind yourself
+
+**Scopes:**
+- `channel` - This channel only (default)
+- `guild` - This server
+- `global` - Global binding
+
+**Examples:**
+```
+/ub channel Aria             # Remove Aria from this channel
+/ub me Traveler              # Stop speaking as Traveler
+/ub me Knight scope:guild    # Remove server-wide persona
+```
+
+---
+
 ## Status
 
 ### `/status` (alias: `/s`)

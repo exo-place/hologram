@@ -65,6 +65,7 @@ function getAlias(name: string): string | null {
     edit: "e",
     delete: "d",
     bind: "b",
+    unbind: "ub",
     status: "s",
     transfer: "t",
   };
@@ -246,10 +247,57 @@ async function handleAutocomplete(bot: Bot, interaction: Interaction) {
   if (!focused) return;
 
   const query = (focused.value as string) || "";
+  const commandName = interaction.data?.name;
+  const userId = interaction.user?.id?.toString() ?? "";
 
   // Import here to avoid circular deps
-  const { searchEntities } = await import("../../db/entities");
-  const results = searchEntities(query, 25);
+  const { searchEntities, searchEntitiesOwnedBy, getEntityWithFacts } = await import("../../db/entities");
+  const { parsePermissionDirectives } = await import("../../logic/expr");
+
+  let results;
+
+  // Helper to check edit permission
+  const canEdit = (entity: { id: number; owned_by: string | null }) => {
+    if (entity.owned_by === userId) return true;
+    const entityWithFacts = getEntityWithFacts(entity.id);
+    if (!entityWithFacts) return false;
+    const facts = entityWithFacts.facts.map(f => f.content);
+    const permissions = parsePermissionDirectives(facts);
+    if (permissions.editList === "everyone") return true;
+    if (permissions.editList && permissions.editList.includes(userId)) return true;
+    return false;
+  };
+
+  // Helper to check view permission
+  const canView = (entity: { id: number; owned_by: string | null }) => {
+    if (entity.owned_by === userId) return true;
+    const entityWithFacts = getEntityWithFacts(entity.id);
+    if (!entityWithFacts) return false;
+    const facts = entityWithFacts.facts.map(f => f.content);
+    const permissions = parsePermissionDirectives(facts);
+    // No $view directive = public by default
+    if (permissions.viewList === null) return true;
+    if (permissions.viewList === "everyone") return true;
+    if (permissions.viewList.includes(userId)) return true;
+    return false;
+  };
+
+  // Filter based on command - only show entities the user can actually use
+  if (commandName === "delete" || commandName === "d" || commandName === "transfer" || commandName === "t") {
+    // These commands require ownership
+    results = searchEntitiesOwnedBy(query, userId, 25);
+  } else if (commandName === "edit" || commandName === "e" || commandName === "bind" || commandName === "b" || commandName === "unbind" || commandName === "ub") {
+    // These commands require edit permission
+    const allResults = searchEntities(query, 100);
+    results = allResults.filter(canEdit).slice(0, 25);
+  } else if (commandName === "view" || commandName === "v") {
+    // View requires view permission
+    const allResults = searchEntities(query, 100);
+    results = allResults.filter(canView).slice(0, 25);
+  } else {
+    // Fallback - show all
+    results = searchEntities(query, 25);
+  }
 
   const choices = results.map(e => ({
     name: e.name,

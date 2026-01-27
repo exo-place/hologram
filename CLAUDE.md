@@ -111,6 +111,7 @@ Discord channels/users map to entities via `discord_entities`:
 | `/edit <entity>` | `/e` | Edit facts (modal) |
 | `/delete <entity>` | `/d` | Delete entity |
 | `/bind <target> <entity>` | `/b` | Bind channel/user |
+| `/unbind <target> <entity>` | `/ub` | Unbind channel/user |
 | `/status` | `/s` | Channel state |
 
 Help is an entity: `/v help`, `/v help:commands`, `/v help:respond`

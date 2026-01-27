@@ -723,7 +723,7 @@ const HELP_ENTITY_FACTS: Record<string, string[]> = {
     "`/delete` (`/d`) - Delete entity",
     "`/transfer` (`/t`) - Transfer entity ownership",
     "`/bind` (`/b`) - Bind channel/user to entity",
-    "`/unbind` - Remove entity binding",
+    "`/unbind` (`/ub`) - Remove entity binding",
     "`/status` (`/s`) - Channel state",
     "---",
     "**Type shortcuts:** `c`/`char`, `l`/`loc`, `i`",
