@@ -232,6 +232,7 @@ See `docs/postmortem/2026-01-26-ux-critique.md` for full analysis.
 ### Very Low Priority
 
 - [ ] Regex support in `$if` expressions - would need tokenizer extension for `/pattern/` literals; low priority because regex is opaque and hard to read
+- [ ] `$emojis` macro - expand to list of custom guild emojis for LLM context; needs macro system or special-case handling
 
 ### Plugin Ideas
 
