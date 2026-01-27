@@ -92,8 +92,8 @@ $if random() < 0.1: $respond          # 10% chance to respond
 $if dt_ms > 30000: $respond        # Rate limit: 30s between responses
 ```
 
-**Context variables:** `mentioned`, `replied`, `is_forward`, `content`, `author`, `dt_ms`, `elapsed_ms`, `time.is_night`, `self.*`
-**Functions:** `random(n)`, `has_fact(pattern)`, `roll(dice)`
+**Context variables:** `mentioned`, `replied`, `is_forward`, `is_self`, `content`, `author`, `dt_ms`, `elapsed_ms`, `time.is_night`, `self.*`
+**Functions:** `random(n)`, `has_fact(pattern)`, `roll(dice)`, `mentioned_in_dialogue(name)`
 
 ### Bindings
 

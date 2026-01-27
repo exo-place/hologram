@@ -234,6 +234,9 @@ bot.events.messageCreate = async (message) => {
 
     // Build expression context for this entity
     const facts = entity.facts.map(f => f.content);
+    // Check if this is the entity's own webhook message (self-triggered)
+    const isSelf = !!message.webhookId &&
+      entity.name.toLowerCase() === authorName.toLowerCase();
     const ctx = createBaseContext({
       facts,
       has_fact: (pattern: string) => {
@@ -246,6 +249,7 @@ bot.events.messageCreate = async (message) => {
       replied: isReplied,
       replied_to: repliedToWebhookEntity?.entityName ?? "",
       is_forward: isForward,
+      is_self: isSelf,
       content: message.content,
       author: authorName,
       name: entity.name,
@@ -268,17 +272,8 @@ bot.events.messageCreate = async (message) => {
     } else {
       // Default response logic (when no $respond directive):
       // 1. If only one character: respond to mentions or replies
-      // 2. Respond if entity's name is mentioned in content
-      const namePattern = new RegExp(`\\b${entity.name}\\b`, "i");
-      // Skip if name only appears as an XML tag (e.g., "<Aria>") to prevent loops
-      const escapedName = entity.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const xmlTagPattern = new RegExp(`<${escapedName}>`, "i");
-      // Skip if this is the entity's own webhook message (don't trigger on own narration)
-      const isOwnWebhookMessage = message.webhookId &&
-        entity.name.toLowerCase() === authorName.toLowerCase();
-      const nameMentioned = namePattern.test(message.content) &&
-        !xmlTagPattern.test(message.content) &&
-        !isOwnWebhookMessage;
+      // 2. Respond if entity's name is mentioned in dialogue (not self-triggered)
+      const nameMentioned = ctx.mentioned_in_dialogue(entity.name) && !isSelf;
       const defaultRespond =
         (channelEntities.length === 1 && (isMentioned || isReplied)) ||
         nameMentioned;
@@ -348,6 +343,7 @@ async function processEntityRetry(
     replied: false,
     replied_to: "",
     is_forward: false,
+    is_self: false, // Retry is never self-triggered
     content,
     author: username,
     name: entity.name,
@@ -368,9 +364,8 @@ async function processEntityRetry(
     return;
   }
 
-  // Default for retry: respond if entity's name is in content
-  const namePattern = new RegExp(`\\b${entity.name}\\b`, "i");
-  const defaultRespond = namePattern.test(content);
+  // Default for retry: respond if entity's name is mentioned in dialogue
+  const defaultRespond = ctx.mentioned_in_dialogue(entity.name);
   const shouldRespond = result.shouldRespond ?? defaultRespond;
 
   if (!shouldRespond) {

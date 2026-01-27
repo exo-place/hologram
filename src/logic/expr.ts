@@ -42,6 +42,10 @@ export interface ExprContext {
   replied_to: string;
   /** Whether the message is a forwarded message */
   is_forward: boolean;
+  /** Whether the message is from this entity's own webhook (self-triggered) */
+  is_self: boolean;
+  /** Check if a name is mentioned in dialogue (excludes XML tags like <Name>) */
+  mentioned_in_dialogue: (name: string) => boolean;
   /** Message content */
   content: string;
   /** Message author name */
@@ -351,6 +355,7 @@ class Parser {
 const ALLOWED_GLOBALS = new Set([
   "self", "random", "has_fact", "roll", "time",
   "dt_ms", "elapsed_ms", "mentioned", "replied", "replied_to", "is_forward",
+  "is_self", "mentioned_in_dialogue",
   "content", "author", "interaction_type"
 ]);
 
@@ -851,6 +856,8 @@ export interface BaseContextOptions {
   /** Name of entity that was replied to (for webhook replies) */
   replied_to?: string;
   is_forward?: boolean;
+  /** Whether the message is from this entity's own webhook */
+  is_self?: boolean;
   content?: string;
   author?: string;
   interaction_type?: string;
@@ -861,12 +868,38 @@ export interface BaseContextOptions {
 }
 
 /**
+ * Check if a name is mentioned in dialogue (quoted text).
+ * Only checks within quoted portions ("..." or '...').
+ * If no quotes are found, checks the full content.
+ */
+function checkMentionedInDialogue(content: string, name: string): boolean {
+  if (!name) return false;
+
+  // Extract all quoted portions (both " and ')
+  const quotePattern = /["']([^"']+)["']/g;
+  const quotedParts: string[] = [];
+  let match;
+  while ((match = quotePattern.exec(content)) !== null) {
+    quotedParts.push(match[1]);
+  }
+
+  // If there are quoted parts, only check within them
+  const textToCheck = quotedParts.length > 0 ? quotedParts.join(" ") : content;
+
+  // Word boundary check for the name
+  const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const namePattern = new RegExp(`\\b${escapedName}\\b`, "i");
+  return namePattern.test(textToCheck);
+}
+
+/**
  * Create a base context with standard globals.
  * Caller should extend with entity-specific data.
  */
 export function createBaseContext(options: BaseContextOptions): ExprContext {
   const now = new Date();
   const hour = now.getHours();
+  const content = options.content ?? "";
 
   return {
     self: parseSelfContext(options.facts ?? []),
@@ -888,7 +921,9 @@ export function createBaseContext(options: BaseContextOptions): ExprContext {
     replied: options.replied ?? false,
     replied_to: options.replied_to ?? "",
     is_forward: options.is_forward ?? false,
-    content: options.content ?? "",
+    is_self: options.is_self ?? false,
+    mentioned_in_dialogue: (name: string) => checkMentionedInDialogue(content, name),
+    content,
     author: options.author ?? "",
     interaction_type: options.interaction_type,
     name: options.name ?? "",

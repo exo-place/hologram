@@ -31,12 +31,14 @@ Conditions are JavaScript-like expressions with access to context variables.
 | Variable | Type | Description |
 |----------|------|-------------|
 | `mentioned` | boolean | Bot was @mentioned |
+| `is_self` | boolean | Message is from this entity's own webhook |
 | `content` | string | Message content |
 | `author` | string | Message author name |
 | `dt_ms` | number | Milliseconds since last response |
 | `elapsed_ms` | number | Milliseconds since message (for retries) |
 | `random()` | function | Float [0,1), or int with `random(max)` [1,max] / `random(min,max)` [min,max] |
 | `has_fact(pattern)` | function | Check if entity has matching fact |
+| `mentioned_in_dialogue(name)` | function | Check if name appears in dialogue (excludes XML tags) |
 | `time.hour` | number | Current hour (0-23) |
 | `time.is_day` | boolean | 6am-6pm |
 | `time.is_night` | boolean | 6pm-6am |
@@ -157,6 +159,21 @@ Only responds to specific patterns:
 $respond false
 $if content.startsWith("!help"): $respond
 $if content.startsWith("!roll"): $respond
+```
+
+### Name-triggered character
+
+Responds when their name is mentioned in dialogue (not from self):
+```
+$if mentioned_in_dialogue(name) && !is_self: $respond
+```
+
+### Character aware of other characters
+
+Responds when another character is mentioned:
+```
+$if mentioned_in_dialogue("Alice"): $respond
+$if mentioned_in_dialogue("Bob"): $respond
 ```
 
 ## Self Context

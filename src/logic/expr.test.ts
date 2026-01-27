@@ -14,7 +14,28 @@ import {
 // Test Helpers
 // =============================================================================
 
+function checkMentionedInDialogue(content: string, name: string): boolean {
+  if (!name) return false;
+
+  // Extract all quoted portions (both " and ')
+  const quotePattern = /["']([^"']+)["']/g;
+  const quotedParts: string[] = [];
+  let match;
+  while ((match = quotePattern.exec(content)) !== null) {
+    quotedParts.push(match[1]);
+  }
+
+  // If there are quoted parts, only check within them
+  const textToCheck = quotedParts.length > 0 ? quotedParts.join(" ") : content;
+
+  // Word boundary check for the name
+  const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const namePattern = new RegExp(`\\b${escapedName}\\b`, "i");
+  return namePattern.test(textToCheck);
+}
+
 function makeContext(overrides: Partial<ExprContext> = {}): ExprContext {
+  const content = overrides.content ?? "";
   return {
     self: Object.create(null),
     random: () => 0,
@@ -31,7 +52,9 @@ function makeContext(overrides: Partial<ExprContext> = {}): ExprContext {
     replied: false,
     replied_to: "",
     is_forward: false,
-    content: "",
+    is_self: false,
+    mentioned_in_dialogue: (name: string) => checkMentionedInDialogue(content, name),
+    content,
     author: "",
     name: "",
     chars: [],
@@ -616,5 +639,80 @@ describe("integration", () => {
     const fn1 = compileExpr("1 + 1 == 2");
     const fn2 = compileExpr("1 + 1 == 2");
     expect(fn1).toBe(fn2); // Same cached function
+  });
+
+  test("is_self variable works", () => {
+    const ctx1 = makeContext({ is_self: true });
+    const ctx2 = makeContext({ is_self: false });
+    expect(evalExpr("is_self", ctx1)).toBe(true);
+    expect(evalExpr("is_self", ctx2)).toBe(false);
+    expect(evalExpr("!is_self", ctx1)).toBe(false);
+    expect(evalExpr("!is_self", ctx2)).toBe(true);
+  });
+
+  test("mentioned_in_dialogue function checks quoted text", () => {
+    // With quotes, only checks within quotes
+    const ctx = makeContext({ content: '<Alice> "Hey Bob, how are you?"' });
+    expect(evalExpr('mentioned_in_dialogue("Bob")', ctx)).toBe(true);
+    expect(evalExpr('mentioned_in_dialogue("bob")', ctx)).toBe(true); // case insensitive
+    expect(evalExpr('mentioned_in_dialogue("Alice")', ctx)).toBe(false); // Alice is outside quotes
+  });
+
+  test("mentioned_in_dialogue falls back to full content when no quotes", () => {
+    // Without quotes, checks full content
+    const ctx = makeContext({ content: "Hey Alice, how are you?" });
+    expect(evalExpr('mentioned_in_dialogue("Alice")', ctx)).toBe(true);
+    expect(evalExpr('mentioned_in_dialogue("Bob")', ctx)).toBe(false);
+  });
+
+  test("mentioned_in_dialogue excludes partial matches", () => {
+    const ctx = makeContext({ content: '"Alice went to Aliceland"' });
+    expect(evalExpr('mentioned_in_dialogue("Alice")', ctx)).toBe(true);
+    expect(evalExpr('mentioned_in_dialogue("Alic")', ctx)).toBe(false); // word boundary
+  });
+
+  test("mentioned_in_dialogue handles multiple quotes", () => {
+    const ctx = createBaseContext({
+      facts: [],
+      has_fact: () => false,
+      content: '<Alice> "Hello" <Bob> "Hey Alice!"',
+    });
+    // Alice is mentioned in second quote
+    expect(ctx.mentioned_in_dialogue("Alice")).toBe(true);
+    // Hello is in first quote
+    expect(ctx.mentioned_in_dialogue("Hello")).toBe(true);
+    // Bob is outside quotes (in narration tag)
+    expect(ctx.mentioned_in_dialogue("Bob")).toBe(false);
+  });
+
+  test("mentioned_in_dialogue handles single quotes", () => {
+    const ctx = createBaseContext({
+      facts: [],
+      has_fact: () => false,
+      content: "<Alice> 'Hey Bob!'",
+    });
+    expect(ctx.mentioned_in_dialogue("Bob")).toBe(true);
+    expect(ctx.mentioned_in_dialogue("Alice")).toBe(false);
+  });
+
+  test("is_self and mentioned_in_dialogue combined", () => {
+    const ctx = createBaseContext({
+      facts: [],
+      has_fact: () => false,
+      content: "Hey Alice!",
+      is_self: false,
+      name: "Alice",
+    });
+    // Common pattern: respond when name mentioned but not self-triggered
+    expect(evalExpr('mentioned_in_dialogue("Alice") && !is_self', ctx)).toBe(true);
+
+    const selfCtx = createBaseContext({
+      facts: [],
+      has_fact: () => false,
+      content: "Hey Alice!",
+      is_self: true,
+      name: "Alice",
+    });
+    expect(evalExpr('mentioned_in_dialogue("Alice") && !is_self', selfCtx)).toBe(false);
   });
 });
