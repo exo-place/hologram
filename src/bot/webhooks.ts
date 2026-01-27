@@ -132,7 +132,7 @@ function splitContent(content: string): string[] {
 
 /**
  * Execute webhook with custom username and avatar.
- * Returns true on success, false on failure.
+ * Returns array of sent message IDs on success, null on failure.
  * Automatically splits long messages into multiple webhook calls.
  */
 export async function executeWebhook(
@@ -140,14 +140,14 @@ export async function executeWebhook(
   content: string,
   username: string,
   avatarUrl?: string
-): Promise<boolean> {
+): Promise<string[] | null> {
   if (!bot) {
     error("Bot not initialized for webhooks");
-    return false;
+    return null;
   }
 
   const webhook = await getOrCreateWebhook(channelId);
-  if (!webhook) return false;
+  if (!webhook) return null;
 
   // Split content if too long
   const chunks = splitContent(content);
@@ -163,9 +163,10 @@ export async function executeWebhook(
   });
 
   try {
+    const messageIds: string[] = [];
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i];
-      await bot!.helpers.executeWebhook(
+      const result = await bot!.helpers.executeWebhook(
         BigInt(webhook.webhookId),
         webhook.webhookToken,
         {
@@ -175,10 +176,13 @@ export async function executeWebhook(
           wait: true,
         }
       );
-      debug("Webhook chunk sent", { chunk: i + 1, of: chunks.length });
+      if (result?.id) {
+        messageIds.push(result.id.toString());
+      }
+      debug("Webhook chunk sent", { chunk: i + 1, of: chunks.length, messageId: result?.id?.toString() });
     }
-    debug("Webhook executed successfully");
-    return true;
+    debug("Webhook executed successfully", { messageIds });
+    return messageIds;
   } catch (err: unknown) {
     // Try to extract all properties from the error
     const allProps: Record<string, unknown> = {};
@@ -197,7 +201,7 @@ export async function executeWebhook(
     webhookCache.delete(channelId);
     const db = getDb();
     db.prepare(`DELETE FROM webhooks WHERE channel_id = ?`).run(channelId);
-    return false;
+    return null;
   }
 }
 

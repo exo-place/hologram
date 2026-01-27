@@ -83,6 +83,14 @@ const MAX_PROCESSED = 1000;
 const botMessageIds = new Set<string>();
 const MAX_BOT_MESSAGES = 1000;
 
+// Track webhook message IDs → entity info (for webhook reply detection)
+interface WebhookMessageInfo {
+  entityId: number;
+  entityName: string;
+}
+const webhookMessageEntities = new Map<string, WebhookMessageInfo>();
+const MAX_WEBHOOK_MESSAGES = 1000;
+
 function markProcessed(messageId: bigint): boolean {
   const id = messageId.toString();
   if (processedMessages.has(id)) return false;
@@ -124,9 +132,10 @@ bot.events.messageCreate = async (message) => {
 
   // Detect reply to bot and forwarded messages
   const messageRef = message.messageReference;
-  const isReplied = messageRef?.messageId
-    ? botMessageIds.has(messageRef.messageId.toString())
-    : false;
+  const refMessageId = messageRef?.messageId?.toString();
+  const isRepliedToBot = refMessageId ? botMessageIds.has(refMessageId) : false;
+  const repliedToWebhookEntity = refMessageId ? getWebhookMessageEntity(refMessageId) : undefined;
+  const isReplied = isRepliedToBot || !!repliedToWebhookEntity;
   // Forwarded messages have messageSnapshots
   const isForward = (message.messageSnapshots?.length ?? 0) > 0;
 
@@ -210,6 +219,7 @@ bot.events.messageCreate = async (message) => {
       elapsed_ms: 0,
       mentioned: isMentioned ?? false,
       replied: isReplied,
+      replied_to: repliedToWebhookEntity?.entityName ?? "",
       is_forward: isForward,
       content: message.content,
       author: authorName,
@@ -311,6 +321,7 @@ async function processEntityRetry(
     elapsed_ms: now - messageTime,
     mentioned: false, // Retry is never from a mention
     replied: false,
+    replied_to: "",
     is_forward: false,
     content,
     author: username,
@@ -396,26 +407,32 @@ async function sendResponse(
       if (result.characterResponses && result.characterResponses.length > 0) {
         // Multi-character: send separate webhook message for each
         for (const charResponse of result.characterResponses) {
-          const success = await executeWebhook(
+          // Find the entity for this character response
+          const entity = respondingEntities.find(e => e.name === charResponse.name);
+          const messageIds = await executeWebhook(
             channelId,
             charResponse.content,
             charResponse.name,
             charResponse.avatarUrl
           );
-          if (!success) {
+          if (messageIds && entity) {
+            trackWebhookMessages(messageIds, entity.id, entity.name);
+          } else if (!messageIds) {
             await sendFallbackMessage(channelId, charResponse.name, charResponse.content);
           }
         }
       } else {
         // Single entity: send via webhook with entity's name
         const entity = respondingEntities[0];
-        const success = await executeWebhook(
+        const messageIds = await executeWebhook(
           channelId,
           result.response,
           entity.name,
           entity.avatarUrl ?? undefined
         );
-        if (!success) {
+        if (messageIds) {
+          trackWebhookMessages(messageIds, entity.id, entity.name);
+        } else {
           await sendFallbackMessage(channelId, entity.name, result.response);
         }
       }
@@ -463,6 +480,26 @@ function trackBotMessage(messageId: bigint): void {
       if (v) botMessageIds.delete(v);
     }
   }
+}
+
+/** Track webhook message IDs with entity association for reply detection */
+function trackWebhookMessages(messageIds: string[], entityId: number, entityName: string): void {
+  for (const id of messageIds) {
+    webhookMessageEntities.set(id, { entityId, entityName });
+  }
+  // Trim if too large
+  if (webhookMessageEntities.size > MAX_WEBHOOK_MESSAGES) {
+    const iter = webhookMessageEntities.keys();
+    for (let i = 0; i < MAX_WEBHOOK_MESSAGES / 2; i++) {
+      const v = iter.next().value;
+      if (v) webhookMessageEntities.delete(v);
+    }
+  }
+}
+
+/** Look up entity info for a webhook message */
+function getWebhookMessageEntity(messageId: string): WebhookMessageInfo | undefined {
+  return webhookMessageEntities.get(messageId);
 }
 
 async function sendWelcomeDm(userId: bigint): Promise<void> {

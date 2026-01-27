@@ -38,6 +38,8 @@ export interface ExprContext {
   mentioned: boolean;
   /** Whether the message is a reply to the bot */
   replied: boolean;
+  /** Name of entity that was replied to (empty if not a webhook reply) */
+  replied_to: string;
   /** Whether the message is a forwarded message */
   is_forward: boolean;
   /** Message content */
@@ -348,7 +350,7 @@ class Parser {
 // Allowed top-level identifiers (whitelist)
 const ALLOWED_GLOBALS = new Set([
   "self", "random", "has_fact", "roll", "time",
-  "dt_ms", "elapsed_ms", "mentioned", "replied", "is_forward",
+  "dt_ms", "elapsed_ms", "mentioned", "replied", "replied_to", "is_forward",
   "content", "author", "interaction_type"
 ]);
 
@@ -757,6 +759,8 @@ export interface BaseContextOptions {
   elapsed_ms?: number;
   mentioned?: boolean;
   replied?: boolean;
+  /** Name of entity that was replied to (for webhook replies) */
+  replied_to?: string;
   is_forward?: boolean;
   content?: string;
   author?: string;
@@ -793,6 +797,7 @@ export function createBaseContext(options: BaseContextOptions): ExprContext {
     elapsed_ms: options.elapsed_ms ?? 0,
     mentioned: options.mentioned ?? false,
     replied: options.replied ?? false,
+    replied_to: options.replied_to ?? "",
     is_forward: options.is_forward ?? false,
     content: options.content ?? "",
     author: options.author ?? "",
