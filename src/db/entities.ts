@@ -214,10 +214,9 @@ export function ensureSystemEntity(name: string, facts: string[]): EntityWithFac
   let entity = getSystemEntity(name);
   if (!entity) {
     entity = createEntity(name, "system");
-    for (const fact of facts) {
-      addFact(entity.id, fact);
-    }
   }
+  // Always update facts to latest
+  setFacts(entity.id, facts);
   return getEntityWithFacts(entity.id)!;
 }
 

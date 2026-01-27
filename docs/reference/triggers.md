@@ -44,13 +44,14 @@ $if content.includes(hello): $respond
 |----------|------|-------------|
 | `mentioned` | boolean | Bot was @mentioned |
 | `is_self` | boolean | Message is from this entity's own webhook |
-| `content` | string | Message content |
-| `author` | string | Message author name |
+| `content` | string | Message content (alias for `messages(1, "%m")`) |
+| `author` | string | Message author name (alias for `messages(1, "%a")`) |
 | `dt_ms` | number | Milliseconds since last response |
 | `elapsed_ms` | number | Milliseconds since message (for retries) |
 | `random()` | function | Float [0,1), or int with `random(max)` [1,max] / `random(min,max)` [min,max] |
 | `has_fact(pattern)` | function | Check if entity has matching fact |
 | `mentioned_in_dialogue(name)` | function | Check if name appears in quoted dialogue |
+| `messages(n, format)` | function | Last n messages. Format: `%a`=author, `%m`=message (default `"%a: %m"`) |
 | `time.hour` | number | Current hour (0-23) |
 | `time.is_day` | boolean | 6am-6pm |
 | `time.is_night` | boolean | 6pm-6am |
@@ -71,6 +72,11 @@ $if random() < 0.1: $respond
 Respond to keywords:
 ```
 $if content.includes("hello"): $respond
+```
+
+Check conversation history:
+```
+$if messages(10).includes("help"): $respond
 ```
 
 Respond only at night:
