@@ -213,7 +213,7 @@ Wrap each character's dialogue in their name tag. Characters may interact natura
 
   return `${context}
 
-You have access to tools to modify facts about entities. Use them sparingly:
+You have access to tools to modify facts about entities. Use them sparingly—only save things fundamental to the character or that need to be remembered long-term:
 - Something new is learned (add_fact)
 - A fact changes (update_fact)
 - A fact is no longer true (remove_fact)
