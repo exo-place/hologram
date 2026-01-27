@@ -580,8 +580,8 @@ export interface ProcessedFact {
   isLockedFact: boolean;
   /** True if this fact is a $stream directive */
   isStream: boolean;
-  /** For $stream directives, the mode (currently only "lines") */
-  streamMode?: "lines";
+  /** For $stream directives, the mode */
+  streamMode?: "lines" | "full" | "lines_full";
 }
 
 /** Parse expression, expect ':', return position after ':' */
@@ -831,15 +831,23 @@ function parseLockedDirective(content: string): { isDirective: true } | { isDire
  * Parse a $stream directive.
  * Returns null if not a stream directive, or the stream mode.
  * "$stream" or "$stream lines" → "lines" mode (one line = one message)
+ * "$stream full" → "full" mode (single message, edited progressively)
+ * "$stream lines_full" → "lines_full" mode (one message per line, edited as it streams)
  */
-function parseStreamDirective(content: string): "lines" | null {
+function parseStreamDirective(content: string): "lines" | "full" | "lines_full" | null {
   if (!content.startsWith(STREAM_SIGIL)) {
     return null;
   }
   const rest = content.slice(STREAM_SIGIL.length).trim().toLowerCase();
-  // Default to "lines" mode, or explicit "lines"
+  // Default to "lines" mode
   if (rest === "" || rest === "lines") {
     return "lines";
+  }
+  if (rest === "full") {
+    return "full";
+  }
+  if (rest === "lines_full") {
+    return "lines_full";
   }
   // Not a valid $stream directive
   return null;
@@ -860,8 +868,8 @@ export interface EvaluatedFacts {
   isLocked: boolean;
   /** Set of fact content strings that are locked (from $locked prefix) */
   lockedFacts: Set<string>;
-  /** Stream mode if $stream directive present (e.g., "lines" for line-based streaming) */
-  streamMode: "lines" | null;
+  /** Stream mode if $stream directive present */
+  streamMode: "lines" | "full" | "lines_full" | null;
 }
 
 /**
@@ -886,7 +894,7 @@ export function evaluateFacts(
   let avatarUrl: string | null = null;
   let isLocked = false;
   const lockedFacts = new Set<string>();
-  let streamMode: "lines" | null = null;
+  let streamMode: "lines" | "full" | "lines_full" | null = null;
 
   // Strip comments first
   const uncommented = stripComments(facts);

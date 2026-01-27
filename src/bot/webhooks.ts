@@ -289,3 +289,49 @@ export function clearWebhookCache(channelId: string): void {
   const db = getDb();
   db.prepare(`DELETE FROM webhooks WHERE channel_id = ?`).run(channelId);
 }
+
+/**
+ * Edit an existing webhook message.
+ * Returns true on success, false on failure.
+ */
+export async function editWebhookMessage(
+  channelId: string,
+  messageId: string,
+  content: string
+): Promise<boolean> {
+  if (!bot) {
+    error("Bot not initialized for webhooks");
+    return false;
+  }
+
+  // Resolve thread to parent channel if needed
+  const resolved = await resolveWebhookChannel(channelId);
+  if (!resolved) return false;
+
+  const { webhookChannelId, threadId } = resolved;
+
+  const webhook = await getOrCreateWebhook(webhookChannelId);
+  if (!webhook) return false;
+
+  debug("Editing webhook message", {
+    webhookId: webhook.webhookId,
+    messageId,
+    contentLength: content.length,
+  });
+
+  try {
+    await bot.helpers.editWebhookMessage(
+      BigInt(webhook.webhookId),
+      webhook.webhookToken,
+      BigInt(messageId),
+      {
+        content,
+        ...(threadId ? { threadId: BigInt(threadId) } : {}),
+      }
+    );
+    return true;
+  } catch (err) {
+    error("Failed to edit webhook message", err, { messageId, channelId });
+    return false;
+  }
+}

@@ -5,7 +5,7 @@ import { handleMessage, handleMessageStreaming, type EvaluatedEntity } from "../
 import { resolveDiscordEntity, resolveDiscordEntities, isNewUser, markUserWelcomed, addMessage, trackWebhookMessage, getWebhookMessageEntity, getMessages, formatMessagesForContext, recordEvalError } from "../db/discord";
 import { getEntity, getEntityWithFacts, getSystemEntity, getFactsForEntity, type EntityWithFacts } from "../db/entities";
 import { evaluateFacts, createBaseContext, parsePermissionDirectives } from "../logic/expr";
-import { executeWebhook, setBot } from "./webhooks";
+import { executeWebhook, editWebhookMessage, setBot } from "./webhooks";
 import "./commands/commands"; // Register all commands
 import { ensureHelpEntities } from "./commands/commands";
 
@@ -460,6 +460,174 @@ async function processEntityRetry(
   }]);
 }
 
+/**
+ * Handle streaming response with different modes.
+ */
+async function handleStreamingResponse(
+  channelId: string,
+  entities: EvaluatedEntity[],
+  streamMode: "lines" | "full" | "lines_full",
+  ctx: {
+    channelId: string;
+    guildId?: string;
+    userId: string;
+    username: string;
+    content: string;
+    isMentioned: boolean;
+  }
+): Promise<void> {
+  const allMessageIds: string[] = [];
+
+  // Track current message per entity (for editing)
+  const entityMessages = new Map<string, { messageId: string; content: string }>();
+  // Track current line message (for lines_full mode)
+  let currentLineMessage: { messageId: string; content: string } | null = null;
+  // Single message for full mode
+  let fullMessage: { messageId: string; content: string } | null = null;
+
+  const isSingleEntity = entities.length === 1;
+  const entity = isSingleEntity ? entities[0] : null;
+
+  for await (const event of handleMessageStreaming({
+    ...ctx,
+    entities,
+    streamMode,
+  })) {
+    switch (event.type) {
+      case "line": {
+        // Single entity: new message per line
+        if (entity) {
+          const ids = await executeWebhook(channelId, event.content, entity.name, entity.avatarUrl ?? undefined);
+          if (ids) allMessageIds.push(...ids);
+          currentLineMessage = null;
+        }
+        break;
+      }
+
+      case "delta": {
+        // Single entity: edit or create message
+        if (entity) {
+          if (streamMode === "full") {
+            // Edit single message with full content
+            if (fullMessage) {
+              fullMessage.content = event.fullContent;
+              await editWebhookMessage(channelId, fullMessage.messageId, event.fullContent);
+            } else {
+              const ids = await executeWebhook(channelId, event.fullContent, entity.name, entity.avatarUrl ?? undefined);
+              if (ids && ids[0]) {
+                fullMessage = { messageId: ids[0], content: event.fullContent };
+                allMessageIds.push(...ids);
+              }
+            }
+          } else if (streamMode === "lines_full") {
+            // Edit current line message
+            if (currentLineMessage) {
+              currentLineMessage.content = event.fullContent;
+              await editWebhookMessage(channelId, currentLineMessage.messageId, event.fullContent);
+            } else {
+              const ids = await executeWebhook(channelId, event.fullContent, entity.name, entity.avatarUrl ?? undefined);
+              if (ids && ids[0]) {
+                currentLineMessage = { messageId: ids[0], content: event.fullContent };
+                allMessageIds.push(...ids);
+              }
+            }
+          }
+        }
+        break;
+      }
+
+      case "char_start": {
+        // Multi-character: prepare for new character
+        entityMessages.delete(event.name);
+        break;
+      }
+
+      case "char_line": {
+        // Multi-character: new line for this character
+        const charEntity = entities.find(e => e.name === event.name);
+        if (charEntity) {
+          if (streamMode === "lines") {
+            // New message per line
+            const ids = await executeWebhook(channelId, event.content, event.name, charEntity.avatarUrl ?? undefined);
+            if (ids) allMessageIds.push(...ids);
+          } else {
+            // For full/lines_full, accumulate and edit
+            const existing = entityMessages.get(event.name);
+            const newContent = existing ? `${existing.content}\n${event.content}` : event.content;
+            if (existing) {
+              existing.content = newContent;
+              await editWebhookMessage(channelId, existing.messageId, newContent);
+            } else {
+              const ids = await executeWebhook(channelId, newContent, event.name, charEntity.avatarUrl ?? undefined);
+              if (ids && ids[0]) {
+                entityMessages.set(event.name, { messageId: ids[0], content: newContent });
+                allMessageIds.push(...ids);
+              }
+            }
+          }
+        }
+        break;
+      }
+
+      case "char_delta": {
+        // Multi-character: delta update for this character
+        const charEntity = entities.find(e => e.name === event.name);
+        if (charEntity && (streamMode === "full" || streamMode === "lines_full")) {
+          const existing = entityMessages.get(event.name);
+          if (existing) {
+            existing.content = event.content;
+            await editWebhookMessage(channelId, existing.messageId, event.content);
+          } else {
+            const ids = await executeWebhook(channelId, event.content, event.name, charEntity.avatarUrl ?? undefined);
+            if (ids && ids[0]) {
+              entityMessages.set(event.name, { messageId: ids[0], content: event.content });
+              allMessageIds.push(...ids);
+            }
+          }
+        }
+        break;
+      }
+
+      case "char_end": {
+        // Multi-character: finalize character response
+        const charEntity = entities.find(e => e.name === event.name);
+        if (charEntity) {
+          const existing = entityMessages.get(event.name);
+          if (existing) {
+            // Final edit with complete content
+            await editWebhookMessage(channelId, existing.messageId, event.content);
+          } else if (event.content) {
+            // No message created yet, create one
+            const ids = await executeWebhook(channelId, event.content, event.name, charEntity.avatarUrl ?? undefined);
+            if (ids) allMessageIds.push(...ids);
+          }
+        }
+        break;
+      }
+
+      case "done": {
+        debug("Streaming complete", { fullTextLength: event.fullText.length });
+        break;
+      }
+    }
+  }
+
+  // Track all webhook messages
+  if (allMessageIds.length > 0) {
+    if (isSingleEntity && entity) {
+      trackWebhookMessages(allMessageIds, entity.id, entity.name);
+    } else {
+      // For multi-char, we tracked per character already
+      for (const [name, msg] of entityMessages) {
+        const charEntity = entities.find(e => e.name === name);
+        if (charEntity) {
+          trackWebhookMessage(msg.messageId, charEntity.id, charEntity.name);
+        }
+      }
+    }
+  }
+}
+
 async function sendResponse(
   channelId: string,
   guildId: string | undefined,
@@ -492,50 +660,27 @@ async function sendResponse(
 
   // Handle message via LLM
   try {
-    // Check for single-entity streaming mode
-    const useStreaming = respondingEntities?.length === 1 &&
-      respondingEntities[0].streamMode === "lines";
+    // Check for streaming mode
+    const streamMode = respondingEntities?.[0]?.streamMode;
+    const useStreaming = streamMode && respondingEntities && respondingEntities.length > 0;
 
     if (useStreaming) {
-      const entity = respondingEntities![0];
-      debug("Using streaming mode", { entity: entity.name });
+      debug("Using streaming mode", { mode: streamMode, entities: respondingEntities.map(e => e.name) });
 
       // Stop typing - we'll be sending messages as we stream
       stopTyping();
 
-      const messageIds: string[] = [];
-      let lineCount = 0;
-
-      for await (const line of handleMessageStreaming({
+      await handleStreamingResponse(channelId, respondingEntities, streamMode, {
         channelId,
         guildId,
         userId: "",
         username,
         content,
         isMentioned,
-        entity,
-      })) {
-        lineCount++;
-        const ids = await executeWebhook(
-          channelId,
-          line,
-          entity.name,
-          entity.avatarUrl ?? undefined
-        );
-        if (ids) {
-          messageIds.push(...ids);
-        } else {
-          await sendFallbackMessage(channelId, entity.name, line);
-        }
-      }
-
-      if (messageIds.length > 0) {
-        trackWebhookMessages(messageIds, entity.id, entity.name);
-      }
+      });
 
       // Mark response time
       lastResponseTime.set(channelId, Date.now());
-      debug("Streaming complete", { entity: entity.name, lines: lineCount });
       return;
     }
 

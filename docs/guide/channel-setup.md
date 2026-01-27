@@ -92,27 +92,47 @@ $if random() < 0.05: $respond
 
 ## Streaming Responses
 
-By default, the AI generates a complete response and sends it as a single message. You can enable **line-based streaming** to send each line as it's generated:
+By default, the AI generates a complete response and sends it as a single message. You can enable **streaming** to send responses progressively as they're generated.
+
+### Stream Modes
 
 ```
-$stream
+$stream              # Same as $stream lines (default)
+$stream lines        # New message per completed line
+$stream full         # Single message, edited as content streams
+$stream lines_full   # New message per line, edited as it streams
 ```
 
-With streaming enabled, the character's response appears line-by-line in real-time. This creates a more natural, conversational feel.
+**lines** - Each completed line becomes a separate Discord message. Creates a natural, conversational feel.
+
+**full** - One message that gets progressively edited with the full response. Useful for seeing the complete thought form.
+
+**lines_full** - Combines both: creates a new message for each line, but each line is edited in real-time as it streams. Most dynamic effect.
 
 ### Conditional Streaming
 
 You can make streaming conditional:
 
 ```
-$if mentioned: $stream
+$if mentioned: $stream full
 ```
+
+### Multi-Character Streaming
+
+Streaming works with multiple characters too! The system parses XML tags as they stream:
+
+```xml
+<Aria>*waves* Hello there!</Aria>
+<Marcus>Good to see you.</Marcus>
+```
+
+Each character's response streams independently to their own message.
 
 ### Notes
 
-- Streaming only works for single-entity channels (not multi-character)
-- Each line becomes a separate Discord message
-- Useful for longer responses or dramatic effect
+- Streaming requires webhook permissions
+- `full` and `lines_full` modes edit messages, which has rate limits
+- For very long responses, `lines` mode is most reliable
 
 ## Rate Limiting
 

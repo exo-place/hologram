@@ -98,15 +98,22 @@ $if messages(10).includes("help"): $respond  # Check last 10 messages
 
 ### Streaming
 
-Line-based streaming sends each line of the LLM response as a separate Discord message as it's generated:
+Streaming sends LLM responses progressively as they're generated. Three modes available:
 
 ```
-$stream                            # Enable line-based streaming (default: lines mode)
-$stream lines                      # Explicit lines mode
+$stream                            # Same as $stream lines
+$stream lines                      # New message per line (default)
+$stream full                       # Single message, edited progressively
+$stream lines_full                 # New message per line, edited as it streams
 $if mentioned: $stream             # Conditional streaming
 ```
 
-When streaming is enabled, responses appear line-by-line in real-time rather than as a single message. Only supported for single-entity responses (not multi-character).
+**Modes:**
+- `lines`: Each completed line becomes a new Discord message
+- `full`: One message, continuously edited with accumulated content
+- `lines_full`: New message per line, but each line is edited as it streams
+
+**Multi-character streaming:** When streaming with multiple characters bound to a channel, the system uses heuristic XML parsing to detect `<CharName>...</CharName>` tags and streams each character's response separately.
 
 **Context variables:** `mentioned`, `replied`, `is_forward`, `is_self`, `content`, `author`, `dt_ms`, `elapsed_ms`, `time.is_night`, `self.*`
 
