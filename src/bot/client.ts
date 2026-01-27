@@ -267,30 +267,32 @@ async function sendResponse(
   }
 
   // Handle message via LLM
-  const result = await handleMessage({
-    channelId,
-    guildId,
-    userId: "",
-    username,
-    content,
-    isMentioned,
-  });
+  try {
+    const result = await handleMessage({
+      channelId,
+      guildId,
+      userId: "",
+      username,
+      content,
+      isMentioned,
+    });
 
-  // Stop typing
-  if (typingInterval) {
-    clearInterval(typingInterval);
-  }
+    // Mark response time
+    lastResponseTime.set(channelId, Date.now());
 
-  // Mark response time
-  lastResponseTime.set(channelId, Date.now());
-
-  if (result) {
-    try {
-      await bot.helpers.sendMessage(BigInt(channelId), {
-        content: result.response,
-      });
-    } catch (err) {
-      error("Failed to send message", err);
+    if (result) {
+      try {
+        await bot.helpers.sendMessage(BigInt(channelId), {
+          content: result.response,
+        });
+      } catch (err) {
+        error("Failed to send message", err);
+      }
+    }
+  } finally {
+    // Always stop typing
+    if (typingInterval) {
+      clearInterval(typingInterval);
     }
   }
 }
