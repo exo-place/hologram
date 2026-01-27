@@ -344,6 +344,7 @@ bot.events.messageCreate = async (message) => {
           facts: result.facts,
           avatarUrl: result.avatarUrl,
           streamMode: result.streamMode,
+          streamDelimiter: result.streamDelimiter,
         });
       }
     }
@@ -457,6 +458,7 @@ async function processEntityRetry(
     facts: result.facts,
     avatarUrl: result.avatarUrl,
     streamMode: result.streamMode,
+    streamDelimiter: result.streamDelimiter,
   }]);
 }
 
@@ -531,7 +533,8 @@ async function editStreamMessage(
 async function handleStreamingResponse(
   channelId: string,
   entities: EvaluatedEntity[],
-  streamMode: "lines" | "full" | "lines_full",
+  streamMode: "lines" | "full",
+  delimiter: string | undefined,
   ctx: {
     channelId: string;
     guildId?: string;
@@ -545,8 +548,6 @@ async function handleStreamingResponse(
 
   // Track current message per entity (for editing)
   const entityMessages = new Map<string, { messageId: string; content: string }>();
-  // Track current line message (for lines_full mode)
-  let currentLineMessage: { messageId: string; content: string } | null = null;
   // Single message for full mode
   let fullMessage: { messageId: string; content: string } | null = null;
 
@@ -557,44 +558,29 @@ async function handleStreamingResponse(
     ...ctx,
     entities,
     streamMode,
+    delimiter,
   })) {
     switch (event.type) {
       case "line": {
-        // Single entity: new message per line
+        // Single entity: new message per chunk
         if (entity) {
           const msgId = await sendStreamMessage(channelId, event.content, entity);
           if (msgId) allMessageIds.push(msgId);
-          currentLineMessage = null;
         }
         break;
       }
 
       case "delta": {
-        // Single entity: edit or create message
-        if (entity) {
-          if (streamMode === "full") {
-            // Edit single message with full content
-            if (fullMessage) {
-              fullMessage.content = event.fullContent;
-              await editStreamMessage(channelId, fullMessage.messageId, event.fullContent, entity);
-            } else {
-              const msgId = await sendStreamMessage(channelId, event.fullContent, entity);
-              if (msgId) {
-                fullMessage = { messageId: msgId, content: event.fullContent };
-                allMessageIds.push(msgId);
-              }
-            }
-          } else if (streamMode === "lines_full") {
-            // Edit current line message
-            if (currentLineMessage) {
-              currentLineMessage.content = event.fullContent;
-              await editStreamMessage(channelId, currentLineMessage.messageId, event.fullContent, entity);
-            } else {
-              const msgId = await sendStreamMessage(channelId, event.fullContent, entity);
-              if (msgId) {
-                currentLineMessage = { messageId: msgId, content: event.fullContent };
-                allMessageIds.push(msgId);
-              }
+        // Single entity full mode: edit or create message
+        if (entity && streamMode === "full") {
+          if (fullMessage) {
+            fullMessage.content = event.fullContent;
+            await editStreamMessage(channelId, fullMessage.messageId, event.fullContent, entity);
+          } else {
+            const msgId = await sendStreamMessage(channelId, event.fullContent, entity);
+            if (msgId) {
+              fullMessage = { messageId: msgId, content: event.fullContent };
+              allMessageIds.push(msgId);
             }
           }
         }
@@ -608,15 +594,15 @@ async function handleStreamingResponse(
       }
 
       case "char_line": {
-        // Multi-character: new line for this character
+        // Multi-character: new line/chunk for this character
         const charEntity = entities.find(e => e.name === event.name);
         if (charEntity) {
           if (streamMode === "lines") {
-            // New message per line
+            // New message per chunk
             const msgId = await sendStreamMessage(channelId, event.content, charEntity);
             if (msgId) allMessageIds.push(msgId);
           } else {
-            // For full/lines_full, accumulate and edit
+            // Full mode: accumulate and edit
             const existing = entityMessages.get(event.name);
             const newContent = existing ? `${existing.content}\n${event.content}` : event.content;
             if (existing) {
@@ -635,9 +621,9 @@ async function handleStreamingResponse(
       }
 
       case "char_delta": {
-        // Multi-character: delta update for this character
+        // Multi-character full mode: delta update for this character
         const charEntity = entities.find(e => e.name === event.name);
-        if (charEntity && (streamMode === "full" || streamMode === "lines_full")) {
+        if (charEntity && streamMode === "full") {
           const existing = entityMessages.get(event.name);
           if (existing) {
             existing.content = event.content;
@@ -730,12 +716,13 @@ async function sendResponse(
     const useStreaming = streamMode && respondingEntities && respondingEntities.length > 0;
 
     if (useStreaming) {
-      debug("Using streaming mode", { mode: streamMode, entities: respondingEntities.map(e => e.name) });
+      const streamDelimiter = respondingEntities[0]?.streamDelimiter ?? undefined;
+      debug("Using streaming mode", { mode: streamMode, delimiter: streamDelimiter, entities: respondingEntities.map(e => e.name) });
 
       // Stop typing - we'll be sending messages as we stream
       stopTyping();
 
-      await handleStreamingResponse(channelId, respondingEntities, streamMode, {
+      await handleStreamingResponse(channelId, respondingEntities, streamMode, streamDelimiter, {
         channelId,
         guildId,
         userId: "",

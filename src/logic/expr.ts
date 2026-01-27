@@ -581,7 +581,9 @@ export interface ProcessedFact {
   /** True if this fact is a $stream directive */
   isStream: boolean;
   /** For $stream directives, the mode */
-  streamMode?: "lines" | "full" | "lines_full";
+  streamMode?: "lines" | "full";
+  /** For $stream directives with custom delimiter (default: newline) */
+  streamDelimiter?: string;
 }
 
 /** Parse expression, expect ':', return position after ':' */
@@ -680,7 +682,8 @@ export function parseFact(fact: string): ProcessedFact {
         isLockedDirective: false,
         isLockedFact: false,
         isStream: true,
-        streamMode: streamResultCond,
+        streamMode: streamResultCond.mode,
+        streamDelimiter: streamResultCond.delimiter,
       };
     }
 
@@ -747,7 +750,8 @@ export function parseFact(fact: string): ProcessedFact {
       isLockedDirective: false,
       isLockedFact: false,
       isStream: true,
-      streamMode: streamResult,
+      streamMode: streamResult.mode,
+      streamDelimiter: streamResult.delimiter,
     };
   }
 
@@ -827,30 +831,47 @@ function parseLockedDirective(content: string): { isDirective: true } | { isDire
   return null;
 }
 
+interface StreamDirectiveResult {
+  mode: "lines" | "full";
+  delimiter?: string;
+}
+
 /**
  * Parse a $stream directive.
- * Returns null if not a stream directive, or the stream mode.
- * "$stream" or "$stream lines" → "lines" mode (one line = one message)
+ * Returns null if not a stream directive, or the stream mode and optional delimiter.
+ * "$stream" or "$stream lines" → "lines" mode (new message per delimiter, default: newline)
  * "$stream full" → "full" mode (single message, edited progressively)
- * "$stream lines_full" → "lines_full" mode (one message per line, edited as it streams)
+ * "$stream "delim"" → "lines" mode with custom delimiter (e.g., $stream "kitten:")
+ * "$stream full "delim"" → "full" mode with custom delimiter
  */
-function parseStreamDirective(content: string): "lines" | "full" | "lines_full" | null {
+function parseStreamDirective(content: string): StreamDirectiveResult | null {
   if (!content.startsWith(STREAM_SIGIL)) {
     return null;
   }
-  const rest = content.slice(STREAM_SIGIL.length).trim().toLowerCase();
-  // Default to "lines" mode
+  let rest = content.slice(STREAM_SIGIL.length).trim();
+
+  // Check for quoted delimiter at the end
+  let delimiter: string | undefined;
+  const quoteMatch = rest.match(/["']([^"']+)["']$/);
+  if (quoteMatch) {
+    delimiter = quoteMatch[1];
+    rest = rest.slice(0, quoteMatch.index).trim().toLowerCase();
+  } else {
+    rest = rest.toLowerCase();
+  }
+
+  // Parse mode
+  let mode: "lines" | "full" = "lines";
   if (rest === "" || rest === "lines") {
-    return "lines";
+    mode = "lines";
+  } else if (rest === "full") {
+    mode = "full";
+  } else if (rest !== "") {
+    // Unknown mode
+    return null;
   }
-  if (rest === "full") {
-    return "full";
-  }
-  if (rest === "lines_full") {
-    return "lines_full";
-  }
-  // Not a valid $stream directive
-  return null;
+
+  return { mode, delimiter };
 }
 
 export interface EvaluatedFacts {
@@ -869,7 +890,9 @@ export interface EvaluatedFacts {
   /** Set of fact content strings that are locked (from $locked prefix) */
   lockedFacts: Set<string>;
   /** Stream mode if $stream directive present */
-  streamMode: "lines" | "full" | "lines_full" | null;
+  streamMode: "lines" | "full" | null;
+  /** Custom delimiter for streaming (default: newline) */
+  streamDelimiter: string | null;
 }
 
 /**
@@ -894,7 +917,8 @@ export function evaluateFacts(
   let avatarUrl: string | null = null;
   let isLocked = false;
   const lockedFacts = new Set<string>();
-  let streamMode: "lines" | "full" | "lines_full" | null = null;
+  let streamMode: "lines" | "full" | null = null;
+  let streamDelimiter: string | null = null;
 
   // Strip comments first
   const uncommented = stripComments(facts);
@@ -945,13 +969,14 @@ export function evaluateFacts(
     // Handle $stream directives - last one wins
     if (parsed.isStream) {
       streamMode = parsed.streamMode ?? null;
+      streamDelimiter = parsed.streamDelimiter ?? null;
       continue;
     }
 
     results.push(parsed.content);
   }
 
-  return { facts: results, shouldRespond, respondSource, retryMs, avatarUrl, isLocked, lockedFacts, streamMode };
+  return { facts: results, shouldRespond, respondSource, retryMs, avatarUrl, isLocked, lockedFacts, streamMode, streamDelimiter };
 }
 
 // =============================================================================

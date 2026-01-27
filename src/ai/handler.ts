@@ -29,7 +29,9 @@ export interface EvaluatedEntity {
   /** Avatar URL from $avatar directive, if present */
   avatarUrl: string | null;
   /** Stream mode from $stream directive, if present */
-  streamMode: "lines" | "full" | "lines_full" | null;
+  streamMode: "lines" | "full" | null;
+  /** Custom delimiter for streaming (default: newline) */
+  streamDelimiter: string | null;
 }
 
 export interface MessageContext {
@@ -48,7 +50,8 @@ export interface CharacterResponse {
   name: string;
   content: string;
   avatarUrl?: string;
-  streamMode?: "lines" | "full" | "lines_full" | null;
+  streamMode?: "lines" | "full" | null;
+  streamDelimiter?: string | null;
 }
 
 export interface ResponseResult {
@@ -422,7 +425,9 @@ export interface StreamingContext extends MessageContext {
   /** Entities to stream for */
   entities: EvaluatedEntity[];
   /** Stream mode */
-  streamMode: "lines" | "full" | "lines_full";
+  streamMode: "lines" | "full";
+  /** Custom delimiter (default: newline) */
+  delimiter?: string;
 }
 
 /** Stream event types */
@@ -451,7 +456,7 @@ export type StreamEvent =
 export async function* handleMessageStreaming(
   ctx: StreamingContext
 ): AsyncGenerator<StreamEvent, void, unknown> {
-  const { channelId, guildId, entities, streamMode } = ctx;
+  const { channelId, guildId, entities, streamMode, delimiter = "\n" } = ctx;
 
   // Build context (resolve entity references)
   const other: EntityWithFacts[] = [];
@@ -531,9 +536,9 @@ export async function* handleMessageStreaming(
 
     // Use different streaming logic based on single vs multi-character
     if (entities.length === 1) {
-      yield* streamSingleEntity(result.textStream, streamMode);
+      yield* streamSingleEntity(result.textStream, streamMode, delimiter);
     } else {
-      yield* streamMultiCharacter(result.textStream, entities, streamMode);
+      yield* streamMultiCharacter(result.textStream, entities, streamMode, delimiter);
     }
 
     // Yield done event with full text
@@ -556,11 +561,11 @@ export async function* handleMessageStreaming(
  */
 async function* streamSingleEntity(
   textStream: AsyncIterable<string>,
-  streamMode: "lines" | "full" | "lines_full"
+  streamMode: "lines" | "full",
+  delimiter: string
 ): AsyncGenerator<StreamEvent, void, unknown> {
   let buffer = "";
   let fullContent = "";
-  let currentLine = "";
 
   for await (const delta of textStream) {
     buffer += delta;
@@ -570,24 +575,14 @@ async function* streamSingleEntity(
       // Emit every delta
       yield { type: "delta", content: delta, fullContent };
     } else {
-      // lines or lines_full: process line by line
-      let newlineIndex: number;
-      while ((newlineIndex = buffer.indexOf("\n")) !== -1) {
-        const line = buffer.slice(0, newlineIndex).trim();
-        buffer = buffer.slice(newlineIndex + 1);
-        currentLine = "";
+      // lines mode: split on delimiter
+      let delimIndex: number;
+      while ((delimIndex = buffer.indexOf(delimiter)) !== -1) {
+        const chunk = buffer.slice(0, delimIndex).trim();
+        buffer = buffer.slice(delimIndex + delimiter.length);
 
-        if (line && line !== "<none/>") {
-          yield { type: "line", content: line };
-        }
-      }
-
-      // For lines_full, emit deltas within the current line
-      if (streamMode === "lines_full" && buffer.length > 0) {
-        const newContent = buffer.trim();
-        if (newContent !== currentLine) {
-          yield { type: "delta", content: buffer.slice(currentLine.length), fullContent: newContent };
-          currentLine = newContent;
+        if (chunk && chunk !== "<none/>") {
+          yield { type: "line", content: chunk };
         }
       }
     }
@@ -596,11 +591,10 @@ async function* streamSingleEntity(
   // Handle remaining buffer
   const remaining = buffer.trim();
   if (remaining && remaining !== "<none/>") {
-    if (streamMode === "full") {
-      // Already emitted as deltas
-    } else {
+    if (streamMode === "lines") {
       yield { type: "line", content: remaining };
     }
+    // For full mode, already emitted as deltas
   }
 }
 
@@ -611,11 +605,11 @@ async function* streamSingleEntity(
 async function* streamMultiCharacter(
   textStream: AsyncIterable<string>,
   entities: EvaluatedEntity[],
-  streamMode: "lines" | "full" | "lines_full"
+  streamMode: "lines" | "full",
+  delimiter: string
 ): AsyncGenerator<StreamEvent, void, unknown> {
   let buffer = "";
   let currentChar: { name: string; entityId: number; avatarUrl?: string; content: string } | null = null;
-  let currentLine = "";
 
   // Build entity lookup map (case-insensitive)
   const entityMap = new Map<string, EvaluatedEntity>();
@@ -648,15 +642,12 @@ async function* streamMultiCharacter(
               avatarUrl: entity.avatarUrl ?? undefined,
               content: "",
             };
-            currentLine = "";
             yield { type: "char_start", name: entity.name, entityId: entity.id, avatarUrl: entity.avatarUrl ?? undefined };
           }
         } else {
           // No tag found yet, might be partial - keep minimal buffer
-          // Only keep enough to match longest possible tag
           const maxTagLen = Math.max(...names.map(n => n.length)) + 2; // <Name>
           if (buffer.length > maxTagLen && !buffer.includes("<")) {
-            // No < at all, discard
             buffer = "";
           }
           break;
@@ -672,11 +663,11 @@ async function* streamMultiCharacter(
           // Emit remaining content
           if (content.trim()) {
             currentChar.content += content;
-            if (streamMode === "lines" || streamMode === "lines_full") {
-              // Emit any remaining lines
-              const lines = content.split("\n");
-              for (const line of lines) {
-                const trimmed = line.trim();
+            if (streamMode === "lines") {
+              // Emit any remaining chunks
+              const chunks = content.split(delimiter);
+              for (const chunk of chunks) {
+                const trimmed = chunk.trim();
                 if (trimmed) {
                   yield { type: "char_line", name: currentChar.name, content: trimmed };
                 }
@@ -690,32 +681,26 @@ async function* streamMultiCharacter(
           currentChar = null;
         } else {
           // No closing tag yet - emit content progressively
-          // Check for lines
-          let newlineIndex: number;
-          while ((newlineIndex = buffer.indexOf("\n")) !== -1) {
-            const line = buffer.slice(0, newlineIndex);
-            buffer = buffer.slice(newlineIndex + 1);
-            currentChar.content += line + "\n";
-            currentLine = "";
+          if (streamMode === "lines") {
+            // Check for delimiter
+            let delimIndex: number;
+            while ((delimIndex = buffer.indexOf(delimiter)) !== -1) {
+              const chunk = buffer.slice(0, delimIndex);
+              buffer = buffer.slice(delimIndex + delimiter.length);
+              currentChar.content += chunk + delimiter;
 
-            const trimmed = line.trim();
-            if (trimmed) {
-              yield { type: "char_line", name: currentChar.name, content: trimmed };
+              const trimmed = chunk.trim();
+              if (trimmed) {
+                yield { type: "char_line", name: currentChar.name, content: trimmed };
+              }
             }
-          }
-
-          // For full or lines_full mode, emit deltas
-          if ((streamMode === "full" || streamMode === "lines_full") && buffer.length > 0) {
+          } else {
+            // Full mode: emit deltas
             // Check if this might be a partial closing tag
             const mightBeClosing = buffer.includes("<");
             if (!mightBeClosing) {
               currentChar.content += buffer;
-              if (streamMode === "full") {
-                yield { type: "char_delta", name: currentChar.name, delta: buffer, content: currentChar.content };
-              } else if (buffer.trim() !== currentLine) {
-                yield { type: "char_delta", name: currentChar.name, delta: buffer.slice(currentLine.length), content: buffer.trim() };
-                currentLine = buffer.trim();
-              }
+              yield { type: "char_delta", name: currentChar.name, delta: buffer, content: currentChar.content };
               buffer = "";
             }
           }
