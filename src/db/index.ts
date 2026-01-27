@@ -106,4 +106,41 @@ function initSchema(db: Database) {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_messages_channel ON messages(channel_id, created_at DESC)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_effects_entity ON effects(entity_id)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_effects_expires ON effects(expires_at)`);
+
+  // Migration: Update discord_entities UNIQUE constraint to allow multiple entities per channel
+  migrateDiscordEntitiesConstraint(db);
+}
+
+/**
+ * Migrate discord_entities table to allow multiple entities bound to the same channel.
+ * Old constraint: UNIQUE (discord_id, discord_type, scope_guild_id, scope_channel_id)
+ * New constraint: UNIQUE (discord_id, discord_type, scope_guild_id, scope_channel_id, entity_id)
+ */
+function migrateDiscordEntitiesConstraint(db: Database) {
+  // Check current schema
+  const tableInfo = db.prepare(`
+    SELECT sql FROM sqlite_master WHERE type='table' AND name='discord_entities'
+  `).get() as { sql: string } | null;
+
+  if (!tableInfo) return;
+
+  // Already migrated if entity_id is in the UNIQUE constraint
+  if (tableInfo.sql.includes("scope_channel_id, entity_id)")) return;
+
+  // Perform migration
+  db.exec(`
+    CREATE TABLE discord_entities_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      discord_id TEXT NOT NULL,
+      discord_type TEXT NOT NULL CHECK (discord_type IN ('user', 'channel', 'guild')),
+      scope_guild_id TEXT,
+      scope_channel_id TEXT,
+      entity_id INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+      UNIQUE (discord_id, discord_type, scope_guild_id, scope_channel_id, entity_id)
+    );
+    INSERT INTO discord_entities_new SELECT * FROM discord_entities;
+    DROP TABLE discord_entities;
+    ALTER TABLE discord_entities_new RENAME TO discord_entities;
+    CREATE INDEX idx_discord_entities_lookup ON discord_entities(discord_id, discord_type);
+  `);
 }

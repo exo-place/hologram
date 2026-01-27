@@ -26,6 +26,7 @@ export interface MessageContext {
   username: string;
   content: string;
   isMentioned: boolean;
+  respondingEntities?: EntityWithFacts[];
 }
 
 export interface ResponseResult {
@@ -91,6 +92,18 @@ function buildSystemPrompt(entities: EntityWithFacts[]): string {
   }
 
   const context = formatEntitiesForContext(entities);
+
+  // Identify character entities for multi-char guidance
+  const characters = entities.filter(e =>
+    e.facts.some(f => f.content.includes("is a character"))
+  );
+
+  let multiCharGuidance = "";
+  if (characters.length > 1) {
+    const names = characters.map(c => c.name).join(", ");
+    multiCharGuidance = `\n\nMultiple characters are present: ${names}. Write a combined response incorporating all characters naturally. Use dialogue format when characters interact.`;
+  }
+
   return `${context}
 
 You have access to tools to modify facts about entities. Use them when:
@@ -98,7 +111,7 @@ You have access to tools to modify facts about entities. Use them when:
 - A fact changes (update_fact)
 - A fact is no longer true (remove_fact)
 
-Respond naturally in character based on the facts provided.`;
+Respond naturally in character based on the facts provided.${multiCharGuidance}`;
 }
 
 function buildUserMessage(messages: Array<{ author_name: string; content: string }>): string {
@@ -110,43 +123,60 @@ function buildUserMessage(messages: Array<{ author_name: string; content: string
 // =============================================================================
 
 export async function handleMessage(ctx: MessageContext): Promise<ResponseResult | null> {
-  const { channelId, guildId, userId, isMentioned } = ctx;
-
-  // Resolve channel and user entities
-  const channelEntityId = resolveDiscordEntity(channelId, "channel", guildId, channelId);
-  const userEntityId = resolveDiscordEntity(userId, "user", guildId, channelId);
+  const { channelId, guildId, userId, isMentioned, respondingEntities } = ctx;
 
   // Gather entities for context
   const entities: EntityWithFacts[] = [];
 
-  // Add channel entity if bound
-  if (channelEntityId) {
-    const channelEntity = getEntityWithFacts(channelEntityId);
-    if (channelEntity) {
-      entities.push(channelEntity);
+  // Use pre-evaluated responding entities if provided (multi-character support)
+  if (respondingEntities && respondingEntities.length > 0) {
+    entities.push(...respondingEntities);
 
-      // Check if channel is in a location, add that too
-      const locationFact = channelEntity.facts.find(f => f.content.match(/^is in \[entity:(\d+)\]/));
+    // Add location entities for each responding character
+    for (const entity of respondingEntities) {
+      const locationFact = entity.facts.find(f => f.content.match(/^is in \[entity:(\d+)\]/));
       if (locationFact) {
         const match = locationFact.content.match(/^is in \[entity:(\d+)\]/);
         if (match) {
           const locationEntity = getEntityWithFacts(parseInt(match[1]));
-          if (locationEntity) entities.push(locationEntity);
+          if (locationEntity && !entities.some(e => e.id === locationEntity.id)) {
+            entities.push(locationEntity);
+          }
+        }
+      }
+    }
+  } else {
+    // Fallback: resolve channel entity (backward compatibility)
+    const channelEntityId = resolveDiscordEntity(channelId, "channel", guildId, channelId);
+    if (channelEntityId) {
+      const channelEntity = getEntityWithFacts(channelEntityId);
+      if (channelEntity) {
+        entities.push(channelEntity);
+
+        // Check if channel is in a location, add that too
+        const locationFact = channelEntity.facts.find(f => f.content.match(/^is in \[entity:(\d+)\]/));
+        if (locationFact) {
+          const match = locationFact.content.match(/^is in \[entity:(\d+)\]/);
+          if (match) {
+            const locationEntity = getEntityWithFacts(parseInt(match[1]));
+            if (locationEntity) entities.push(locationEntity);
+          }
         }
       }
     }
   }
 
   // Add user entity if bound
+  const userEntityId = resolveDiscordEntity(userId, "user", guildId, channelId);
   if (userEntityId) {
     const userEntity = getEntityWithFacts(userEntityId);
     if (userEntity) entities.push(userEntity);
   }
 
   // Decide whether to respond
-  const shouldRespond = isMentioned || channelEntityId !== null;
+  const shouldRespond = isMentioned || entities.length > 0;
   if (!shouldRespond) {
-    debug("Not responding - not mentioned and no channel binding");
+    debug("Not responding - not mentioned and no entities");
     return null;
   }
 

@@ -32,6 +32,8 @@ function makeContext(overrides: Partial<ExprContext> = {}): ExprContext {
     is_forward: false,
     content: "",
     author: "",
+    name: "",
+    chars: [],
     ...overrides,
   };
 }

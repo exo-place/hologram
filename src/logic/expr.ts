@@ -46,6 +46,10 @@ export interface ExprContext {
   author: string;
   /** Interaction type if applicable (drink, eat, throw, etc.) */
   interaction_type?: string;
+  /** This entity's name */
+  name: string;
+  /** Names of all characters bound to channel */
+  chars: string[];
   /** Additional context-specific variables */
   [key: string]: unknown;
 }
@@ -707,6 +711,10 @@ export interface BaseContextOptions {
   content?: string;
   author?: string;
   interaction_type?: string;
+  /** This entity's name */
+  name?: string;
+  /** Names of all characters bound to channel */
+  chars?: string[];
 }
 
 /**
@@ -739,6 +747,8 @@ export function createBaseContext(options: BaseContextOptions): ExprContext {
     content: options.content ?? "",
     author: options.author ?? "",
     interaction_type: options.interaction_type,
+    name: options.name ?? "",
+    chars: options.chars ?? [],
   };
 }
 

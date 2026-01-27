@@ -2,8 +2,8 @@ import { createBot, Intents } from "@discordeno/bot";
 import { info, debug, error } from "../logger";
 import { registerCommands, handleInteraction } from "./commands";
 import { handleMessage } from "../ai/handler";
-import { resolveDiscordEntity, isNewUser, markUserWelcomed, addMessage } from "../db/discord";
-import { getEntity, getEntityWithFacts, getSystemEntity, getFactsForEntity } from "../db/entities";
+import { resolveDiscordEntity, resolveDiscordEntities, isNewUser, markUserWelcomed, addMessage } from "../db/discord";
+import { getEntity, getEntityWithFacts, getSystemEntity, getFactsForEntity, type EntityWithFacts } from "../db/entities";
 import { evaluateFacts, createBaseContext } from "../logic/expr";
 import "./commands/commands"; // Register all commands
 import { ensureHelpEntities } from "./commands/commands";
@@ -58,8 +58,12 @@ let botUserId: bigint | null = null;
 // Track last response time per channel (for dt_ms in expressions)
 const lastResponseTime = new Map<string, number>();
 
-// Pending retry timers per channel
+// Pending retry timers per channel:entity
 const retryTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function retryKey(channelId: string, entityId: number): string {
+  return `${channelId}:${entityId}`;
+}
 
 // Message deduplication
 const processedMessages = new Set<string>();
@@ -141,19 +145,16 @@ bot.events.messageCreate = async (message) => {
   // Store message in history (before response decision so context builds up)
   addMessage(channelId, authorId, authorName, message.content);
 
-  // Get channel entity
-  const channelEntityId = resolveDiscordEntity(channelId, "channel", guildId, channelId);
+  // Get ALL channel entities (supports multiple characters)
+  const channelEntityIds = resolveDiscordEntities(channelId, "channel", guildId, channelId);
 
   // No binding = no response
-  if (!channelEntityId) {
+  if (channelEntityIds.length === 0) {
     if (isMentioned) {
       debug("Mentioned but no channel binding - ignoring");
     }
     return;
   }
-
-  const channelEntity = getEntityWithFacts(channelEntityId);
-  if (!channelEntity) return;
 
   // Welcome new users with a DM
   const userId = message.author.id.toString();
@@ -164,76 +165,105 @@ bot.events.messageCreate = async (message) => {
     });
   }
 
-  // Cancel any pending retry for this channel
-  const existingTimer = retryTimers.get(channelId);
-  if (existingTimer) {
-    clearTimeout(existingTimer);
-    retryTimers.delete(channelId);
+  // Load all channel entities
+  const channelEntities: EntityWithFacts[] = [];
+  for (const entityId of channelEntityIds) {
+    const entity = getEntityWithFacts(entityId);
+    if (entity) channelEntities.push(entity);
   }
 
-  // Build expression context
-  const facts = channelEntity.facts.map(f => f.content);
+  if (channelEntities.length === 0) return;
+
+  // Evaluate each entity's facts independently
+  const respondingEntities: EntityWithFacts[] = [];
+  const retryEntities: { entity: EntityWithFacts; retryMs: number }[] = [];
   const lastResponse = lastResponseTime.get(channelId) ?? 0;
-  const ctx = createBaseContext({
-    facts,
-    has_fact: (pattern: string) => {
-      const regex = new RegExp(pattern, "i");
-      return facts.some(f => regex.test(f));
-    },
-    dt_ms: lastResponse > 0 ? messageTime - lastResponse : 0,
-    elapsed_ms: 0,
-    mentioned: isMentioned ?? false,
-    replied: isReplied,
-    is_forward: isForward,
-    content: message.content,
-    author: authorName,
-  });
 
-  // Evaluate facts to determine if we should respond
-  const result = evaluateFacts(facts, ctx);
+  for (const entity of channelEntities) {
+    // Cancel any pending retry for this entity
+    const key = retryKey(channelId, entity.id);
+    const existingTimer = retryTimers.get(key);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+      retryTimers.delete(key);
+    }
 
-  debug("Fact evaluation", {
-    shouldRespond: result.shouldRespond,
-    retryMs: result.retryMs,
-    factsCount: result.facts.length,
-  });
+    // Build expression context for this entity
+    const facts = entity.facts.map(f => f.content);
+    const ctx = createBaseContext({
+      facts,
+      has_fact: (pattern: string) => {
+        const regex = new RegExp(pattern, "i");
+        return facts.some(f => regex.test(f));
+      },
+      dt_ms: lastResponse > 0 ? messageTime - lastResponse : 0,
+      elapsed_ms: 0,
+      mentioned: isMentioned ?? false,
+      replied: isReplied,
+      is_forward: isForward,
+      content: message.content,
+      author: authorName,
+      name: entity.name,
+      chars: channelEntities.map(e => e.name),
+    });
 
-  // Handle $retry - schedule re-evaluation
-  if (result.retryMs !== null && result.retryMs > 0) {
-    debug("Scheduling retry", { retryMs: result.retryMs });
+    const result = evaluateFacts(facts, ctx);
+
+    debug("Fact evaluation", {
+      entity: entity.name,
+      shouldRespond: result.shouldRespond,
+      retryMs: result.retryMs,
+      factsCount: result.facts.length,
+    });
+
+    if (result.retryMs !== null && result.retryMs > 0) {
+      // Entity wants to delay
+      retryEntities.push({ entity, retryMs: result.retryMs });
+    } else {
+      // Default response logic (when no $respond directive):
+      // 1. If only one character: respond to mentions or replies
+      // 2. Always respond if entity's name is mentioned in content
+      const namePattern = new RegExp(`\\b${entity.name}\\b`, "i");
+      const defaultRespond =
+        (channelEntities.length === 1 && (isMentioned || isReplied)) ||
+        namePattern.test(message.content);
+      const shouldRespond = result.shouldRespond ?? defaultRespond;
+      if (shouldRespond) {
+        respondingEntities.push(entity);
+      }
+    }
+  }
+
+  // Respond immediately with entities that are ready
+  if (respondingEntities.length > 0) {
+    await sendResponse(channelId, guildId, authorName, message.content, isMentioned ?? false, respondingEntities);
+  }
+
+  // Schedule per-entity retries (don't block other characters)
+  for (const { entity, retryMs } of retryEntities) {
+    const key = retryKey(channelId, entity.id);
+    debug("Scheduling entity retry", { entity: entity.name, retryMs });
     const timer = setTimeout(() => {
-      retryTimers.delete(channelId);
-      processRetry(channelId, guildId, authorName, message.content, messageTime);
-    }, result.retryMs);
-    retryTimers.set(channelId, timer);
-    return;
+      retryTimers.delete(key);
+      processEntityRetry(channelId, guildId, entity.id, authorName, message.content, messageTime, channelEntities);
+    }, retryMs);
+    retryTimers.set(key, timer);
   }
-
-  // Default: respond if mentioned, unless explicitly suppressed
-  const shouldRespond = result.shouldRespond ?? isMentioned;
-
-  if (!shouldRespond) {
-    debug("Not responding");
-    return;
-  }
-
-  await sendResponse(channelId, guildId, authorName, message.content, isMentioned ?? false);
 };
 
-async function processRetry(
+async function processEntityRetry(
   channelId: string,
   guildId: string | undefined,
+  entityId: number,
   username: string,
   content: string,
-  messageTime: number
+  messageTime: number,
+  allChannelEntities: EntityWithFacts[]
 ) {
-  const channelEntityId = resolveDiscordEntity(channelId, "channel", guildId, channelId);
-  if (!channelEntityId) return;
+  const entity = getEntityWithFacts(entityId);
+  if (!entity) return;
 
-  const channelEntity = getEntityWithFacts(channelEntityId);
-  if (!channelEntity) return;
-
-  const facts = channelEntity.facts.map(f => f.content);
+  const facts = entity.facts.map(f => f.content);
   const lastResponse = lastResponseTime.get(channelId) ?? 0;
   const now = Date.now();
 
@@ -246,29 +276,40 @@ async function processRetry(
     dt_ms: lastResponse > 0 ? now - lastResponse : 0,
     elapsed_ms: now - messageTime,
     mentioned: false, // Retry is never from a mention
+    replied: false,
+    is_forward: false,
     content,
     author: username,
+    name: entity.name,
+    chars: allChannelEntities.map(e => e.name),
   });
 
   const result = evaluateFacts(facts, ctx);
 
   // Handle chained $retry
   if (result.retryMs !== null && result.retryMs > 0) {
-    debug("Scheduling chained retry", { retryMs: result.retryMs });
+    const key = retryKey(channelId, entityId);
+    debug("Scheduling chained entity retry", { entity: entity.name, retryMs: result.retryMs });
     const timer = setTimeout(() => {
-      retryTimers.delete(channelId);
-      processRetry(channelId, guildId, username, content, messageTime);
+      retryTimers.delete(key);
+      processEntityRetry(channelId, guildId, entityId, username, content, messageTime, allChannelEntities);
     }, result.retryMs);
-    retryTimers.set(channelId, timer);
+    retryTimers.set(key, timer);
     return;
   }
 
-  if (result.shouldRespond !== true) {
-    debug("Not responding after retry");
+  // Default for retry: respond if entity's name is in content
+  const namePattern = new RegExp(`\\b${entity.name}\\b`, "i");
+  const defaultRespond = namePattern.test(content);
+  const shouldRespond = result.shouldRespond ?? defaultRespond;
+
+  if (!shouldRespond) {
+    debug("Entity not responding after retry", { entity: entity.name });
     return;
   }
 
-  await sendResponse(channelId, guildId, username, content, false);
+  // Respond with just this entity
+  await sendResponse(channelId, guildId, username, content, false, [entity]);
 }
 
 async function sendResponse(
@@ -276,7 +317,8 @@ async function sendResponse(
   guildId: string | undefined,
   username: string,
   content: string,
-  isMentioned: boolean
+  isMentioned: boolean,
+  respondingEntities?: EntityWithFacts[]
 ) {
   // Start typing indicator
   let typingInterval: ReturnType<typeof setInterval> | null = null;
@@ -302,6 +344,7 @@ async function sendResponse(
       username,
       content,
       isMentioned,
+      respondingEntities,
     });
 
     // Mark response time

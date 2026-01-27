@@ -16,11 +16,37 @@ export interface DiscordEntityMapping {
 }
 
 /**
- * Map a Discord ID to an entity with optional scope.
- * Scope resolution order (most specific wins):
- * 1. channel-scoped (user_id + channel_id)
- * 2. guild-scoped (user_id + guild_id)
- * 3. global (user_id only)
+ * Add a Discord ID to entity binding (additive - allows multiple entities per channel).
+ * Returns null if this exact binding already exists.
+ */
+export function addDiscordEntity(
+  discordId: string,
+  discordType: DiscordType,
+  entityId: number,
+  scopeGuildId?: string,
+  scopeChannelId?: string
+): DiscordEntityMapping | null {
+  const db = getDb();
+  try {
+    return db.prepare(`
+      INSERT INTO discord_entities (discord_id, discord_type, scope_guild_id, scope_channel_id, entity_id)
+      VALUES (?, ?, ?, ?, ?)
+      RETURNING *
+    `).get(
+      discordId,
+      discordType,
+      scopeGuildId ?? null,
+      scopeChannelId ?? null,
+      entityId
+    ) as DiscordEntityMapping;
+  } catch {
+    // UNIQUE constraint violation - binding already exists
+    return null;
+  }
+}
+
+/**
+ * @deprecated Use addDiscordEntity for additive bindings
  */
 export function setDiscordEntity(
   discordId: string,
@@ -28,25 +54,55 @@ export function setDiscordEntity(
   entityId: number,
   scopeGuildId?: string,
   scopeChannelId?: string
-): DiscordEntityMapping {
-  const db = getDb();
-  return db.prepare(`
-    INSERT INTO discord_entities (discord_id, discord_type, scope_guild_id, scope_channel_id, entity_id)
-    VALUES (?, ?, ?, ?, ?)
-    ON CONFLICT (discord_id, discord_type, scope_guild_id, scope_channel_id)
-    DO UPDATE SET entity_id = excluded.entity_id
-    RETURNING *
-  `).get(
-    discordId,
-    discordType,
-    scopeGuildId ?? null,
-    scopeChannelId ?? null,
-    entityId
-  ) as DiscordEntityMapping;
+): DiscordEntityMapping | null {
+  return addDiscordEntity(discordId, discordType, entityId, scopeGuildId, scopeChannelId);
 }
 
 /**
- * Resolve a Discord ID to an entity, respecting scope precedence.
+ * Resolve a Discord ID to ALL matching entities, respecting scope precedence.
+ * Returns all entities at the most specific scope level that has bindings.
+ */
+export function resolveDiscordEntities(
+  discordId: string,
+  discordType: DiscordType,
+  guildId?: string,
+  channelId?: string
+): number[] {
+  const db = getDb();
+
+  // Try channel-scoped first (returns ALL channel-scoped entities)
+  if (channelId) {
+    const channelScoped = db.prepare(`
+      SELECT entity_id FROM discord_entities
+      WHERE discord_id = ? AND discord_type = ? AND scope_channel_id = ?
+    `).all(discordId, discordType, channelId) as { entity_id: number }[];
+    if (channelScoped.length > 0) {
+      return channelScoped.map(r => r.entity_id);
+    }
+  }
+
+  // Try guild-scoped (returns ALL guild-scoped entities)
+  if (guildId) {
+    const guildScoped = db.prepare(`
+      SELECT entity_id FROM discord_entities
+      WHERE discord_id = ? AND discord_type = ? AND scope_guild_id = ? AND scope_channel_id IS NULL
+    `).all(discordId, discordType, guildId) as { entity_id: number }[];
+    if (guildScoped.length > 0) {
+      return guildScoped.map(r => r.entity_id);
+    }
+  }
+
+  // Try global (returns ALL global entities)
+  const globalScoped = db.prepare(`
+    SELECT entity_id FROM discord_entities
+    WHERE discord_id = ? AND discord_type = ? AND scope_guild_id IS NULL AND scope_channel_id IS NULL
+  `).all(discordId, discordType) as { entity_id: number }[];
+  return globalScoped.map(r => r.entity_id);
+}
+
+/**
+ * Resolve a Discord ID to a single entity (first match), respecting scope precedence.
+ * Use resolveDiscordEntities for multi-entity support.
  */
 export function resolveDiscordEntity(
   discordId: string,
@@ -54,36 +110,45 @@ export function resolveDiscordEntity(
   guildId?: string,
   channelId?: string
 ): number | null {
-  const db = getDb();
-
-  // Try channel-scoped first
-  if (channelId) {
-    const channelScoped = db.prepare(`
-      SELECT entity_id FROM discord_entities
-      WHERE discord_id = ? AND discord_type = ? AND scope_channel_id = ?
-    `).get(discordId, discordType, channelId) as { entity_id: number } | null;
-    if (channelScoped) return channelScoped.entity_id;
-  }
-
-  // Try guild-scoped
-  if (guildId) {
-    const guildScoped = db.prepare(`
-      SELECT entity_id FROM discord_entities
-      WHERE discord_id = ? AND discord_type = ? AND scope_guild_id = ? AND scope_channel_id IS NULL
-    `).get(discordId, discordType, guildId) as { entity_id: number } | null;
-    if (guildScoped) return guildScoped.entity_id;
-  }
-
-  // Try global
-  const global = db.prepare(`
-    SELECT entity_id FROM discord_entities
-    WHERE discord_id = ? AND discord_type = ? AND scope_guild_id IS NULL AND scope_channel_id IS NULL
-  `).get(discordId, discordType) as { entity_id: number } | null;
-  return global?.entity_id ?? null;
+  const entities = resolveDiscordEntities(discordId, discordType, guildId, channelId);
+  return entities[0] ?? null;
 }
 
 /**
- * Remove a Discord entity mapping.
+ * Remove a specific entity binding from a Discord ID.
+ */
+export function removeDiscordEntityBinding(
+  discordId: string,
+  discordType: DiscordType,
+  entityId: number,
+  scopeGuildId?: string,
+  scopeChannelId?: string
+): boolean {
+  const db = getDb();
+
+  let query = `DELETE FROM discord_entities WHERE discord_id = ? AND discord_type = ? AND entity_id = ?`;
+  const params: (string | number | null)[] = [discordId, discordType, entityId];
+
+  if (scopeChannelId) {
+    query += ` AND scope_channel_id = ?`;
+    params.push(scopeChannelId);
+  } else {
+    query += ` AND scope_channel_id IS NULL`;
+  }
+
+  if (scopeGuildId) {
+    query += ` AND scope_guild_id = ?`;
+    params.push(scopeGuildId);
+  } else {
+    query += ` AND scope_guild_id IS NULL`;
+  }
+
+  const result = db.prepare(query).run(...params);
+  return result.changes > 0;
+}
+
+/**
+ * Remove ALL entity bindings from a Discord ID at a specific scope.
  */
 export function removeDiscordEntity(
   discordId: string,
