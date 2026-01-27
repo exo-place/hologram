@@ -245,7 +245,7 @@ export async function executeWebhook(
           content: chunk,
           username: safeUsername,
           avatarUrl: avatarUrl ?? DEFAULT_AVATAR,
-          ...(threadId ? { threadId } : { wait: true }),
+          ...(threadId ? { threadId: BigInt(threadId) } : { wait: true }),
         }
       );
       if (result?.id) {
