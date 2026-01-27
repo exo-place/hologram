@@ -33,6 +33,8 @@ export const bot = createBot({
       guildId: true,
       author: true,
       mentionedUserIds: true as const,
+      messageReference: true as const,
+      messageSnapshots: true as const,
     },
     interaction: {
       id: true,
@@ -62,6 +64,10 @@ const retryTimers = new Map<string, ReturnType<typeof setTimeout>>();
 // Message deduplication
 const processedMessages = new Set<string>();
 const MAX_PROCESSED = 1000;
+
+// Track bot-sent message IDs (for reply detection)
+const botMessageIds = new Set<string>();
+const MAX_BOT_MESSAGES = 1000;
 
 function markProcessed(messageId: bigint): boolean {
   const id = messageId.toString();
@@ -102,6 +108,14 @@ bot.events.messageCreate = async (message) => {
   const guildId = message.guildId?.toString();
   const messageTime = Date.now();
 
+  // Detect reply to bot and forwarded messages
+  const messageRef = message.messageReference;
+  const isReplied = messageRef?.messageId
+    ? botMessageIds.has(messageRef.messageId.toString())
+    : false;
+  // Forwarded messages have messageSnapshots
+  const isForward = (message.messageSnapshots?.length ?? 0) > 0;
+
   debug("Mention check", {
     botUserId: botUserId?.toString(),
     mentionedUserIds: message.mentionedUserIds?.map(id => id.toString()),
@@ -120,6 +134,8 @@ bot.events.messageCreate = async (message) => {
     author: authorName,
     content: message.content.slice(0, 50),
     mentioned: isMentioned,
+    replied: isReplied,
+    is_forward: isForward,
   });
 
   // Store message in history (before response decision so context builds up)
@@ -167,6 +183,8 @@ bot.events.messageCreate = async (message) => {
     dt_ms: lastResponse > 0 ? messageTime - lastResponse : 0,
     elapsed_ms: 0,
     mentioned: isMentioned ?? false,
+    replied: isReplied,
+    is_forward: isForward,
     content: message.content,
     author: authorName,
   });
@@ -291,9 +309,18 @@ async function sendResponse(
 
     if (result) {
       try {
-        await bot.helpers.sendMessage(BigInt(channelId), {
+        const sent = await bot.helpers.sendMessage(BigInt(channelId), {
           content: result.response,
         });
+        // Track bot message for reply detection
+        botMessageIds.add(sent.id.toString());
+        if (botMessageIds.size > MAX_BOT_MESSAGES) {
+          const iter = botMessageIds.values();
+          for (let i = 0; i < MAX_BOT_MESSAGES / 2; i++) {
+            const v = iter.next().value;
+            if (v) botMessageIds.delete(v);
+          }
+        }
       } catch (err) {
         error("Failed to send message", err);
       }

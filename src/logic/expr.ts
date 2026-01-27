@@ -36,6 +36,10 @@ export interface ExprContext {
   elapsed_ms: number;
   /** Whether the bot was @mentioned */
   mentioned: boolean;
+  /** Whether the message is a reply to the bot */
+  replied: boolean;
+  /** Whether the message is a forwarded message */
+  is_forward: boolean;
   /** Message content */
   content: string;
   /** Message author name */
@@ -340,7 +344,8 @@ class Parser {
 // Allowed top-level identifiers (whitelist)
 const ALLOWED_GLOBALS = new Set([
   "self", "random", "has_fact", "roll", "time",
-  "dt_ms", "elapsed_ms", "mentioned", "content", "author", "interaction_type"
+  "dt_ms", "elapsed_ms", "mentioned", "replied", "is_forward",
+  "content", "author", "interaction_type"
 ]);
 
 // Blocked property names (prevent prototype chain escapes)
@@ -697,6 +702,8 @@ export interface BaseContextOptions {
   dt_ms?: number;
   elapsed_ms?: number;
   mentioned?: boolean;
+  replied?: boolean;
+  is_forward?: boolean;
   content?: string;
   author?: string;
   interaction_type?: string;
@@ -727,6 +734,8 @@ export function createBaseContext(options: BaseContextOptions): ExprContext {
     dt_ms: options.dt_ms ?? 0,
     elapsed_ms: options.elapsed_ms ?? 0,
     mentioned: options.mentioned ?? false,
+    replied: options.replied ?? false,
+    is_forward: options.is_forward ?? false,
     content: options.content ?? "",
     author: options.author ?? "",
     interaction_type: options.interaction_type,

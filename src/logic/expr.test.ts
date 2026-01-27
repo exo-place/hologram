@@ -28,6 +28,8 @@ function makeContext(overrides: Partial<ExprContext> = {}): ExprContext {
     dt_ms: 0,
     elapsed_ms: 0,
     mentioned: false,
+    replied: false,
+    is_forward: false,
     content: "",
     author: "",
     ...overrides,
