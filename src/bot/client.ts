@@ -92,10 +92,19 @@ bot.events.messageCreate = async (message) => {
   if (!message.content) return;
   if (!markProcessed(message.id)) return;
 
-  const isMentioned = botUserId !== null && message.mentionedUserIds?.includes(botUserId);
+  // mentionedUserIds is unreliable in Discordeno, parse from content as fallback
+  const isMentioned = botUserId !== null && (
+    message.mentionedUserIds?.includes(botUserId) ||
+    message.content.includes(`<@${botUserId}>`)
+  );
   const channelId = message.channelId.toString();
   const guildId = message.guildId?.toString();
   const messageTime = Date.now();
+
+  debug("Mention check", {
+    botUserId: botUserId?.toString(),
+    mentionedUserIds: message.mentionedUserIds?.map(id => id.toString()),
+  });
 
   debug("Message", {
     channel: channelId,
