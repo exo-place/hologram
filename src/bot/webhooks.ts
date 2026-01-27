@@ -91,9 +91,49 @@ export async function getOrCreateWebhook(channelId: string): Promise<CachedWebho
   }
 }
 
+// Discord's max message length
+const MAX_MESSAGE_LENGTH = 2000;
+
+/**
+ * Split content into chunks that fit Discord's message limit.
+ * Tries to split at newlines or spaces when possible.
+ */
+function splitContent(content: string): string[] {
+  if (content.length <= MAX_MESSAGE_LENGTH) {
+    return [content];
+  }
+
+  const chunks: string[] = [];
+  let remaining = content;
+
+  while (remaining.length > 0) {
+    if (remaining.length <= MAX_MESSAGE_LENGTH) {
+      chunks.push(remaining);
+      break;
+    }
+
+    // Find a good split point (newline or space)
+    let splitAt = MAX_MESSAGE_LENGTH;
+    const lastNewline = remaining.lastIndexOf("\n", MAX_MESSAGE_LENGTH);
+    const lastSpace = remaining.lastIndexOf(" ", MAX_MESSAGE_LENGTH);
+
+    if (lastNewline > MAX_MESSAGE_LENGTH * 0.5) {
+      splitAt = lastNewline + 1; // Include the newline in current chunk
+    } else if (lastSpace > MAX_MESSAGE_LENGTH * 0.5) {
+      splitAt = lastSpace + 1; // Include the space in current chunk
+    }
+
+    chunks.push(remaining.slice(0, splitAt).trimEnd());
+    remaining = remaining.slice(splitAt).trimStart();
+  }
+
+  return chunks;
+}
+
 /**
  * Execute webhook with custom username and avatar.
  * Returns true on success, false on failure.
+ * Automatically splits long messages into multiple webhook calls.
  */
 export async function executeWebhook(
   channelId: string,
@@ -109,23 +149,34 @@ export async function executeWebhook(
   const webhook = await getOrCreateWebhook(channelId);
   if (!webhook) return false;
 
+  // Split content if too long
+  const chunks = splitContent(content);
+
+  debug("Executing webhook", {
+    webhookId: webhook.webhookId,
+    username,
+    contentLength: content.length,
+    chunks: chunks.length,
+    hasAvatar: !!avatarUrl,
+    avatarUrl: avatarUrl ?? DEFAULT_AVATAR,
+    contentPreview: content.slice(0, 100) + (content.length > 100 ? "..." : ""),
+  });
+
   try {
-    debug("Executing webhook", {
-      webhookId: webhook.webhookId,
-      username,
-      contentLength: content.length,
-      hasAvatar: !!avatarUrl,
-    });
-    await bot!.helpers.executeWebhook(
-      BigInt(webhook.webhookId),
-      webhook.webhookToken,
-      {
-        content,
-        username,
-        avatarUrl: avatarUrl ?? DEFAULT_AVATAR,
-        wait: true, // Wait for confirmation to get better error messages
-      }
-    );
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i];
+      await bot!.helpers.executeWebhook(
+        BigInt(webhook.webhookId),
+        webhook.webhookToken,
+        {
+          content: chunk,
+          username,
+          avatarUrl: avatarUrl ?? DEFAULT_AVATAR,
+          wait: true,
+        }
+      );
+      debug("Webhook chunk sent", { chunk: i + 1, of: chunks.length });
+    }
     debug("Webhook executed successfully");
     return true;
   } catch (err: unknown) {

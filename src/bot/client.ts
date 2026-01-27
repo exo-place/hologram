@@ -238,8 +238,12 @@ bot.events.messageCreate = async (message) => {
       // Skip if name only appears as an XML tag (e.g., "<Aria>") to prevent loops
       const escapedName = entity.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const xmlTagPattern = new RegExp(`<${escapedName}>`, "i");
+      // Skip if this is the entity's own webhook message (don't trigger on own narration)
+      const isOwnWebhookMessage = message.webhookId &&
+        entity.name.toLowerCase() === authorName.toLowerCase();
       const nameMentioned = namePattern.test(message.content) &&
-        !xmlTagPattern.test(message.content);
+        !xmlTagPattern.test(message.content) &&
+        !isOwnWebhookMessage;
       const defaultRespond =
         (channelEntities.length === 1 && (isMentioned || isReplied)) ||
         nameMentioned;
