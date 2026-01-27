@@ -236,8 +236,6 @@ export async function executeWebhook(
     const messageIds: string[] = [];
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i];
-      // Note: Discordeno has a bug where wait + threadId query params aren't joined with &
-      // So we skip wait for thread posts (lose message ID tracking but it works)
       const result = await bot!.helpers.executeWebhook(
         BigInt(webhook.webhookId),
         webhook.webhookToken,
@@ -245,7 +243,8 @@ export async function executeWebhook(
           content: chunk,
           username: safeUsername,
           avatarUrl: avatarUrl ?? DEFAULT_AVATAR,
-          ...(threadId ? { threadId: BigInt(threadId) } : { wait: true }),
+          wait: true,
+          ...(threadId ? { threadId: BigInt(threadId) } : {}),
         }
       );
       if (result?.id) {

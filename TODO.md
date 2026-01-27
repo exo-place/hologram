@@ -2,6 +2,10 @@
 
 ## Tech Debt
 
+### Dependencies
+
+- **@discordeno/bot** pinned to `22.0.1-next.ff7c51d` - stable v21 has a bug where webhook query params (`wait` + `thread_id`) aren't joined with `&`, breaking thread posts. Fixed in next/beta but not released to stable yet.
+
 ### Architecture
 
 - [x] Extract circular dependencies - removed phantom workarounds in `build.ts` and `dice/index.ts` (no actual cycles existed)

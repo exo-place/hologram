@@ -113,7 +113,7 @@ export async function respondWithModal(
       components: components.map(c => ({
         type: MessageComponentTypes.ActionRow,
         components: [{
-          type: MessageComponentTypes.InputText,
+          type: MessageComponentTypes.TextInput,
           customId: c.customId,
           label: c.label,
           style: c.style,
