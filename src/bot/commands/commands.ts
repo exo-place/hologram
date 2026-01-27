@@ -334,6 +334,13 @@ registerModalHandler("edit", async (bot, interaction, values) => {
   }
 
   const facts = factsText.split("\n").map(f => f.trim()).filter(f => f);
+
+  // Prevent accidentally clearing all facts with empty submission
+  if (facts.length === 0) {
+    await respond(bot, interaction, "Cannot clear all facts. Use /delete to remove an entity.", true);
+    return;
+  }
+
   setFacts(entityId, facts);
 
   await respond(bot, interaction, `Updated "${entity.name}" with ${facts.length} facts`, true);
