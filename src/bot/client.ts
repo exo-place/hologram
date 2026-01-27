@@ -57,6 +57,11 @@ export const bot = createBot({
       name: true,
       token: true,
     },
+    channel: {
+      id: true,
+      type: true,
+      parentId: true,
+    },
   },
 });
 
