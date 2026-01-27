@@ -3,7 +3,7 @@ import { info, debug, error } from "../logger";
 import { registerCommands, handleInteraction } from "./commands";
 import { handleMessage } from "../ai/handler";
 import { resolveDiscordEntity, isNewUser, markUserWelcomed, addMessage } from "../db/discord";
-import { getEntityWithFacts, getSystemEntity, getFactsForEntity } from "../db/entities";
+import { getEntity, getEntityWithFacts, getSystemEntity, getFactsForEntity } from "../db/entities";
 import { evaluateFacts, createBaseContext } from "../logic/expr";
 import "./commands/commands"; // Register all commands
 import { ensureHelpEntities } from "./commands/commands";
@@ -24,6 +24,7 @@ export const bot = createBot({
     user: {
       id: true,
       username: true,
+      globalName: true,
     },
     message: {
       id: true,
@@ -106,15 +107,23 @@ bot.events.messageCreate = async (message) => {
     mentionedUserIds: message.mentionedUserIds?.map(id => id.toString()),
   });
 
+  // Resolve author name: persona > display name > username
+  const authorId = message.author.id.toString();
+  const userEntityId = resolveDiscordEntity(authorId, "user", guildId, channelId);
+  const userEntity = userEntityId ? getEntity(userEntityId) : null;
+  const authorName = userEntity?.name
+    ?? message.author.globalName
+    ?? message.author.username;
+
   debug("Message", {
     channel: channelId,
-    author: message.author.username,
+    author: authorName,
     content: message.content.slice(0, 50),
     mentioned: isMentioned,
   });
 
   // Store message in history (before response decision so context builds up)
-  addMessage(channelId, message.author.id.toString(), message.author.username, message.content);
+  addMessage(channelId, authorId, authorName, message.content);
 
   // Get channel entity
   const channelEntityId = resolveDiscordEntity(channelId, "channel", guildId, channelId);
@@ -159,7 +168,7 @@ bot.events.messageCreate = async (message) => {
     elapsed_ms: 0,
     mentioned: isMentioned ?? false,
     content: message.content,
-    author: message.author.username,
+    author: authorName,
   });
 
   // Evaluate facts to determine if we should respond
@@ -176,7 +185,7 @@ bot.events.messageCreate = async (message) => {
     debug("Scheduling retry", { retryMs: result.retryMs });
     const timer = setTimeout(() => {
       retryTimers.delete(channelId);
-      processRetry(channelId, guildId, message.author.username, message.content, messageTime);
+      processRetry(channelId, guildId, authorName, message.content, messageTime);
     }, result.retryMs);
     retryTimers.set(channelId, timer);
     return;
@@ -190,7 +199,7 @@ bot.events.messageCreate = async (message) => {
     return;
   }
 
-  await sendResponse(channelId, guildId, message.author.username, message.content, isMentioned ?? false);
+  await sendResponse(channelId, guildId, authorName, message.content, isMentioned ?? false);
 };
 
 async function processRetry(
