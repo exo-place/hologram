@@ -44,7 +44,11 @@ Facts are freeform text. You can write anything. Some patterns have special mean
 | `is a location` | Entity type |
 | `is a item` | Entity type |
 | `is in [entity:12]` | Location/containment |
-| `trigger: ...` | Response trigger (see [Triggers](/reference/triggers)) |
+| `$if condition: fact` | Conditional fact |
+| `$locked` | Prevent AI from modifying entity |
+| `$edit @everyone` | Allow anyone to edit |
+
+See [Permissions](/guide/permissions) for full permission system documentation.
 
 ## Bindings
 

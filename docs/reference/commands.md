@@ -66,17 +66,34 @@ Opens a modal with current facts. Edit them (one per line) and submit.
 
 ### `/delete` (alias: `/d`)
 
-Delete an entity you created.
+Delete an entity you own.
 
 ```
 /d <entity>
 ```
 
-Only the creator can delete an entity.
+Only the owner can delete an entity.
 
 **Examples:**
 ```
 /d Aria                # Delete Aria
+```
+
+---
+
+### `/transfer` (alias: `/t`)
+
+Transfer entity ownership to another user.
+
+```
+/t <entity> <user>
+```
+
+Only the current owner can transfer an entity.
+
+**Examples:**
+```
+/t Aria @username      # Transfer Aria to another user
 ```
 
 ---
@@ -135,8 +152,10 @@ Help is an entity! View it with `/v`:
 /v help              # Overview
 /v help:start        # Getting started guide
 /v help:commands     # Command reference
-/v help:triggers     # Trigger system
+/v help:expressions  # Response control ($if)
+/v help:patterns     # Common expression patterns
 /v help:facts        # Fact patterns
 /v help:bindings     # Binding system
+/v help:permissions  # Entity permissions
 /v help:models       # LLM configuration
 ```
