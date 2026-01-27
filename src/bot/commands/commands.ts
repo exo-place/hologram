@@ -24,6 +24,7 @@ import {
   removeDiscordEntityBinding,
   getMessages,
 } from "../../db/discord";
+import { parsePermissionDirectives } from "../../logic/expr";
 
 // =============================================================================
 // Type aliases for create command
@@ -39,6 +40,54 @@ const TYPE_ALIASES: Record<string, string> = {
   i: "item",
   item: "item",
 };
+
+// =============================================================================
+// Permission Helpers
+// =============================================================================
+
+/**
+ * Check if a user can edit an entity.
+ * Owner always can. Otherwise check $edit directive.
+ * Default (no $edit directive) = owner-only.
+ */
+function canUserEdit(entity: EntityWithFacts, userId: string): boolean {
+  // Owner always can
+  if (entity.owned_by === userId) return true;
+
+  // Parse permission directives from raw facts
+  const facts = entity.facts.map(f => f.content);
+  const permissions = parsePermissionDirectives(facts);
+
+  // Check $edit directive
+  if (permissions.editList === "everyone") return true;
+  if (permissions.editList && permissions.editList.includes(userId)) return true;
+
+  // No $edit directive = owner only
+  return false;
+}
+
+/**
+ * Check if a user can view an entity.
+ * Owner always can. Otherwise check $view directive.
+ * Default (no $view directive) = everyone can view (public by default).
+ */
+function canUserView(entity: EntityWithFacts, userId: string): boolean {
+  // Owner always can
+  if (entity.owned_by === userId) return true;
+
+  // Parse permission directives from raw facts
+  const facts = entity.facts.map(f => f.content);
+  const permissions = parsePermissionDirectives(facts);
+
+  // If no $view directive, default to public (everyone can view)
+  if (permissions.viewList === null) return true;
+
+  // Check $view directive
+  if (permissions.viewList === "everyone") return true;
+  if (permissions.viewList.includes(userId)) return true;
+
+  return false;
+}
 
 // =============================================================================
 // /create (/c) - Create entity
@@ -149,6 +198,12 @@ registerCommand({
       return;
     }
 
+    // Check view permission
+    if (!canUserView(entity, ctx.userId)) {
+      await respond(ctx.bot, ctx.interaction, "You don't have permission to view this entity", true);
+      return;
+    }
+
     const factsDisplay = entity.facts.length > 0
       ? entity.facts.map(f => `• ${f.content}`).join("\n")
       : "(no facts)";
@@ -193,7 +248,11 @@ registerCommand({
       return;
     }
 
-    // TODO: Permission check - only owner can edit
+    // Check edit permission
+    if (!canUserEdit(entity, ctx.userId)) {
+      await respond(ctx.bot, ctx.interaction, "You don't have permission to edit this entity", true);
+      return;
+    }
 
     const currentFacts = entity.facts.map(f => f.content).join("\n");
 
@@ -214,9 +273,16 @@ registerModalHandler("edit", async (bot, interaction, values) => {
   const entityId = parseInt(customId.split(":")[1]);
   const factsText = values.facts ?? "";
 
-  const entity = getEntity(entityId);
+  const entity = getEntityWithFacts(entityId);
   if (!entity) {
     await respond(bot, interaction, "Entity not found", true);
+    return;
+  }
+
+  // Check edit permission (defense in depth)
+  const userId = interaction.user?.id?.toString() ?? "";
+  if (!canUserEdit(entity, userId)) {
+    await respond(bot, interaction, "You don't have permission to edit this entity", true);
     return;
   }
 
