@@ -285,22 +285,39 @@ export async function handleMessage(ctx: MessageContext): Promise<ResponseResult
   const evaluated: EvaluatedEntity[] = respondingEntities ?? [];
   const other: EntityWithFacts[] = [];
 
-  // Add location entities for each responding character and transform location refs
+  // Add location and item entities for each responding character, transform refs
   const seenIds = new Set(evaluated.map(e => e.id));
   for (const entity of evaluated) {
+    // Location: "is in [entity:ID]"
     const locationPattern = /^is in \[entity:(\d+)\]/;
-    const factIndex = entity.facts.findIndex(f => locationPattern.test(f));
-    if (factIndex !== -1) {
-      const match = entity.facts[factIndex].match(locationPattern);
+    const locIndex = entity.facts.findIndex(f => locationPattern.test(f));
+    if (locIndex !== -1) {
+      const match = entity.facts[locIndex].match(locationPattern);
       if (match) {
         const locationId = parseInt(match[1]);
         const locationEntity = getEntityWithFacts(locationId);
         if (locationEntity) {
-          // Transform fact to readable format: "is in The Tavern [12]"
-          entity.facts[factIndex] = `is in ${locationEntity.name} [${locationId}]`;
+          entity.facts[locIndex] = `is in ${locationEntity.name} [${locationId}]`;
           if (!seenIds.has(locationId)) {
             other.push(locationEntity);
             seenIds.add(locationId);
+          }
+        }
+      }
+    }
+
+    // Items: "has [entity:ID]"
+    const itemPattern = /^has \[entity:(\d+)\]/;
+    for (let i = 0; i < entity.facts.length; i++) {
+      const match = entity.facts[i].match(itemPattern);
+      if (match) {
+        const itemId = parseInt(match[1]);
+        const itemEntity = getEntityWithFacts(itemId);
+        if (itemEntity) {
+          entity.facts[i] = `has ${itemEntity.name} [${itemId}]`;
+          if (!seenIds.has(itemId)) {
+            other.push(itemEntity);
+            seenIds.add(itemId);
           }
         }
       }
