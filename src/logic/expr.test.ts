@@ -182,6 +182,31 @@ describe("parser", () => {
     const ctx = makeContext();
     expect(() => evalExpr("1 2", ctx)).toThrow("Unexpected token");
   });
+
+  test("method chaining after function call", () => {
+    const ctx = makeContext({ content: "Hello World" });
+    expect(evalExpr('content.toLowerCase().startsWith("hello")', ctx)).toBe(true);
+    expect(evalExpr('content.toLowerCase().startsWith("world")', ctx)).toBe(false);
+    expect(evalExpr('content.toUpperCase().endsWith("WORLD")', ctx)).toBe(true);
+  });
+
+  test("property access on string", () => {
+    const ctx = makeContext({ content: "hello" });
+    expect(evalExpr("content.length == 5", ctx)).toBe(true);
+    expect(evalExpr("content.length > 3", ctx)).toBe(true);
+  });
+
+  test("multiple method chains", () => {
+    const ctx = makeContext({ content: "  Hello  " });
+    expect(evalExpr('content.trim().toLowerCase() == "hello"', ctx)).toBe(true);
+  });
+
+  test("method with arguments in chain", () => {
+    const ctx = makeContext({ content: "hello world" });
+    expect(evalExpr('content.split(" ").length == 2', ctx)).toBe(true);
+    expect(evalExpr('content.includes("world")', ctx)).toBe(true);
+    expect(evalExpr('content.replace("world", "there").includes("there")', ctx)).toBe(true);
+  });
 });
 
 // =============================================================================
@@ -238,6 +263,12 @@ describe("injection prevention", () => {
   test("blocks prototype access", () => {
     const ctx = makeContext();
     expect(() => evalExpr("random.prototype", ctx)).toThrow("Blocked property access: prototype");
+  });
+
+  test("blocks constructor in method chain", () => {
+    const ctx = makeContext({ content: "test" });
+    expect(() => evalExpr("content.toLowerCase().constructor", ctx)).toThrow("Blocked property access: constructor");
+    expect(() => evalExpr("content.constructor.constructor", ctx)).toThrow("Blocked property access: constructor");
   });
 
   test("string escaping prevents code injection", () => {

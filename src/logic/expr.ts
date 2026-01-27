@@ -283,33 +283,32 @@ class Parser {
       const op = this.consume().value as string;
       return { type: "unary", operator: op, operand: this.parseUnary() };
     }
-    return this.parseCall();
+    return this.parsePostfix();
   }
 
-  private parseCall(): ExprNode {
-    let node = this.parseMember();
-    while (this.peek().type === "paren" && this.peek().value === "(") {
-      this.consume(); // (
-      const args: ExprNode[] = [];
-      if (!(this.peek().type === "paren" && this.peek().value === ")")) {
-        args.push(this.parseTernary());
-        while (this.peek().type === "comma") {
-          this.consume();
-          args.push(this.parseTernary());
-        }
-      }
-      this.expect("paren", ")");
-      node = { type: "call", callee: node, args };
-    }
-    return node;
-  }
-
-  private parseMember(): ExprNode {
+  /** Parse member access and calls in a single loop to support chaining like foo().bar().baz */
+  private parsePostfix(): ExprNode {
     let node = this.parsePrimary();
-    while (this.peek().type === "dot") {
-      this.consume(); // .
-      const prop = this.expect("identifier").value as string;
-      node = { type: "member", object: node, property: prop };
+    while (true) {
+      if (this.peek().type === "dot") {
+        this.consume(); // .
+        const prop = this.expect("identifier").value as string;
+        node = { type: "member", object: node, property: prop };
+      } else if (this.peek().type === "paren" && this.peek().value === "(") {
+        this.consume(); // (
+        const args: ExprNode[] = [];
+        if (!(this.peek().type === "paren" && this.peek().value === ")")) {
+          args.push(this.parseTernary());
+          while (this.peek().type === "comma") {
+            this.consume();
+            args.push(this.parseTernary());
+          }
+        }
+        this.expect("paren", ")");
+        node = { type: "call", callee: node, args };
+      } else {
+        break;
+      }
     }
     return node;
   }
