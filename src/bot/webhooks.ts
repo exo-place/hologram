@@ -116,10 +116,9 @@ export async function executeWebhook(
     return true;
   } catch (err: unknown) {
     const errObj = err as { status?: number; body?: unknown; message?: string };
-    error("Failed to execute webhook", {
-      message: errObj.message ?? String(err),
+    error("Failed to execute webhook", err, {
       status: errObj.status,
-      body: JSON.stringify(errObj.body),
+      body: errObj.body,
       webhookId: webhook.webhookId,
       username,
       contentLength: content.length,

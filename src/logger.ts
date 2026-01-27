@@ -124,7 +124,12 @@ export function error(
       errorContext.error = err.message;
       errorContext.stack = err.stack;
     } else if (err !== undefined) {
-      errorContext.error = String(err);
+      // Try to serialize objects properly
+      try {
+        errorContext.error = typeof err === "object" ? JSON.stringify(err) : String(err);
+      } catch {
+        errorContext.error = String(err);
+      }
     }
     console.error(formatEntry("error", message, errorContext));
   }
