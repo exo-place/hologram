@@ -105,17 +105,18 @@ Discord channels/users map to entities via `discord_entities`:
 
 ## Commands
 
-| Command | Alias | Description |
-|---------|-------|-------------|
-| `/create [name]` | `/c` | Create entity |
-| `/view <entity>` | `/v` | View entity facts |
-| `/edit <entity>` | `/e` | Edit facts (modal) |
-| `/delete <entity>` | `/d` | Delete entity |
-| `/bind <target> <entity>` | `/b` | Bind channel/user |
-| `/unbind <target> <entity>` | `/ub` | Unbind channel/user |
-| `/status` | `/s` | Channel state |
+| Command | Description |
+|---------|-------------|
+| `/create [name]` | Create entity |
+| `/view <entity>` | View entity facts |
+| `/edit <entity>` | Edit facts (modal) |
+| `/delete <entity>` | Delete entity |
+| `/transfer <entity> <user>` | Transfer ownership |
+| `/bind <target> <entity>` | Bind channel/user |
+| `/unbind <target> <entity>` | Unbind channel/user |
+| `/status` | Channel state |
 
-Help is an entity: `/v help`, `/v help:commands`, `/v help:respond`
+Help is an entity: `/view help`, `/view help:commands`, `/view help:respond`
 
 ## Dev Commands
 

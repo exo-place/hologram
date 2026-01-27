@@ -51,25 +51,6 @@ const commands = new Map<string, Command>();
 
 export function registerCommand(command: Command) {
   commands.set(command.name, command);
-  // Also register short alias if different
-  const alias = getAlias(command.name);
-  if (alias && alias !== command.name) {
-    commands.set(alias, command);
-  }
-}
-
-function getAlias(name: string): string | null {
-  const aliases: Record<string, string> = {
-    create: "c",
-    view: "v",
-    edit: "e",
-    delete: "d",
-    bind: "b",
-    unbind: "ub",
-    status: "s",
-    transfer: "t",
-  };
-  return aliases[name] ?? null;
 }
 
 // =============================================================================
@@ -152,30 +133,14 @@ export async function followUp(bot: Bot, interaction: Interaction, content: stri
 export async function registerCommands(bot: Bot) {
   // Build command definitions for Discord
   const defs = [];
-  const seen = new Set<string>();
 
   for (const [_name, cmd] of commands) {
-    // Skip aliases, only register primary names
-    if (seen.has(cmd.name)) continue;
-    seen.add(cmd.name);
-
     defs.push({
       name: cmd.name,
       description: cmd.description,
       type: ApplicationCommandTypes.ChatInput,
       options: cmd.options,
     });
-
-    // Also register alias as separate command
-    const alias = getAlias(cmd.name);
-    if (alias) {
-      defs.push({
-        name: alias,
-        description: cmd.description,
-        type: ApplicationCommandTypes.ChatInput,
-        options: cmd.options,
-      });
-    }
   }
 
   await bot.helpers.upsertGlobalApplicationCommands(defs);
@@ -287,14 +252,14 @@ async function handleAutocomplete(bot: Bot, interaction: Interaction) {
   };
 
   // Filter based on command - only show entities the user can actually use
-  if (commandName === "delete" || commandName === "d" || commandName === "transfer" || commandName === "t") {
+  if (commandName === "delete" || commandName === "transfer") {
     // These commands require ownership
     results = searchEntitiesOwnedBy(query, userId, 25);
-  } else if (commandName === "edit" || commandName === "e" || commandName === "bind" || commandName === "b" || commandName === "unbind" || commandName === "ub") {
+  } else if (commandName === "edit" || commandName === "bind" || commandName === "unbind") {
     // These commands require edit permission
     const allResults = searchEntities(query, 100);
     results = allResults.filter(canEdit).slice(0, 25);
-  } else if (commandName === "view" || commandName === "v") {
+  } else if (commandName === "view") {
     // View requires view permission
     const allResults = searchEntities(query, 100);
     results = allResults.filter(canView).slice(0, 25);

@@ -77,7 +77,7 @@ function canUserView(entity: EntityWithFacts, userId: string): boolean {
 }
 
 // =============================================================================
-// /create (/c) - Create entity
+// /create - Create entity
 // =============================================================================
 
 registerCommand({
@@ -137,7 +137,7 @@ registerModalHandler("create", async (bot, interaction, values) => {
 });
 
 // =============================================================================
-// /view (/v) - View entity
+// /view - View entity
 // =============================================================================
 
 registerCommand({
@@ -188,7 +188,7 @@ registerCommand({
 });
 
 // =============================================================================
-// /edit (/e) - Edit entity facts
+// /edit - Edit entity facts
 // =============================================================================
 
 registerCommand({
@@ -356,7 +356,7 @@ registerModalHandler("edit", async (bot, interaction, values) => {
 });
 
 // =============================================================================
-// /delete (/d) - Delete entity
+// /delete - Delete entity
 // =============================================================================
 
 registerCommand({
@@ -457,7 +457,7 @@ registerCommand({
 });
 
 // =============================================================================
-// /bind (/b) - Bind Discord thing to entity
+// /bind - Bind Discord thing to entity
 // =============================================================================
 
 registerCommand({
@@ -640,7 +640,7 @@ registerCommand({
 });
 
 // =============================================================================
-// /status (/s) - View channel state
+// /status - View channel state
 // =============================================================================
 
 registerCommand({
@@ -702,50 +702,50 @@ const HELP_ENTITY_FACTS: Record<string, string[]> = {
   help: [
     "is the help system",
     "topics: start, commands, expressions, patterns, facts, bindings, permissions, models",
-    "use `/v help:<topic>` for details",
+    "use `/view help:<topic>` for details",
     "---",
     "**Hologram** - Collaborative worldbuilding and roleplay",
     "Everything is an **entity** with **facts**.",
     "---",
-    "New here? Try `/v help:start`",
+    "New here? Try `/view help:start`",
   ],
   "help:start": [
     "is the getting started guide",
     "---",
     "**Setting up a channel:**",
-    "1. `/c Aria` - Create an entity",
-    "2. `/e Aria` - Add facts like personality, appearance",
-    "3. `/b channel Aria` - Bind Aria to this channel",
+    "1. `/create Aria` - Create an entity",
+    "2. `/edit Aria` - Add facts like personality, appearance",
+    "3. `/bind channel Aria` - Bind Aria to this channel",
     "4. Chat! Aria responds when @mentioned",
     "---",
     "**Creating a persona:**",
-    "1. `/c MyChar` - Create your entity",
-    "2. `/e MyChar` - Add your entity's facts",
-    "3. `/b me MyChar` - Bind yourself to this entity",
+    "1. `/create MyChar` - Create your entity",
+    "2. `/edit MyChar` - Add your entity's facts",
+    "3. `/bind me MyChar` - Bind yourself to this entity",
     "4. Your messages now come from MyChar's perspective",
     "---",
     "**Tips:**",
-    "• Use `/s` to see current channel state",
-    "• Use `/v <entity>` to view any entity",
-    "• Control responses with `$if` (`/v help:expressions`)",
+    "• Use `/status` to see current channel state",
+    "• Use `/view <entity>` to view any entity",
+    "• Control responses with `$if` (`/view help:expressions`)",
   ],
   "help:commands": [
     "is help for commands",
     "---",
     "**Commands** (8 total)",
-    "`/create` (`/c`) - Create entity",
-    "`/view` (`/v`) - View entity facts",
-    "`/edit` (`/e`) - Edit entity facts",
-    "`/delete` (`/d`) - Delete entity",
-    "`/transfer` (`/t`) - Transfer entity ownership",
-    "`/bind` (`/b`) - Bind channel/user to entity",
-    "`/unbind` (`/ub`) - Remove entity binding",
-    "`/status` (`/s`) - Channel state",
+    "`/create` - Create entity",
+    "`/view` - View entity facts",
+    "`/edit` - Edit entity facts",
+    "`/delete` - Delete entity",
+    "`/transfer` - Transfer entity ownership",
+    "`/bind` - Bind channel/user to entity",
+    "`/unbind` - Remove entity binding",
+    "`/status` - Channel state",
     "---",
     "**Examples:**",
-    "`/c Aria` - Create entity",
-    "`/v Aria` - View facts",
-    "`/b channel Aria` - Bind to channel",
+    "`/create Aria` - Create entity",
+    "`/view Aria` - View facts",
+    "`/bind channel Aria` - Bind to channel",
   ],
   "help:expressions": [
     "is help for $if expressions and response control",
@@ -780,7 +780,7 @@ const HELP_ENTITY_FACTS: Record<string, string[]> = {
     "• `roll(\"2d6+3\")` - dice roll",
     "• `mentioned_in_dialogue(name)` - name in dialogue (not XML tags)",
     "---",
-    "See `/v help:patterns` for common examples",
+    "See `/view help:patterns` for common examples",
   ],
   "help:patterns": [
     "is help for common $if patterns",
@@ -834,18 +834,18 @@ const HELP_ENTITY_FACTS: Record<string, string[]> = {
     "• `is in [entity:12]` - location reference",
     "• `$if condition: $respond` - response control",
     "---",
-    "**Permissions:** See `/v help:permissions`",
+    "**Permissions:** See `/view help:permissions`",
   ],
   "help:bindings": [
     "is help for bindings",
     "---",
     "**Bindings** - Connect Discord to entities",
     "---",
-    "`/b channel <entity>` - Add entity to channel",
+    "`/bind channel <entity>` - Add entity to channel",
     "`/unbind channel <entity>` - Remove entity",
-    "`/b me <entity>` - Speak as entity",
+    "`/bind me <entity>` - Speak as entity",
     "---",
-    "**Multiple characters:** Bind several entities to one channel. Each evaluates `$respond` independently.",
+    "**Multiple entities:** Bind several entities to one channel. Each evaluates `$respond` independently.",
     "---",
     "**Scopes:** channel (default), guild, global",
   ],
@@ -855,7 +855,7 @@ const HELP_ENTITY_FACTS: Record<string, string[]> = {
     "**Ownership** - Each entity has an owner",
     "• Creator owns by default",
     "• Owner always has full access",
-    "• `/t <entity> <user>` - Transfer ownership",
+    "• `/transfer <entity> <user>` - Transfer ownership",
     "---",
     "**LLM Lock** - Prevent AI modifications",
     "• `$locked` - Lock entire entity",
