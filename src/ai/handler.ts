@@ -4,6 +4,7 @@ import { getLanguageModel, DEFAULT_MODEL } from "./models";
 import { debug, error } from "../logger";
 import {
   getEntityWithFacts,
+  getFactsForEntity,
   addFact,
   updateFactByContent,
   removeFactByContent,
@@ -55,6 +56,52 @@ export interface ResponseResult {
 }
 
 // =============================================================================
+// Permission Checking
+// =============================================================================
+
+const LOCKED_SIGIL = "$locked";
+
+/**
+ * Check if an entity is locked from LLM modification.
+ * Returns { locked: false } if not locked.
+ * Returns { locked: true, reason: string } if locked.
+ */
+function checkEntityLocked(entityId: number): { locked: false } | { locked: true; reason: string } {
+  const facts = getFactsForEntity(entityId);
+  for (const fact of facts) {
+    const trimmed = fact.content.trim();
+    // Pure $locked directive (entity-level lock)
+    if (trimmed === LOCKED_SIGIL) {
+      return { locked: true, reason: "Entity is locked" };
+    }
+  }
+  return { locked: false };
+}
+
+/**
+ * Check if a specific fact is locked from LLM modification.
+ * This checks both entity-level locks and fact-level $locked prefix.
+ */
+function checkFactLocked(entityId: number, factContent: string): { locked: false } | { locked: true; reason: string } {
+  const facts = getFactsForEntity(entityId);
+  for (const fact of facts) {
+    const trimmed = fact.content.trim();
+    // Pure $locked directive (entity-level lock)
+    if (trimmed === LOCKED_SIGIL) {
+      return { locked: true, reason: "Entity is locked" };
+    }
+    // Check if this is the locked version of the fact we're trying to modify
+    if (trimmed.startsWith(LOCKED_SIGIL + " ")) {
+      const lockedContent = trimmed.slice(LOCKED_SIGIL.length + 1).trim();
+      if (lockedContent === factContent) {
+        return { locked: true, reason: "Fact is locked" };
+      }
+    }
+  }
+  return { locked: false };
+}
+
+// =============================================================================
 // Tool Definitions
 // =============================================================================
 
@@ -66,6 +113,13 @@ const tools = {
       content: z.string().describe("The fact content"),
     }),
     execute: async ({ entityId, content }) => {
+      // Check if entity is locked
+      const lockCheck = checkEntityLocked(entityId);
+      if (lockCheck.locked) {
+        debug("Tool: add_fact blocked", { entityId, content, reason: lockCheck.reason });
+        return { success: false, error: lockCheck.reason };
+      }
+
       const fact = addFact(entityId, content);
       debug("Tool: add_fact", { entityId, content, factId: fact.id });
       return { success: true, factId: fact.id };
@@ -80,6 +134,13 @@ const tools = {
       newContent: z.string().describe("The new fact content"),
     }),
     execute: async ({ entityId, oldContent, newContent }) => {
+      // Check if entity or specific fact is locked
+      const lockCheck = checkFactLocked(entityId, oldContent);
+      if (lockCheck.locked) {
+        debug("Tool: update_fact blocked", { entityId, oldContent, newContent, reason: lockCheck.reason });
+        return { success: false, error: lockCheck.reason };
+      }
+
       const fact = updateFactByContent(entityId, oldContent, newContent);
       debug("Tool: update_fact", { entityId, oldContent, newContent, success: !!fact });
       return { success: !!fact };
@@ -93,6 +154,13 @@ const tools = {
       content: z.string().describe("The exact fact text to remove"),
     }),
     execute: async ({ entityId, content }) => {
+      // Check if entity or specific fact is locked
+      const lockCheck = checkFactLocked(entityId, content);
+      if (lockCheck.locked) {
+        debug("Tool: remove_fact blocked", { entityId, content, reason: lockCheck.reason });
+        return { success: false, error: lockCheck.reason };
+      }
+
       const success = removeFactByContent(entityId, content);
       debug("Tool: remove_fact", { entityId, content, success });
       return { success };
