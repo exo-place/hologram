@@ -1,7 +1,7 @@
 import { generateText, tool, stepCountIs } from "ai";
 import { z } from "zod";
 import { getLanguageModel, DEFAULT_MODEL } from "./models";
-import { info, debug, error } from "../logger";
+import { debug, error } from "../logger";
 import {
   getEntityWithFacts,
   addFact,
@@ -266,10 +266,10 @@ export async function handleMessage(ctx: MessageContext): Promise<ResponseResult
   );
 
   debug("Calling LLM", {
-    respondingEntities: evaluated.length,
-    otherEntities: other.length,
-    historyMessages: history.length,
-    systemPromptLength: systemPrompt.length,
+    respondingEntities: evaluated.map(e => e.name),
+    otherEntities: other.map(e => e.name),
+    systemPrompt,
+    userMessage,
   });
 
   // Track tool usage
@@ -295,8 +295,8 @@ export async function handleMessage(ctx: MessageContext): Promise<ResponseResult
       },
     });
 
-    info("LLM response", {
-      textLength: result.text.length,
+    debug("LLM response", {
+      text: result.text,
       factsAdded,
       factsUpdated,
       factsRemoved,
