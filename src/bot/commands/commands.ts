@@ -463,15 +463,16 @@ registerCommand({
 
 registerCommand({
   name: "bind",
-  description: "Bind a Discord channel or user to an entity",
+  description: "Bind a Discord channel, server, or user to an entity",
   options: [
     {
       name: "target",
-      description: "What to bind (channel, user, or 'me')",
+      description: "What to bind (channel, server, or 'me')",
       type: ApplicationCommandOptionTypes.String,
       required: true,
       choices: [
         { name: "This channel", value: "channel" },
+        { name: "This server", value: "server" },
         { name: "Me (user)", value: "me" },
       ],
     },
@@ -516,10 +517,17 @@ registerCommand({
 
     // Determine what to bind
     let discordId: string;
-    let discordType: "user" | "channel";
+    let discordType: "user" | "channel" | "guild";
     if (target === "channel") {
       discordId = ctx.channelId;
       discordType = "channel";
+    } else if (target === "server") {
+      if (!ctx.guildId) {
+        await respond(ctx.bot, ctx.interaction, "Cannot bind to server in DMs", true);
+        return;
+      }
+      discordId = ctx.guildId;
+      discordType = "guild";
     } else {
       discordId = ctx.userId;
       discordType = "user";
@@ -538,7 +546,7 @@ registerCommand({
     const result = addDiscordEntity(discordId, discordType, entity.id, scopeGuildId, scopeChannelId);
 
     const scopeDesc = scope === "global" ? "globally" : scope === "guild" ? "in this server" : "in this channel";
-    const targetDesc = target === "channel" ? "This channel" : "You";
+    const targetDesc = target === "channel" ? "This channel" : target === "server" ? "This server" : "You";
 
     if (!result) {
       await respond(ctx.bot, ctx.interaction, `"${entity.name}" is already bound ${scopeDesc}`, true);
@@ -555,7 +563,7 @@ registerCommand({
 
 registerCommand({
   name: "unbind",
-  description: "Remove an entity binding from a channel or user",
+  description: "Remove an entity binding from a channel, server, or user",
   options: [
     {
       name: "target",
@@ -564,6 +572,7 @@ registerCommand({
       required: true,
       choices: [
         { name: "This channel", value: "channel" },
+        { name: "This server", value: "server" },
         { name: "Me (user)", value: "me" },
       ],
     },
@@ -608,10 +617,17 @@ registerCommand({
 
     // Determine what to unbind
     let discordId: string;
-    let discordType: "user" | "channel";
+    let discordType: "user" | "channel" | "guild";
     if (target === "channel") {
       discordId = ctx.channelId;
       discordType = "channel";
+    } else if (target === "server") {
+      if (!ctx.guildId) {
+        await respond(ctx.bot, ctx.interaction, "Cannot unbind from server in DMs", true);
+        return;
+      }
+      discordId = ctx.guildId;
+      discordType = "guild";
     } else {
       discordId = ctx.userId;
       discordType = "user";
@@ -629,7 +645,7 @@ registerCommand({
     const removed = removeDiscordEntityBinding(discordId, discordType, entity.id, scopeGuildId, scopeChannelId);
 
     const scopeDesc = scope === "global" ? "globally" : scope === "guild" ? "from this server" : "from this channel";
-    const targetDesc = target === "channel" ? "Channel" : "You";
+    const targetDesc = target === "channel" ? "Channel" : target === "server" ? "Server" : "You";
 
     if (!removed) {
       await respond(ctx.bot, ctx.interaction, `"${entity.name}" was not bound ${scopeDesc}`, true);

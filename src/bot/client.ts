@@ -212,10 +212,18 @@ bot.events.messageCreate = async (message) => {
   // Get ALL channel entities (supports multiple characters)
   const channelEntityIds = resolveDiscordEntities(channelId, "channel", guildId, channelId);
 
+  // Also get guild-level entities (bound to server) - only if in a guild
+  const guildEntityIds = guildId
+    ? resolveDiscordEntities(guildId, "guild", guildId, channelId)
+    : [];
+
+  // Combine unique entity IDs (channel bindings + guild bindings)
+  const allEntityIds = [...new Set([...channelEntityIds, ...guildEntityIds])];
+
   // No binding = no response
-  if (channelEntityIds.length === 0) {
+  if (allEntityIds.length === 0) {
     if (isMentioned) {
-      debug("Mentioned but no channel binding - ignoring");
+      debug("Mentioned but no channel or guild binding - ignoring");
     }
     return;
   }
@@ -229,9 +237,9 @@ bot.events.messageCreate = async (message) => {
     });
   }
 
-  // Load all channel entities
+  // Load all bound entities (channel + guild level)
   const channelEntities: EntityWithFacts[] = [];
-  for (const entityId of channelEntityIds) {
+  for (const entityId of allEntityIds) {
     const entity = getEntityWithFacts(entityId);
     if (entity) channelEntities.push(entity);
   }
