@@ -159,9 +159,6 @@ bot.events.messageCreate = async (message) => {
         return;
       }
     }
-  } else {
-    // Real user message - reset chain depth
-    responseChainDepth.set(channelId, 0);
   }
 
   debug("Mention check", {
@@ -300,6 +297,10 @@ bot.events.messageCreate = async (message) => {
 
   // Respond immediately with entities that are ready
   if (respondingEntities.length > 0) {
+    // Reset chain depth only when a real user message triggers a response
+    if (!message.webhookId) {
+      responseChainDepth.set(channelId, 0);
+    }
     await sendResponse(channelId, guildId, authorName, message.content, isMentioned ?? false, respondingEntities);
   }
 
