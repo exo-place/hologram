@@ -424,6 +424,13 @@ async function sendResponse(
     // Ignore typing errors
   }
 
+  const stopTyping = () => {
+    if (typingInterval) {
+      clearInterval(typingInterval);
+      typingInterval = null;
+    }
+  };
+
   // Handle message via LLM
   try {
     const result = await handleMessage({
@@ -439,7 +446,13 @@ async function sendResponse(
     // Mark response time
     lastResponseTime.set(channelId, Date.now());
 
-    if (!result) return;
+    if (!result) {
+      stopTyping();
+      return;
+    }
+
+    // Stop typing before sending response (indicator will expire naturally)
+    stopTyping();
 
     // Use webhooks when we have responding entities (custom name/avatar)
     if (respondingEntities && respondingEntities.length > 0) {
@@ -480,7 +493,7 @@ async function sendResponse(
       await sendRegularMessage(channelId, result.response);
     }
   } finally {
-    // Always stop typing
+    // Safety net - ensure typing is stopped even on error
     if (typingInterval) {
       clearInterval(typingInterval);
     }
