@@ -95,6 +95,18 @@ export async function getOrCreateWebhook(channelId: string): Promise<CachedWebho
 const MAX_MESSAGE_LENGTH = 2000;
 
 /**
+ * Sanitize username for Discord webhook.
+ * Discord forbids "discord" (case-insensitive) in webhook usernames.
+ */
+function sanitizeUsername(username: string): string {
+  // Replace "discord" with "d_scord" (case-insensitive, preserving case)
+  return username.replace(/discord/gi, (match) => {
+    // Preserve the case pattern: replace 'i' with '_'
+    return match[0] + "_" + match.slice(2);
+  });
+}
+
+/**
  * Split content into chunks that fit Discord's message limit.
  * Tries to split at newlines or spaces when possible.
  */
@@ -149,12 +161,15 @@ export async function executeWebhook(
   const webhook = await getOrCreateWebhook(channelId);
   if (!webhook) return null;
 
+  // Sanitize username (Discord forbids "discord" in webhook usernames)
+  const safeUsername = sanitizeUsername(username);
+
   // Split content if too long
   const chunks = splitContent(content);
 
   debug("Executing webhook", {
     webhookId: webhook.webhookId,
-    username,
+    username: safeUsername,
     contentLength: content.length,
     chunks: chunks.length,
     hasAvatar: !!avatarUrl,
@@ -171,7 +186,7 @@ export async function executeWebhook(
         webhook.webhookToken,
         {
           content: chunk,
-          username,
+          username: safeUsername,
           avatarUrl: avatarUrl ?? DEFAULT_AVATAR,
           wait: true,
         }
@@ -194,7 +209,7 @@ export async function executeWebhook(
     error("Failed to execute webhook", err, {
       errorProps: allProps,
       webhookId: webhook.webhookId,
-      username,
+      username: safeUsername,
       contentLength: content.length,
     });
     // Webhook may have been deleted - clear cache and try once more
