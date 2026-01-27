@@ -42,6 +42,7 @@ async function resolveWebhookChannel(
       channelType: channel?.type,
       parentId: channel?.parentId?.toString(),
       isThread: channel ? THREAD_TYPES.has(channel.type) : false,
+      channelKeys: channel ? Object.keys(channel) : null,
     });
     if (channel && THREAD_TYPES.has(channel.type) && channel.parentId) {
       debug("Channel is thread, using parent", {
