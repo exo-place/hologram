@@ -455,6 +455,8 @@ const RESPOND_SIGIL = "$respond";
 const RETRY_SIGIL = "$retry ";
 const AVATAR_SIGIL = "$avatar ";
 const LOCKED_SIGIL = "$locked";
+const EDIT_SIGIL = "$edit ";
+const VIEW_SIGIL = "$view ";
 
 export interface ProcessedFact {
   content: string;
@@ -913,4 +915,78 @@ function rollDice(expr: string): number {
   }
 
   return total;
+}
+
+// =============================================================================
+// Permission Directives
+// =============================================================================
+
+export interface EntityPermissions {
+  /** True if $locked directive present (entity is locked from LLM modification) */
+  isLocked: boolean;
+  /** Set of fact content strings that are locked (from $locked prefix) */
+  lockedFacts: Set<string>;
+  /** User IDs allowed to edit, "everyone" for public, null for owner-only */
+  editList: string[] | "everyone" | null;
+  /** User IDs allowed to view, "everyone" for public, null for owner-only */
+  viewList: string[] | "everyone" | null;
+}
+
+/**
+ * Parse permission directives from raw facts.
+ * This extracts $locked, $edit, and $view directives without evaluating $if conditions.
+ * Used for permission checking on commands.
+ */
+export function parsePermissionDirectives(facts: string[]): EntityPermissions {
+  let isLocked = false;
+  const lockedFacts = new Set<string>();
+  let editList: string[] | "everyone" | null = null;
+  let viewList: string[] | "everyone" | null = null;
+
+  for (const fact of facts) {
+    const trimmed = fact.trim();
+
+    // Skip comments
+    if (trimmed.startsWith("#")) continue;
+
+    // Check for $locked
+    if (trimmed === LOCKED_SIGIL) {
+      isLocked = true;
+      continue;
+    }
+    if (trimmed.startsWith(LOCKED_SIGIL + " ")) {
+      const content = trimmed.slice(LOCKED_SIGIL.length + 1).trim();
+      lockedFacts.add(content);
+      continue;
+    }
+
+    // Check for $edit
+    if (trimmed.startsWith(EDIT_SIGIL)) {
+      const value = trimmed.slice(EDIT_SIGIL.length).trim();
+      editList = parseUserList(value);
+      continue;
+    }
+
+    // Check for $view
+    if (trimmed.startsWith(VIEW_SIGIL)) {
+      const value = trimmed.slice(VIEW_SIGIL.length).trim();
+      viewList = parseUserList(value);
+      continue;
+    }
+  }
+
+  return { isLocked, lockedFacts, editList, viewList };
+}
+
+/**
+ * Parse a user list value.
+ * "@everyone" -> "everyone"
+ * "user1, user2, user3" -> ["user1", "user2", "user3"]
+ */
+function parseUserList(value: string): string[] | "everyone" {
+  if (value.toLowerCase() === "@everyone" || value.toLowerCase() === "everyone") {
+    return "everyone";
+  }
+  // Split by comma and trim each entry
+  return value.split(",").map(s => s.trim()).filter(s => s.length > 0);
 }
