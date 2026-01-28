@@ -329,11 +329,14 @@ bot.events.messageCreate = async (message) => {
       retryEntities.push({ entity, retryMs: result.retryMs });
     } else {
       // Default response logic (when no $respond directive):
-      // 1. If only one character: respond to mentions or replies
-      // 2. Respond if entity's name is mentioned in dialogue (not self-triggered)
+      // 1. If only one character: respond to @mentions (ambiguous with multiple chars)
+      // 2. Respond if reply is specifically to this entity's message (unambiguous)
+      // 3. Respond if entity's name is mentioned in dialogue (not self-triggered)
       const nameMentioned = ctx.mentioned_in_dialogue(entity.name) && !isSelf;
+      const repliedToThis = repliedToWebhookEntity?.entityName.toLowerCase() === entity.name.toLowerCase();
       const defaultRespond =
-        (channelEntities.length === 1 && (isMentioned || isReplied)) ||
+        (channelEntities.length === 1 && isMentioned) ||
+        repliedToThis ||
         nameMentioned;
       const shouldRespond = result.shouldRespond ?? defaultRespond;
 
