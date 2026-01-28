@@ -44,6 +44,7 @@ interface CommandOption {
   required?: boolean;
   choices?: { name: string; value: string }[];
   autocomplete?: boolean;
+  options?: CommandOption[];  // For SubCommand/SubCommandGroup
 }
 
 // =============================================================================
@@ -175,10 +176,18 @@ export async function handleInteraction(bot: Bot, interaction: Interaction) {
       username: interaction.user?.username ?? "unknown",
     };
 
-    // Parse options
+    // Parse options (handles subcommands)
     const options: Record<string, unknown> = {};
     for (const opt of interaction.data?.options ?? []) {
-      options[opt.name] = opt.value;
+      if (opt.type === 1) {
+        // SubCommand - store subcommand name and parse nested options
+        options._subcommand = opt.name;
+        for (const nestedOpt of opt.options ?? []) {
+          options[nestedOpt.name] = nestedOpt.value;
+        }
+      } else {
+        options[opt.name] = opt.value;
+      }
     }
 
     try {
@@ -215,7 +224,19 @@ export async function handleInteraction(bot: Bot, interaction: Interaction) {
 }
 
 async function handleAutocomplete(bot: Bot, interaction: Interaction) {
-  const focused = interaction.data?.options?.find((o: { focused?: boolean }) => o.focused);
+  // Find focused option - may be in top-level options or nested in subcommand
+  let focused = interaction.data?.options?.find((o: { focused?: boolean }) => o.focused);
+
+  // If not found at top level, look in subcommand options
+  if (!focused) {
+    for (const opt of interaction.data?.options ?? []) {
+      if (opt.type === 1) {
+        // SubCommand
+        focused = opt.options?.find((o: { focused?: boolean }) => o.focused);
+        if (focused) break;
+      }
+    }
+  }
   if (!focused) return;
 
   const query = (focused.value as string) || "";
@@ -310,8 +331,8 @@ async function handleAutocomplete(bot: Bot, interaction: Interaction) {
       if (permissions.editList?.some(u => matchesUserEntry(u, userId, username))) return true;
       return false;
     }).slice(0, 25);
-  } else if (commandName === "view") {
-    // View requires view permission - batch load facts
+  } else if (commandName === "view" || commandName === "info") {
+    // View and info require view permission - batch load facts
     const allResults = searchEntities(query, 100);
     const entitiesWithFacts = getEntitiesWithFacts(allResults.map(e => e.id));
 

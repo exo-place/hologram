@@ -4,6 +4,7 @@ import {
   registerModalHandler,
   respond,
   respondWithModal,
+  type CommandContext,
 } from "./index";
 import {
   createEntity,
@@ -754,59 +755,281 @@ registerCommand({
 });
 
 // =============================================================================
-// /status - View channel state
+// /info - View channel state and debug info
 // =============================================================================
 
 registerCommand({
-  name: "status",
-  description: "View current channel state",
-  options: [],
-  async handler(ctx, _options) {
-    const lines: string[] = [];
+  name: "info",
+  description: "View channel state and debug info",
+  options: [
+    {
+      name: "status",
+      description: "View current channel state (default)",
+      type: ApplicationCommandOptionTypes.SubCommand,
+    },
+    {
+      name: "dryrun",
+      description: "Show context that would be sent to the LLM",
+      type: ApplicationCommandOptionTypes.SubCommand,
+      options: [
+        {
+          name: "entity",
+          description: "Entity to simulate (defaults to channel-bound entity)",
+          type: ApplicationCommandOptionTypes.String,
+          required: false,
+          autocomplete: true,
+        },
+      ],
+    },
+  ],
+  async handler(ctx, options) {
+    // Get subcommand from nested options
+    const subcommand = (options._subcommand as string) ?? "status";
 
-    // Check channel bindings (now supports multiple)
-    const channelEntityIds = resolveDiscordEntities(ctx.channelId, "channel", ctx.guildId, ctx.channelId);
-    if (channelEntityIds.length > 0) {
-      const entityNames: string[] = [];
-      for (const entityId of channelEntityIds) {
-        const entity = getEntity(entityId);
-        if (entity) entityNames.push(entity.name);
-      }
-      lines.push(`**Channel bound to:** ${entityNames.join(", ")}`);
-
-      // Show location for first entity that has one
-      for (const entityId of channelEntityIds) {
-        const entity = getEntityWithFacts(entityId);
-        if (entity) {
-          const locationFact = entity.facts.find(f => f.content.startsWith("is in "));
-          if (locationFact) {
-            lines.push(`**Location:** ${locationFact.content.replace("is in ", "")}`);
-            break;
-          }
-        }
-      }
+    if (subcommand === "dryrun") {
+      await handleInfoDryrun(ctx, options);
     } else {
-      lines.push("**Channel:** Not bound to any entity");
+      await handleInfoStatus(ctx);
     }
-
-    // Check user binding
-    const userEntityId = resolveDiscordEntity(ctx.userId, "user", ctx.guildId, ctx.channelId);
-    if (userEntityId) {
-      const userEntity = getEntityWithFacts(userEntityId);
-      if (userEntity) {
-        lines.push(`**Your persona:** ${userEntity.name}`);
-      }
-    } else {
-      lines.push(`**Your persona:** ${ctx.username} (default)`);
-    }
-
-    // Message count
-    const messages = getMessages(ctx.channelId, 10);
-    lines.push(`**Recent messages:** ${messages.length}`);
-
-    await respond(ctx.bot, ctx.interaction, lines.join("\n"), true);
   },
 });
+
+async function handleInfoStatus(ctx: CommandContext) {
+  const lines: string[] = [];
+
+  // Check channel bindings (now supports multiple)
+  const channelEntityIds = resolveDiscordEntities(ctx.channelId, "channel", ctx.guildId, ctx.channelId);
+  if (channelEntityIds.length > 0) {
+    const entityNames: string[] = [];
+    for (const entityId of channelEntityIds) {
+      const entity = getEntity(entityId);
+      if (entity) entityNames.push(entity.name);
+    }
+    lines.push(`**Channel bound to:** ${entityNames.join(", ")}`);
+
+    // Show location for first entity that has one
+    for (const entityId of channelEntityIds) {
+      const entity = getEntityWithFacts(entityId);
+      if (entity) {
+        const locationFact = entity.facts.find(f => f.content.startsWith("is in "));
+        if (locationFact) {
+          lines.push(`**Location:** ${locationFact.content.replace("is in ", "")}`);
+          break;
+        }
+      }
+    }
+  } else {
+    lines.push("**Channel:** Not bound to any entity");
+  }
+
+  // Check user binding
+  const userEntityId = resolveDiscordEntity(ctx.userId, "user", ctx.guildId, ctx.channelId);
+  if (userEntityId) {
+    const userEntity = getEntityWithFacts(userEntityId);
+    if (userEntity) {
+      lines.push(`**Your persona:** ${userEntity.name}`);
+    }
+  } else {
+    lines.push(`**Your persona:** ${ctx.username} (default)`);
+  }
+
+  // Message count
+  const messages = getMessages(ctx.channelId, 10);
+  lines.push(`**Recent messages:** ${messages.length}`);
+
+  await respond(ctx.bot, ctx.interaction, lines.join("\n"), true);
+}
+
+async function handleInfoDryrun(ctx: CommandContext, options: Record<string, unknown>) {
+  const entityInput = options.entity as string | undefined;
+
+  // Resolve entity to use
+  let targetEntity: EntityWithFacts | null = null;
+
+  if (entityInput) {
+    // User specified an entity
+    const id = parseInt(entityInput);
+    if (!isNaN(id)) {
+      targetEntity = getEntityWithFacts(id);
+    }
+    if (!targetEntity) {
+      targetEntity = getEntityWithFactsByName(entityInput);
+    }
+    if (!targetEntity) {
+      await respond(ctx.bot, ctx.interaction, `Entity not found: ${entityInput}`, true);
+      return;
+    }
+  } else {
+    // Use first channel-bound entity
+    const channelEntityIds = resolveDiscordEntities(ctx.channelId, "channel", ctx.guildId, ctx.channelId);
+    if (channelEntityIds.length > 0) {
+      targetEntity = getEntityWithFacts(channelEntityIds[0]);
+    }
+    if (!targetEntity) {
+      await respond(ctx.bot, ctx.interaction, "No entity bound to this channel. Specify an entity with `/info dryrun entity:<name>`", true);
+      return;
+    }
+  }
+
+  // Build the context similar to handleMessage
+  const result = buildDryrunContext(ctx.channelId, ctx.guildId, ctx.userId, targetEntity);
+
+  // Format output, eliding if needed to stay under 2000 chars (Discord limit)
+  const MAX_CHARS = 1900; // Leave some margin
+  let output = formatDryrunOutput(result.systemPrompt, result.userMessage, result.entityName);
+
+  if (output.length > MAX_CHARS) {
+    output = formatDryrunOutputElided(result.systemPrompt, result.userMessage, result.entityName, MAX_CHARS);
+  }
+
+  await respond(ctx.bot, ctx.interaction, output, true);
+}
+
+interface DryrunContext {
+  entityName: string;
+  systemPrompt: string;
+  userMessage: string;
+}
+
+function buildDryrunContext(
+  channelId: string,
+  guildId: string | undefined,
+  userId: string,
+  entity: EntityWithFacts
+): DryrunContext {
+  // Process facts (remove directives, expand macros)
+  const processedFacts = entity.facts
+    .map(f => f.content)
+    .filter(f => !f.startsWith("$")); // Remove directive-only facts
+
+  // Expand {{char}} and {{user}} macros
+  const expandedFacts = processedFacts.map(fact =>
+    fact
+      .replace(/\{\{char\}\}/gi, entity.name)
+      .replace(/\{\{user\}\}/gi, "user")
+  );
+
+  // Build entity context
+  const entityContext = `<facts entity="${entity.name}" id="${entity.id}">\n${expandedFacts.join("\n")}\n</facts>`;
+
+  // Check for user persona
+  let userContext = "";
+  const userEntityId = resolveDiscordEntity(userId, "user", guildId, channelId);
+  if (userEntityId) {
+    const userEntity = getEntityWithFacts(userEntityId);
+    if (userEntity) {
+      const userFacts = userEntity.facts
+        .map(f => f.content)
+        .filter(f => !f.startsWith("$"));
+      userContext = `\n\n<facts entity="${userEntity.name}" id="${userEntity.id}">\n${userFacts.join("\n")}\n</facts>`;
+    }
+  }
+
+  const systemPrompt = `${entityContext}${userContext}
+
+You have access to tools to modify facts and memories about entities.
+
+**Facts** are permanent defining traits. Use very sparingly:
+- Core personality, appearance, abilities
+- Key relationships that define the entity
+- Use add_fact / update_fact / remove_fact
+
+**Memories** are important events worth recalling. Use sparingly:
+- Significant conversations or promises
+- Events that shaped them
+- Things learned that may be relevant later
+- Use save_memory / update_memory / remove_memory
+
+Most interactions don't need saving. Only save what matters long-term.
+
+Respond naturally based on the facts and memories provided.`;
+
+  // Get message history
+  const messages = getMessages(channelId, 100);
+  const historyLines: string[] = [];
+  let totalChars = 0;
+  const charLimit = 16_000; // Default context limit
+
+  for (const m of messages) {
+    const line = `${m.author_name}: ${m.content}`;
+    const lineLen = line.length + 1;
+    if (totalChars + lineLen > charLimit && historyLines.length > 0) break;
+    historyLines.push(line);
+    totalChars += lineLen;
+  }
+
+  const userMessage = historyLines.reverse().join("\n") || "(no messages)";
+
+  return {
+    entityName: entity.name,
+    systemPrompt,
+    userMessage,
+  };
+}
+
+function formatDryrunOutput(systemPrompt: string, userMessage: string, entityName: string): string {
+  return `**Dryrun for ${entityName}**
+
+**System prompt:**
+\`\`\`
+${systemPrompt}
+\`\`\`
+
+**User message (chat history):**
+\`\`\`
+${userMessage}
+\`\`\``;
+}
+
+function formatDryrunOutputElided(
+  systemPrompt: string,
+  userMessage: string,
+  entityName: string,
+  maxChars: number
+): string {
+  // Calculate available space for each section
+  const headerLen = `**Dryrun for ${entityName}**\n\n**System prompt:**\n\`\`\`\n`.length;
+  const midLen = `\n\`\`\`\n\n**User message (chat history):**\n\`\`\`\n`.length;
+  const footerLen = `\n\`\`\``.length;
+  const elisionMarker = "\n... (elided) ...\n";
+
+  const overhead = headerLen + midLen + footerLen;
+  const availableChars = maxChars - overhead;
+
+  // Give 60% to system prompt, 40% to user message
+  const systemBudget = Math.floor(availableChars * 0.6);
+  const userBudget = availableChars - systemBudget;
+
+  const elidedSystem = elideText(systemPrompt, systemBudget, elisionMarker);
+  const elidedUser = elideText(userMessage, userBudget, elisionMarker);
+
+  return `**Dryrun for ${entityName}**
+
+**System prompt:**
+\`\`\`
+${elidedSystem}
+\`\`\`
+
+**User message (chat history):**
+\`\`\`
+${elidedUser}
+\`\`\``;
+}
+
+function elideText(text: string, maxLen: number, marker: string): string {
+  if (text.length <= maxLen) return text;
+
+  const markerLen = marker.length;
+  const keepLen = maxLen - markerLen;
+  if (keepLen <= 0) return marker.trim();
+
+  // Keep beginning and end
+  const halfKeep = Math.floor(keepLen / 2);
+  const start = text.slice(0, halfKeep);
+  const end = text.slice(-halfKeep);
+
+  return start + marker + end;
+}
 
 // =============================================================================
 // /forget - Clear message history from context
@@ -853,7 +1076,7 @@ const HELP_ENTITY_FACTS: Record<string, string[]> = {
     "4. Your messages now come from MyChar's perspective",
     "---",
     "**Tips:**",
-    "• Use `/status` to see current channel state",
+    "• Use `/info` to see current channel state",
     "• Use `/view <entity>` to view any entity",
     "• Control responses with `$if` (`/view help:expressions`)",
   ],
@@ -868,8 +1091,12 @@ const HELP_ENTITY_FACTS: Record<string, string[]> = {
     "`/transfer` - Transfer entity ownership",
     "`/bind` - Bind channel/user to entity",
     "`/unbind` - Remove entity binding",
-    "`/status` - Channel state",
+    "`/info` - Channel state and debug",
     "`/forget` - Forget history before now",
+    "---",
+    "**Info subcommands:**",
+    "`/info status` - Channel state (default)",
+    "`/info dryrun [entity]` - Show LLM context",
     "---",
     "**Examples:**",
     "`/create Aria` - Create entity",

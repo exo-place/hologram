@@ -193,7 +193,8 @@ $view alice, bob                   # Specific users only
 | `/transfer <entity> <user>` | Transfer ownership |
 | `/bind <target> <entity>` | Bind channel/user |
 | `/unbind <target> <entity>` | Unbind channel/user |
-| `/status` | Channel state |
+| `/info [status]` | Channel state (default) |
+| `/info dryrun [entity]` | Show LLM context for entity |
 | `/forget` | Exclude messages before now from context |
 
 Help is an entity: `/view help`, `/view help:commands`, `/view help:respond`
