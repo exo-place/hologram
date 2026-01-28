@@ -27,7 +27,7 @@ Facts:
   - is in {{entity:2}}
 ```
 
-Facts are freeform text. You can write anything. Some patterns have special meaning (like `is in {{entity:2}}` for location), but most facts are just descriptions that shape how the AI responds.
+Facts are freeform text. You can write anything. Some patterns have special meaning (like <code v-pre>is in {{entity:2}}</code> for location), but most facts are just descriptions that shape how the AI responds.
 
 ### Good Facts
 
@@ -43,7 +43,7 @@ Facts are freeform text. You can write anything. Some patterns have special mean
 | `is a character` | Entity type |
 | `is a location` | Entity type |
 | `is a item` | Entity type |
-| `is in {{entity:12}}` | Location/containment |
+| <code v-pre>is in {{entity:12}}</code> | Location/containment |
 | `$if condition: fact` | Conditional fact |
 | `$respond` | Control when entity responds |
 | `$stream` | Enable line-based streaming |

@@ -24,7 +24,7 @@ is in {{entity:12}}
 is in {{entity:12}} (The Tavern)
 ```
 
-The `{{entity:N}}` syntax references another entity by ID. The parenthetical note is optional but helpful for readability.
+The <code v-pre>{{entity:N}}</code> syntax references another entity by ID. The parenthetical note is optional but helpful for readability.
 
 ## Response Control
 
