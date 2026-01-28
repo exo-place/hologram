@@ -1001,11 +1001,18 @@ function buildMessageHistory(channelId: string): string {
 function elideText(text: string, maxLen: number, marker: string): string {
   if (text.length <= maxLen) return text;
 
+  const overflow = text.length - maxLen;
   const markerLen = marker.length;
+
+  // If only cutting a small amount, truncate start without marker (end is more relevant)
+  if (overflow <= markerLen + 50) {
+    return text.slice(-maxLen);
+  }
+
+  // Significant cut: use marker between beginning and end
   const keepLen = maxLen - markerLen;
   if (keepLen <= 0) return marker.trim();
 
-  // Keep beginning and end
   const halfKeep = Math.floor(keepLen / 2);
   const start = text.slice(0, halfKeep);
   const end = text.slice(-halfKeep);
