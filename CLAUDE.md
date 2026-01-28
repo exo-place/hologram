@@ -223,7 +223,6 @@ error("Message", err, { key: "value" });
 
 Do not:
 - Announce actions ("I will now...") - just do them
-- Leave work uncommitted - commit after completing each task
 - Use `--no-verify` - fix the issue or fix the hook
 - Assume tools are missing - check if `bun` is available
 
@@ -232,3 +231,7 @@ Do not:
 Use conventional commits: `type(scope): message`
 
 Types: `feat`, `fix`, `refactor`, `docs`, `chore`, `test`
+
+Scope is optional but recommended for clarity.
+
+**Commit after every task.** Don't wait to be asked. When a task is done, commit it.
