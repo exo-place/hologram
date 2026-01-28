@@ -176,6 +176,42 @@ export function getEntityWithFactsByName(name: string): EntityWithFacts | null {
 }
 
 /**
+ * Batch load entities with their facts.
+ * Much more efficient than calling getEntityWithFacts in a loop.
+ */
+export function getEntitiesWithFacts(ids: number[]): Map<number, EntityWithFacts> {
+  if (ids.length === 0) return new Map();
+  const db = getDb();
+  const placeholders = ids.map(() => "?").join(",");
+
+  const entities = db.prepare(`
+    SELECT * FROM entities WHERE id IN (${placeholders})
+  `).all(...ids) as Entity[];
+
+  const facts = db.prepare(`
+    SELECT * FROM facts WHERE entity_id IN (${placeholders}) ORDER BY created_at
+  `).all(...ids) as Fact[];
+
+  // Group facts by entity_id
+  const factsByEntity = new Map<number, Fact[]>();
+  for (const fact of facts) {
+    const existing = factsByEntity.get(fact.entity_id) || [];
+    existing.push(fact);
+    factsByEntity.set(fact.entity_id, existing);
+  }
+
+  // Build result map
+  const result = new Map<number, EntityWithFacts>();
+  for (const entity of entities) {
+    result.set(entity.id, {
+      ...entity,
+      facts: factsByEntity.get(entity.id) || [],
+    });
+  }
+  return result;
+}
+
+/**
  * Get all fact content strings for an entity, including active effects.
  * Effects are appended after permanent facts.
  */

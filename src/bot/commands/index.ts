@@ -10,7 +10,9 @@ import {
 type Bot = any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Interaction = any;
-import { info, error } from "../../logger";
+import { info, warn, error } from "../../logger";
+import { searchEntities, searchEntitiesOwnedBy, getEntitiesWithFacts } from "../../db/entities";
+import { parsePermissionDirectives } from "../../logic/expr";
 
 // =============================================================================
 // Types
@@ -220,50 +222,44 @@ async function handleAutocomplete(bot: Bot, interaction: Interaction) {
   const userId = interaction.user?.id?.toString() ?? "";
   const username = interaction.user?.username ?? "";
 
-  // Import here to avoid circular deps
-  const { searchEntities, searchEntitiesOwnedBy, getEntityWithFacts } = await import("../../db/entities");
-  const { parsePermissionDirectives } = await import("../../logic/expr");
-
   let results;
-
-  // Helper to check edit permission
-  const canEdit = (entity: { id: number; owned_by: string | null }) => {
-    if (entity.owned_by === userId) return true;
-    const entityWithFacts = getEntityWithFacts(entity.id);
-    if (!entityWithFacts) return false;
-    const facts = entityWithFacts.facts.map(f => f.content);
-    const permissions = parsePermissionDirectives(facts);
-    if (permissions.editList === "everyone") return true;
-    if (permissions.editList && permissions.editList.some(u => u.toLowerCase() === username.toLowerCase())) return true;
-    return false;
-  };
-
-  // Helper to check view permission
-  const canView = (entity: { id: number; owned_by: string | null }) => {
-    if (entity.owned_by === userId) return true;
-    const entityWithFacts = getEntityWithFacts(entity.id);
-    if (!entityWithFacts) return false;
-    const facts = entityWithFacts.facts.map(f => f.content);
-    const permissions = parsePermissionDirectives(facts);
-    // No $view directive = public by default
-    if (permissions.viewList === null) return true;
-    if (permissions.viewList === "everyone") return true;
-    if (permissions.viewList.some(u => u.toLowerCase() === username.toLowerCase())) return true;
-    return false;
-  };
 
   // Filter based on command - only show entities the user can actually use
   if (commandName === "delete" || commandName === "transfer") {
-    // These commands require ownership
+    // These commands require ownership - no permission check needed
     results = searchEntitiesOwnedBy(query, userId, 25);
   } else if (commandName === "edit" || commandName === "bind" || commandName === "unbind") {
-    // These commands require edit permission
+    // These commands require edit permission - batch load facts
     const allResults = searchEntities(query, 100);
-    results = allResults.filter(canEdit).slice(0, 25);
+    const entitiesWithFacts = getEntitiesWithFacts(allResults.map(e => e.id));
+
+    results = allResults.filter(entity => {
+      if (entity.owned_by === userId) return true;
+      const entityWithFacts = entitiesWithFacts.get(entity.id);
+      if (!entityWithFacts) return false;
+      const facts = entityWithFacts.facts.map(f => f.content);
+      const permissions = parsePermissionDirectives(facts);
+      if (permissions.editList === "everyone") return true;
+      if (permissions.editList?.some(u => u.toLowerCase() === username.toLowerCase())) return true;
+      return false;
+    }).slice(0, 25);
   } else if (commandName === "view") {
-    // View requires view permission
+    // View requires view permission - batch load facts
     const allResults = searchEntities(query, 100);
-    results = allResults.filter(canView).slice(0, 25);
+    const entitiesWithFacts = getEntitiesWithFacts(allResults.map(e => e.id));
+
+    results = allResults.filter(entity => {
+      if (entity.owned_by === userId) return true;
+      const entityWithFacts = entitiesWithFacts.get(entity.id);
+      if (!entityWithFacts) return false;
+      const facts = entityWithFacts.facts.map(f => f.content);
+      const permissions = parsePermissionDirectives(facts);
+      // No $view directive = public by default
+      if (permissions.viewList === null) return true;
+      if (permissions.viewList === "everyone") return true;
+      if (permissions.viewList.some(u => u.toLowerCase() === username.toLowerCase())) return true;
+      return false;
+    }).slice(0, 25);
   } else {
     // Fallback - show all
     results = searchEntities(query, 25);
@@ -274,12 +270,17 @@ async function handleAutocomplete(bot: Bot, interaction: Interaction) {
     value: e.name,
   }));
 
-  await bot.helpers.sendInteractionResponse(interaction.id, interaction.token, {
-    type: InteractionResponseTypes.ApplicationCommandAutocompleteResult,
-    data: {
-      choices,
-    },
-  });
+  try {
+    await bot.helpers.sendInteractionResponse(interaction.id, interaction.token, {
+      type: InteractionResponseTypes.ApplicationCommandAutocompleteResult,
+      data: {
+        choices,
+      },
+    });
+  } catch (err) {
+    // Interaction may have expired (3s timeout) - log but don't crash
+    warn("Autocomplete response failed (interaction may have expired)", { err });
+  }
 }
 
 // Modal submit handlers
