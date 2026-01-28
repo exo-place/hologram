@@ -303,7 +303,7 @@ bot.events.messageCreate = async (message) => {
         return facts.some(f => regex.test(f));
       },
       messages: (n = 1, format?: string) => formatMessagesForContext(getMessages(channelId, n), format),
-      dt_ms: lastResponse > 0 ? messageTime - lastResponse : 0,
+      dt_ms: lastResponse > 0 ? messageTime - lastResponse : Infinity,
       elapsed_ms: 0,
       mentioned: isMentioned ?? false,
       replied: isReplied,
@@ -431,7 +431,7 @@ async function processEntityRetry(
       return facts.some(f => regex.test(f));
     },
     messages: (n = 1, format?: string) => formatMessagesForContext(getMessages(channelId, n), format),
-    dt_ms: lastResponse > 0 ? now - lastResponse : 0,
+    dt_ms: lastResponse > 0 ? now - lastResponse : Infinity,
     elapsed_ms: now - messageTime,
     mentioned: false, // Retry is never from a mention
     replied: false,
