@@ -111,6 +111,29 @@ const MAX_PROCESSED = 1000;
 const botMessageIds = new Set<string>();
 const MAX_BOT_MESSAGES = 1000;
 
+// In-memory tracking of our own webhook messages (for recursion limit)
+// This must be updated synchronously when we send, before yielding control
+const ownWebhookMessageIds = new Set<string>();
+const MAX_OWN_WEBHOOK_IDS = 1000;
+
+function isOwnWebhookMessage(messageId: string): boolean {
+  // Check in-memory first (handles race condition), then DB
+  return ownWebhookMessageIds.has(messageId) || !!getWebhookMessageEntity(messageId);
+}
+
+function trackOwnWebhookMessage(messageId: string, entityId: number, entityName: string): void {
+  // Add to in-memory set immediately (synchronous)
+  ownWebhookMessageIds.add(messageId);
+  if (ownWebhookMessageIds.size > MAX_OWN_WEBHOOK_IDS) {
+    const iter = ownWebhookMessageIds.values();
+    for (let i = 0; i < MAX_OWN_WEBHOOK_IDS / 2; i++) {
+      const v = iter.next().value;
+      if (v) ownWebhookMessageIds.delete(v);
+    }
+  }
+  // Also persist to DB for reply detection
+  trackWebhookMessage(messageId, entityId, entityName);
+}
 
 function markProcessed(messageId: bigint): boolean {
   const id = messageId.toString();
@@ -172,9 +195,9 @@ bot.events.messageCreate = async (message) => {
   // Track response chain depth to prevent infinite self-response loops
   const isWebhookMessage = !!message.webhookId;
   if (isWebhookMessage) {
-    // Check if this is one of our own webhook messages
+    // Check if this is one of our own webhook messages (in-memory first, then DB)
     const msgId = message.id.toString();
-    if (getWebhookMessageEntity(msgId)) {
+    if (isOwnWebhookMessage(msgId)) {
       // This is our own webhook - increment chain depth
       const depth = (responseChainDepth.get(channelId) ?? 0) + 1;
       responseChainDepth.set(channelId, depth);
@@ -757,7 +780,7 @@ async function handleStreamingResponse(
       for (const [name, msg] of entityMessages) {
         const charEntity = entities.find(e => e.name === name);
         if (charEntity) {
-          trackWebhookMessage(msg.messageId, charEntity.id, charEntity.name);
+          trackOwnWebhookMessage(msg.messageId, charEntity.id, charEntity.name);
         }
       }
     }
@@ -953,10 +976,10 @@ function trackBotMessage(messageId: bigint): void {
   }
 }
 
-/** Track webhook message IDs with entity association for reply detection */
+/** Track webhook message IDs with entity association for reply detection and recursion limit */
 function trackWebhookMessages(messageIds: string[], entityId: number, entityName: string): void {
   for (const id of messageIds) {
-    trackWebhookMessage(id, entityId, entityName);
+    trackOwnWebhookMessage(id, entityId, entityName);
   }
 }
 
