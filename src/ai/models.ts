@@ -98,4 +98,4 @@ export function getTextEmbeddingModel(modelSpec: string, apiKey?: string) {
 }
 
 export const DEFAULT_MODEL =
-  process.env.DEFAULT_MODEL || "google:gemini-2.0-flash";
+  process.env.DEFAULT_MODEL || "google:gemini-3-flash-preview";

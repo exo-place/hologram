@@ -41,4 +41,4 @@
 |----------|-------------|
 | `DISCORD_TOKEN` | Your Discord bot token |
 | `DISCORD_APP_ID` | Discord application ID |
-| `LLM_PROVIDER` | Default: `google:gemini-2.0-flash` |
+| `LLM_PROVIDER` | Default: `google:gemini-3-flash-preview` |
