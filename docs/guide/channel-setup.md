@@ -7,13 +7,13 @@ This guide walks through setting up a channel where an AI character responds.
 ### 1. Create a Character
 
 ```
-/c character Bartender
+/create Bartender
 ```
 
 ### 2. Add Personality
 
 ```
-/e Bartender
+/edit Bartender
 ```
 
 Add facts in the modal:
@@ -29,7 +29,7 @@ speaks with a warm, welcoming tone
 ### 3. Bind to Channel
 
 ```
-/b channel Bartender
+/bind channel Bartender
 ```
 
 Done! The Bartender now responds when @mentioned in this channel.
@@ -39,7 +39,7 @@ Done! The Bartender now responds when @mentioned in this channel.
 To have an entity respond across all channels in a server:
 
 ```
-/b server Narrator
+/bind server Narrator
 ```
 
 This is useful for:
@@ -170,8 +170,8 @@ Wait ~5 seconds after a message before responding. If a new message arrives, the
 A character that's part of the conversation:
 
 ```
-/c character Shopkeeper
-/e Shopkeeper
+/create Shopkeeper
+/edit Shopkeeper
 ```
 
 Facts:
@@ -190,8 +190,8 @@ $if random() < 0.05 && dt_ms > 60000: $respond
 A character that occasionally adds flavor:
 
 ```
-/c character Narrator
-/e Narrator
+/create Narrator
+/edit Narrator
 ```
 
 Facts:
@@ -208,7 +208,7 @@ $if random() < 0.05 && dt_ms > 120000: $respond
 See the current channel configuration:
 
 ```
-/s
+/info
 ```
 
 This shows:

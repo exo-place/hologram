@@ -59,7 +59,7 @@ Bindings connect Discord to entities.
 ### Channel Binding
 
 ```
-/b channel Aria
+/bind channel Aria
 ```
 
 When a channel is bound to an entity (usually a character), that entity:
@@ -70,7 +70,7 @@ When a channel is bound to an entity (usually a character), that entity:
 ### Server Binding
 
 ```
-/b server Narrator
+/bind server Narrator
 ```
 
 When a server is bound to an entity:
@@ -81,7 +81,7 @@ When a server is bound to an entity:
 ### User Binding (Persona)
 
 ```
-/b me Traveler
+/bind me Traveler
 ```
 
 When you bind yourself to an entity:
@@ -100,10 +100,10 @@ Bindings can have different scopes:
 | `global` | Everywhere the bot is |
 
 ```
-/b channel Aria              # This channel only
-/b server Narrator           # All channels in this server
-/b me Traveler scope:guild   # This server
-/b me Narrator scope:global  # Everywhere
+/bind channel Aria              # This channel only
+/bind server Narrator           # All channels in this server
+/bind me Traveler scope:guild   # This server
+/bind me Narrator scope:global  # Everywhere
 ```
 
 ## How It Works

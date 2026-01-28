@@ -5,8 +5,8 @@ Hologram is a Discord bot for collaborative worldbuilding and roleplay. Its core
 ## Installation
 
 1. Invite the bot to your server (link from server admin)
-2. Create a character: `/c character YourCharacter`
-3. Bind it to a channel: `/b channel YourCharacter`
+2. Create a character: `/create YourCharacter`
+3. Bind it to a channel: `/bind channel YourCharacter`
 4. Start chatting!
 
 ## Your First Character
@@ -14,15 +14,15 @@ Hologram is a Discord bot for collaborative worldbuilding and roleplay. Its core
 Let's create a character named Aria:
 
 ```
-/c character Aria
+/create Aria
 ```
 
-This creates an entity named "Aria" with a single fact: "is a character".
+This creates an entity named "Aria".
 
 Now let's give her some personality:
 
 ```
-/e Aria
+/edit Aria
 ```
 
 This opens a modal where you can add facts, one per line:
@@ -40,7 +40,7 @@ carries a worn leather satchel
 To make Aria respond in a channel:
 
 ```
-/b channel Aria
+/bind channel Aria
 ```
 
 Now when users chat in that channel, Aria will respond based on her facts. By default, she responds when @mentioned.

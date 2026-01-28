@@ -13,13 +13,13 @@ A persona lets you speak as a character. When you bind yourself to an entity, yo
 ### 1. Create the Entity
 
 ```
-/c character Traveler
+/create Traveler
 ```
 
 ### 2. Define Who They Are
 
 ```
-/e Traveler
+/edit Traveler
 ```
 
 Add facts:
@@ -35,7 +35,7 @@ speaks casually and asks lots of questions
 ### 3. Bind to Yourself
 
 ```
-/b me Traveler
+/bind me Traveler
 ```
 
 Now your messages in this channel come from Traveler's perspective.
@@ -45,7 +45,7 @@ Now your messages in this channel come from Traveler's perspective.
 ### Channel Scope (Default)
 
 ```
-/b me Traveler
+/bind me Traveler
 ```
 
 You're Traveler only in this channel. In other channels, you're yourself.
@@ -53,7 +53,7 @@ You're Traveler only in this channel. In other channels, you're yourself.
 ### Server Scope
 
 ```
-/b me Traveler scope:guild
+/bind me Traveler scope:guild
 ```
 
 You're Traveler across the entire server.
@@ -61,7 +61,7 @@ You're Traveler across the entire server.
 ### Global Scope
 
 ```
-/b me Traveler scope:global
+/bind me Traveler scope:global
 ```
 
 You're Traveler everywhere the bot is active.
@@ -71,13 +71,13 @@ You're Traveler everywhere the bot is active.
 Just bind to a different entity:
 
 ```
-/b me Knight
+/bind me Knight
 ```
 
 Or remove your persona entirely:
 
 ```
-/b me none
+/unbind me
 ```
 
 (Note: "none" unbinds you - you'll speak as yourself again)
@@ -117,7 +117,7 @@ The Shopkeeper responds differently because they know they're talking to a knigh
 ## Checking Your Persona
 
 ```
-/s
+/info
 ```
 
 Shows your current persona in this channel.

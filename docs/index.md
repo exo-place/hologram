@@ -58,9 +58,9 @@ Items can have guaranteed and random effects. The character's body facts update 
 
 ## Getting Started
 
-1. **Create a character**: `/c character Aria`
-2. **Add personality**: `/e Aria` → Add facts describing who Aria is
-3. **Bind to channel**: `/b channel Aria`
+1. **Create a character**: `/create Aria`
+2. **Add personality**: `/edit Aria` → Add facts describing who Aria is
+3. **Bind to channel**: `/bind channel Aria`
 4. **Chat**: Just talk - Aria responds in character
 
 [Read the full guide →](/guide/)

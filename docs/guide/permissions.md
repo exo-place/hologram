@@ -8,14 +8,14 @@ Every entity has an owner - the user who created it. The owner always has full a
 
 ### Checking Ownership
 
-When you create an entity, your Discord user ID is stored as the owner. You can see who owns an entity (and its ID) with `/v <entity>`.
+When you create an entity, your Discord user ID is stored as the owner. You can see who owns an entity (and its ID) with `/view <entity>`.
 
 ### Transferring Ownership
 
-Use the `/transfer` command (alias `/t`) to transfer ownership to another user:
+Use the `/transfer` command to transfer ownership to another user:
 
 ```
-/t Aria @username
+/transfer Aria @username
 ```
 
 Only the current owner can transfer an entity.

@@ -9,8 +9,8 @@ Hologram supports multiple characters responding in the same channel, each with 
 Create each character as a separate entity:
 
 ```
-/c character Aria
-/c character Marcus
+/create Aria
+/create Marcus
 ```
 
 ### 2. Add Facts
@@ -18,7 +18,7 @@ Create each character as a separate entity:
 Edit each character with their distinct personality and traits:
 
 ```
-/e Aria
+/edit Aria
 ```
 
 Facts for Aria:
@@ -30,7 +30,7 @@ speaks with enthusiasm
 ```
 
 ```
-/e Marcus
+/edit Marcus
 ```
 
 Facts for Marcus:
@@ -46,8 +46,8 @@ distrusts magic
 Bind multiple characters to the same channel:
 
 ```
-/b channel Aria
-/b channel Marcus
+/bind channel Aria
+/bind channel Marcus
 ```
 
 Both characters are now active in the channel.

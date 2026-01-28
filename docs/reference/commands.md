@@ -1,115 +1,104 @@
 # Commands Reference
 
-All commands have short aliases for quick access.
-
 ## Entity Management
 
-### `/create` (alias: `/c`)
+### `/create`
 
 Create a new entity.
 
 ```
-/c <type> [name]
+/create [name]
 ```
-
-**Type shortcuts:**
-- `c`, `char`, `character` → character
-- `l`, `loc`, `location` → location
-- `i`, `item` → item
 
 **Examples:**
 ```
-/c character Aria      # Create character named Aria
-/c c Aria              # Same thing
-/c location Tavern     # Create location
-/c l Tavern            # Same thing
-/c item Sword          # Create item
+/create Aria           # Create entity named Aria
+/create                # Opens modal for name entry
 ```
-
-If you omit the name, a modal opens for details.
 
 ---
 
-### `/view` (alias: `/v`)
+### `/view`
 
 View an entity and its facts.
 
 ```
-/v <entity>
+/view <entity>
 ```
 
 **Examples:**
 ```
-/v Aria                # View by name
-/v help                # View help entity
-/v help:triggers       # View triggers help
+/view Aria             # View by name
+/view help             # View help entity
+/view help:triggers    # View triggers help
 ```
 
 ---
 
-### `/edit` (alias: `/e`)
+### `/edit`
 
 Edit an entity's facts.
 
 ```
-/e <entity>
+/edit <entity>
 ```
 
 Opens a modal with current facts. Edit them (one per line) and submit.
 
 **Examples:**
 ```
-/e Aria                # Edit Aria's facts
+/edit Aria             # Edit Aria's facts
 ```
 
 ---
 
-### `/delete` (alias: `/d`)
+### `/delete`
 
 Delete an entity you own.
 
 ```
-/d <entity>
+/delete <entity>
 ```
 
 Only the owner can delete an entity.
 
 **Examples:**
 ```
-/d Aria                # Delete Aria
+/delete Aria           # Delete Aria
 ```
 
 ---
 
-### `/transfer` (alias: `/t`)
+### `/transfer`
 
 Transfer entity ownership to another user.
 
 ```
-/t <entity> <user>
+/transfer <entity> <user>
 ```
 
 Only the current owner can transfer an entity.
 
 **Examples:**
 ```
-/t Aria @username      # Transfer Aria to another user
+/transfer Aria @username  # Transfer Aria to another user
 ```
 
 ---
 
 ## Bindings
 
-### `/bind` (alias: `/b`)
+### `/bind`
 
 Bind a Discord channel or yourself to an entity.
 
 ```
-/b <target> <entity> [scope]
+/bind <target> <entity> [scope]
 ```
 
 **Targets:**
 - `channel` - Bind this channel
+- `server` - Bind this server
 - `me` - Bind yourself
 
 **Scopes:**
@@ -119,24 +108,25 @@ Bind a Discord channel or yourself to an entity.
 
 **Examples:**
 ```
-/b channel Aria              # Aria responds in this channel
-/b me Traveler               # Speak as Traveler here
-/b me Knight scope:guild     # Speak as Knight server-wide
-/b channel Narrator scope:global  # Narrator everywhere
+/bind channel Aria              # Aria responds in this channel
+/bind me Traveler               # Speak as Traveler here
+/bind me Knight scope:guild     # Speak as Knight server-wide
+/bind channel Narrator scope:global  # Narrator everywhere
 ```
 
 ---
 
-### `/unbind` (alias: `/ub`)
+### `/unbind`
 
 Remove an entity binding from a channel or yourself.
 
 ```
-/ub <target> <entity> [scope]
+/unbind <target> <entity> [scope]
 ```
 
 **Targets:**
 - `channel` - Unbind from this channel
+- `server` - Unbind from this server
 - `me` - Unbind yourself
 
 **Scopes:**
@@ -146,21 +136,21 @@ Remove an entity binding from a channel or yourself.
 
 **Examples:**
 ```
-/ub channel Aria             # Remove Aria from this channel
-/ub me Traveler              # Stop speaking as Traveler
-/ub me Knight scope:guild    # Remove server-wide persona
+/unbind channel Aria             # Remove Aria from this channel
+/unbind me Traveler              # Stop speaking as Traveler
+/unbind me Knight scope:guild    # Remove server-wide persona
 ```
 
 ---
 
 ## Status
 
-### `/status` (alias: `/s`)
+### `/info`
 
-View current channel state.
+View current channel state or debug information.
 
 ```
-/s
+/info [status|prompt|history]
 ```
 
 Shows:
@@ -172,16 +162,16 @@ Shows:
 
 ## Help
 
-Help is an entity! View it with `/v`:
+Help is an entity! View it with `/view`:
 
 ```
-/v help              # Overview
-/v help:start        # Getting started guide
-/v help:commands     # Command reference
-/v help:expressions  # Response control ($if)
-/v help:patterns     # Common expression patterns
-/v help:facts        # Fact patterns
-/v help:bindings     # Binding system
-/v help:permissions  # Entity permissions
-/v help:models       # LLM configuration
+/view help              # Overview
+/view help:start        # Getting started guide
+/view help:commands     # Command reference
+/view help:expressions  # Response control ($if)
+/view help:patterns     # Common expression patterns
+/view help:facts        # Fact patterns
+/view help:bindings     # Binding system
+/view help:permissions  # Entity permissions
+/view help:models       # LLM configuration
 ```

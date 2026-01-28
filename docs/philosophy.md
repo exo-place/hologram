@@ -387,12 +387,12 @@ Simple things should be simple. Complex things should be possible.
 
 ```
 # Simple - create and bind a character
-/c character Aria
-/b channel Aria
+/create Aria
+/bind channel Aria
 
-# Complex - detailed TF-capable character with custom response control
-/c character Aria
-/e Aria
+# Complex - detailed character with custom response control
+/create Aria
+/edit Aria
   is a character
   has human ears
   has no tail
