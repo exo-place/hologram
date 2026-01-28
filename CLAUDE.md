@@ -161,6 +161,7 @@ Discord channels/users/servers map to entities via `discord_entities`:
 | `/bind <target> <entity>` | Bind channel/user |
 | `/unbind <target> <entity>` | Unbind channel/user |
 | `/status` | Channel state |
+| `/forget` | Exclude messages before now from context |
 
 Help is an entity: `/view help`, `/view help:commands`, `/view help:respond`
 
@@ -226,12 +227,14 @@ Do not:
 - Use `--no-verify` - fix the issue or fix the hook
 - Assume tools are missing - check if `bun` is available
 
-## Commit Convention
+## Commits
+
+**ALWAYS COMMIT AFTER EVERY TASK. DO NOT WAIT TO BE ASKED.**
+
+This is non-negotiable. When work is done, commit it immediately. Not committing is a failure mode.
 
 Use conventional commits: `type(scope): message`
 
 Types: `feat`, `fix`, `refactor`, `docs`, `chore`, `test`
 
-Scope is optional but recommended for clarity.
-
-**Commit after every task.** Don't wait to be asked. When a task is done, commit it.
+Before committing: `bun run lint && bun run check:types` must pass.
