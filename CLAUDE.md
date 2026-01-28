@@ -194,7 +194,8 @@ $view alice, bob                   # Specific users only
 | `/bind <target> <entity>` | Bind channel/user |
 | `/unbind <target> <entity>` | Unbind channel/user |
 | `/info [status]` | Channel state (default) |
-| `/info dryrun [entity]` | Show LLM context for entity |
+| `/info prompt [entity]` | Show system prompt for entity |
+| `/info history [entity]` | Show message history for entity |
 | `/forget` | Exclude messages before now from context |
 
 Help is an entity: `/view help`, `/view help:commands`, `/view help:respond`

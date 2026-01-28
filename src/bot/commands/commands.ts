@@ -768,8 +768,22 @@ registerCommand({
       type: ApplicationCommandOptionTypes.SubCommand,
     },
     {
-      name: "dryrun",
-      description: "Show context that would be sent to the LLM",
+      name: "prompt",
+      description: "Show system prompt that would be sent to the LLM",
+      type: ApplicationCommandOptionTypes.SubCommand,
+      options: [
+        {
+          name: "entity",
+          description: "Entity to simulate (defaults to channel-bound entity)",
+          type: ApplicationCommandOptionTypes.String,
+          required: false,
+          autocomplete: true,
+        },
+      ],
+    },
+    {
+      name: "history",
+      description: "Show message history that would be sent to the LLM",
       type: ApplicationCommandOptionTypes.SubCommand,
       options: [
         {
@@ -786,8 +800,10 @@ registerCommand({
     // Get subcommand from nested options
     const subcommand = (options._subcommand as string) ?? "status";
 
-    if (subcommand === "dryrun") {
-      await handleInfoDryrun(ctx, options);
+    if (subcommand === "prompt") {
+      await handleInfoPrompt(ctx, options);
+    } else if (subcommand === "history") {
+      await handleInfoHistory(ctx, options);
     } else {
       await handleInfoStatus(ctx);
     }
@@ -840,63 +856,85 @@ async function handleInfoStatus(ctx: CommandContext) {
   await respond(ctx.bot, ctx.interaction, lines.join("\n"), true);
 }
 
-async function handleInfoDryrun(ctx: CommandContext, options: Record<string, unknown>) {
-  const entityInput = options.entity as string | undefined;
-
-  // Resolve entity to use
-  let targetEntity: EntityWithFacts | null = null;
-
+async function resolveTargetEntity(
+  ctx: CommandContext,
+  entityInput: string | undefined,
+  commandHint: string
+): Promise<EntityWithFacts | null> {
   if (entityInput) {
     // User specified an entity
     const id = parseInt(entityInput);
+    let entity: EntityWithFacts | null = null;
     if (!isNaN(id)) {
-      targetEntity = getEntityWithFacts(id);
+      entity = getEntityWithFacts(id);
     }
-    if (!targetEntity) {
-      targetEntity = getEntityWithFactsByName(entityInput);
+    if (!entity) {
+      entity = getEntityWithFactsByName(entityInput);
     }
-    if (!targetEntity) {
+    if (!entity) {
       await respond(ctx.bot, ctx.interaction, `Entity not found: ${entityInput}`, true);
-      return;
+      return null;
     }
-  } else {
-    // Use first channel-bound entity
-    const channelEntityIds = resolveDiscordEntities(ctx.channelId, "channel", ctx.guildId, ctx.channelId);
-    if (channelEntityIds.length > 0) {
-      targetEntity = getEntityWithFacts(channelEntityIds[0]);
-    }
-    if (!targetEntity) {
-      await respond(ctx.bot, ctx.interaction, "No entity bound to this channel. Specify an entity with `/info dryrun entity:<name>`", true);
-      return;
-    }
+    return entity;
   }
 
-  // Build the context similar to handleMessage
-  const result = buildDryrunContext(ctx.channelId, ctx.guildId, ctx.userId, targetEntity);
+  // Use first channel-bound entity
+  const channelEntityIds = resolveDiscordEntities(ctx.channelId, "channel", ctx.guildId, ctx.channelId);
+  if (channelEntityIds.length > 0) {
+    const entity = getEntityWithFacts(channelEntityIds[0]);
+    if (entity) return entity;
+  }
 
-  // Format output, eliding if needed to stay under 2000 chars (Discord limit)
-  const MAX_CHARS = 1900; // Leave some margin
-  let output = formatDryrunOutput(result.systemPrompt, result.userMessage, result.entityName);
+  await respond(ctx.bot, ctx.interaction, `No entity bound to this channel. Specify an entity with \`/info ${commandHint} entity:<name>\``, true);
+  return null;
+}
+
+async function handleInfoPrompt(ctx: CommandContext, options: Record<string, unknown>) {
+  const entityInput = options.entity as string | undefined;
+  const targetEntity = await resolveTargetEntity(ctx, entityInput, "prompt");
+  if (!targetEntity) return;
+
+  const systemPrompt = buildSystemPrompt(ctx.channelId, ctx.guildId, ctx.userId, targetEntity);
+
+  // Format output, eliding if needed
+  const MAX_CHARS = 1900;
+  let output = `**System prompt for ${targetEntity.name}:**\n\`\`\`\n${systemPrompt}\n\`\`\``;
 
   if (output.length > MAX_CHARS) {
-    output = formatDryrunOutputElided(result.systemPrompt, result.userMessage, result.entityName, MAX_CHARS);
+    const budget = MAX_CHARS - `**System prompt for ${targetEntity.name}:**\n\`\`\`\n\n\`\`\``.length;
+    const elided = elideText(systemPrompt, budget, "\n... (elided) ...\n");
+    output = `**System prompt for ${targetEntity.name}:**\n\`\`\`\n${elided}\n\`\`\``;
   }
 
   await respond(ctx.bot, ctx.interaction, output, true);
 }
 
-interface DryrunContext {
-  entityName: string;
-  systemPrompt: string;
-  userMessage: string;
+async function handleInfoHistory(ctx: CommandContext, options: Record<string, unknown>) {
+  const entityInput = options.entity as string | undefined;
+  const targetEntity = await resolveTargetEntity(ctx, entityInput, "history");
+  if (!targetEntity) return;
+
+  const userMessage = buildMessageHistory(ctx.channelId);
+
+  // Format output, eliding if needed
+  const MAX_CHARS = 1900;
+  let output = `**Message history for ${targetEntity.name}:**\n\`\`\`\n${userMessage}\n\`\`\``;
+
+  if (output.length > MAX_CHARS) {
+    const budget = MAX_CHARS - `**Message history for ${targetEntity.name}:**\n\`\`\`\n\n\`\`\``.length;
+    const elided = elideText(userMessage, budget, "\n... (elided) ...\n");
+    output = `**Message history for ${targetEntity.name}:**\n\`\`\`\n${elided}\n\`\`\``;
+  }
+
+  await respond(ctx.bot, ctx.interaction, output, true);
 }
 
-function buildDryrunContext(
+function buildSystemPrompt(
   channelId: string,
   guildId: string | undefined,
   userId: string,
   entity: EntityWithFacts
-): DryrunContext {
+): string {
   // Process facts (remove directives, expand macros)
   const processedFacts = entity.facts
     .map(f => f.content)
@@ -910,7 +948,7 @@ function buildDryrunContext(
   );
 
   // Build entity context
-  const entityContext = `<facts entity="${entity.name}" id="${entity.id}">\n${expandedFacts.join("\n")}\n</facts>`;
+  const entityContext = `<defs for="${entity.name}" id="${entity.id}">\n${expandedFacts.join("\n")}\n</defs>`;
 
   // Check for user persona
   let userContext = "";
@@ -921,11 +959,11 @@ function buildDryrunContext(
       const userFacts = userEntity.facts
         .map(f => f.content)
         .filter(f => !f.startsWith("$"));
-      userContext = `\n\n<facts entity="${userEntity.name}" id="${userEntity.id}">\n${userFacts.join("\n")}\n</facts>`;
+      userContext = `\n\n<defs for="${userEntity.name}" id="${userEntity.id}">\n${userFacts.join("\n")}\n</defs>`;
     }
   }
 
-  const systemPrompt = `${entityContext}${userContext}
+  return `${entityContext}${userContext}
 
 You have access to tools to modify facts and memories about entities.
 
@@ -940,11 +978,10 @@ You have access to tools to modify facts and memories about entities.
 - Things learned that may be relevant later
 - Use save_memory / update_memory / remove_memory
 
-Most interactions don't need saving. Only save what matters long-term.
+Most interactions don't need saving. Only save what matters long-term.`;
+}
 
-Respond naturally based on the facts and memories provided.`;
-
-  // Get message history
+function buildMessageHistory(channelId: string): string {
   const messages = getMessages(channelId, 100);
   const historyLines: string[] = [];
   let totalChars = 0;
@@ -958,62 +995,7 @@ Respond naturally based on the facts and memories provided.`;
     totalChars += lineLen;
   }
 
-  const userMessage = historyLines.reverse().join("\n") || "(no messages)";
-
-  return {
-    entityName: entity.name,
-    systemPrompt,
-    userMessage,
-  };
-}
-
-function formatDryrunOutput(systemPrompt: string, userMessage: string, entityName: string): string {
-  return `**Dryrun for ${entityName}**
-
-**System prompt:**
-\`\`\`
-${systemPrompt}
-\`\`\`
-
-**User message (chat history):**
-\`\`\`
-${userMessage}
-\`\`\``;
-}
-
-function formatDryrunOutputElided(
-  systemPrompt: string,
-  userMessage: string,
-  entityName: string,
-  maxChars: number
-): string {
-  // Calculate available space for each section
-  const headerLen = `**Dryrun for ${entityName}**\n\n**System prompt:**\n\`\`\`\n`.length;
-  const midLen = `\n\`\`\`\n\n**User message (chat history):**\n\`\`\`\n`.length;
-  const footerLen = `\n\`\`\``.length;
-  const elisionMarker = "\n... (elided) ...\n";
-
-  const overhead = headerLen + midLen + footerLen;
-  const availableChars = maxChars - overhead;
-
-  // Give 60% to system prompt, 40% to user message
-  const systemBudget = Math.floor(availableChars * 0.6);
-  const userBudget = availableChars - systemBudget;
-
-  const elidedSystem = elideText(systemPrompt, systemBudget, elisionMarker);
-  const elidedUser = elideText(userMessage, userBudget, elisionMarker);
-
-  return `**Dryrun for ${entityName}**
-
-**System prompt:**
-\`\`\`
-${elidedSystem}
-\`\`\`
-
-**User message (chat history):**
-\`\`\`
-${elidedUser}
-\`\`\``;
+  return historyLines.reverse().join("\n") || "(no messages)";
 }
 
 function elideText(text: string, maxLen: number, marker: string): string {
@@ -1096,7 +1078,8 @@ const HELP_ENTITY_FACTS: Record<string, string[]> = {
     "---",
     "**Info subcommands:**",
     "`/info status` - Channel state (default)",
-    "`/info dryrun [entity]` - Show LLM context",
+    "`/info prompt [entity]` - Show system prompt",
+    "`/info history [entity]` - Show message history",
     "---",
     "**Examples:**",
     "`/create Aria` - Create entity",

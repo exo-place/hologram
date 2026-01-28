@@ -333,13 +333,13 @@ function createTools(channelId?: string, guildId?: string) {
 /** Format an evaluated entity for LLM context */
 function formatEvaluatedEntity(entity: EvaluatedEntity): string {
   const factLines = entity.facts.join("\n");
-  return `<facts entity="${entity.name}" id="${entity.id}">\n${factLines}\n</facts>`;
+  return `<defs for="${entity.name}" id="${entity.id}">\n${factLines}\n</defs>`;
 }
 
 /** Format a raw entity for LLM context (used for locations, etc.) */
 function formatRawEntity(entity: EntityWithFacts): string {
   const factLines = entity.facts.map(f => f.content).join("\n");
-  return `<facts entity="${entity.name}" id="${entity.id}">\n${factLines}\n</facts>`;
+  return `<defs for="${entity.name}" id="${entity.id}">\n${factLines}\n</defs>`;
 }
 
 function buildSystemPrompt(
@@ -358,7 +358,7 @@ function buildSystemPrompt(
     const memories = entityMemories?.get(e.id);
     if (memories && memories.length > 0) {
       const memoryLines = memories.map(m => m.content).join("\n");
-      contextParts.push(`<memories entity="${e.name}" id="${e.id}">\n${memoryLines}\n</memories>`);
+      contextParts.push(`<memories for="${e.name}" id="${e.id}">\n${memoryLines}\n</memories>`);
     }
   }
   for (const e of otherEntities) {
@@ -401,9 +401,7 @@ You have access to tools to modify facts and memories about entities.
 - Things learned that may be relevant later
 - Use save_memory / update_memory / remove_memory
 
-Most interactions don't need saving. Only save what matters long-term.
-
-Respond naturally based on the facts and memories provided.${multiEntityGuidance}`;
+Most interactions don't need saving. Only save what matters long-term.${multiEntityGuidance}`;
 }
 
 /**
