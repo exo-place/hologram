@@ -917,7 +917,17 @@ async function handleInfoHistory(ctx: CommandContext, options: Record<string, un
   if (!targetEntity) return;
 
   const messages = getMessages(ctx.channelId, 100);
-  const userMessage = buildMessageHistory(messages);
+  let userMessage = buildMessageHistory(messages);
+
+  // Cap at 8k to avoid spamming hundreds of messages (context can be up to 1M)
+  const MAX_HISTORY_CHARS = 8000;
+  if (userMessage.length > MAX_HISTORY_CHARS) {
+    const marker = "\n... (elided) ...\n";
+    const keepLen = MAX_HISTORY_CHARS - marker.length;
+    const halfKeep = Math.floor(keepLen / 2);
+    userMessage = userMessage.slice(0, halfKeep) + marker + userMessage.slice(-halfKeep);
+  }
+
   const output = `**Message history for ${targetEntity.name}:**\n\`\`\`\n${userMessage}\n\`\`\``;
   await respond(ctx.bot, ctx.interaction, output, true);
 }
