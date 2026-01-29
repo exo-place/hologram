@@ -1,7 +1,8 @@
 import { createBot, Intents } from "@discordeno/bot";
 import { info, debug, warn, error } from "../logger";
 import { registerCommands, handleInteraction } from "./commands";
-import { handleMessage, handleMessageStreaming, type EvaluatedEntity } from "../ai/handler";
+import { handleMessage, handleMessageStreaming, InferenceError, type EvaluatedEntity } from "../ai/handler";
+import { isModelAllowed } from "../ai/models";
 import { retrieveRelevantMemories, type MemoryScope } from "../db/memories";
 import { resolveDiscordEntity, resolveDiscordEntities, isNewUser, markUserWelcomed, addMessage, trackWebhookMessage, getWebhookMessageEntity, getMessages, formatMessagesForContext, recordEvalError } from "../db/discord";
 import { getEntity, getEntityWithFacts, getSystemEntity, getFactsForEntity, type EntityWithFacts } from "../db/entities";
@@ -382,6 +383,7 @@ bot.events.messageCreate = async (message) => {
           memoryScope: result.memoryScope,
           contextLimit: result.contextLimit,
           isFreeform: result.isFreeform,
+          modelSpec: result.modelSpec,
         });
       }
     }
@@ -499,6 +501,7 @@ async function processEntityRetry(
     memoryScope: result.memoryScope,
     contextLimit: result.contextLimit,
     isFreeform: result.isFreeform,
+    modelSpec: result.modelSpec,
   }]);
 }
 
@@ -847,6 +850,29 @@ async function sendResponse(
       }
     }
 
+    // Validate model allowlist
+    const entityModelSpec = respondingEntities?.[0]?.modelSpec;
+    if (entityModelSpec && !isModelAllowed(entityModelSpec)) {
+      debug("Model not allowed", { model: entityModelSpec });
+      // DM owner about blocked model
+      const entity = respondingEntities?.[0];
+      if (entity) {
+        const entityData = getEntityWithFacts(entity.id);
+        if (entityData) {
+          const editors = getEditorsToNotify(entityData.owned_by, entityData.facts.map(f => f.content));
+          const errorMsg = `Model "${entityModelSpec}" is not in the allowed models list`;
+          const isNew = recordEvalError(entity.id, editors[0] ?? "", errorMsg);
+          if (isNew) {
+            for (const uid of editors) {
+              notifyUserOfError(uid, entity.name, errorMsg).catch(() => {});
+            }
+          }
+        }
+      }
+      stopTyping();
+      return;
+    }
+
     // Check for streaming mode
     const streamMode = respondingEntities?.[0]?.streamMode;
     const useStreaming = streamMode && respondingEntities && respondingEntities.length > 0;
@@ -933,6 +959,26 @@ async function sendResponse(
     } else {
       // No entities - use regular message
       await sendRegularMessage(channelId, result.response);
+    }
+  } catch (err) {
+    if (err instanceof InferenceError) {
+      // DM owner + editors about LLM error
+      const entity = respondingEntities?.[0];
+      if (entity) {
+        const entityData = getEntityWithFacts(entity.id);
+        if (entityData) {
+          const editors = getEditorsToNotify(entityData.owned_by, entityData.facts.map(f => f.content));
+          const errorMsg = `LLM error with model "${err.modelSpec}": ${err.message}`;
+          const isNew = recordEvalError(entity.id, editors[0] ?? "", errorMsg);
+          if (isNew) {
+            for (const uid of editors) {
+              notifyUserOfError(uid, entity.name, errorMsg).catch(() => {});
+            }
+          }
+        }
+      }
+    } else {
+      error("Unexpected error in sendResponse", err);
     }
   } finally {
     // Safety net - ensure typing is stopped even on error

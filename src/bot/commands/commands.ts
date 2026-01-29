@@ -979,6 +979,7 @@ function formatEvaluatedEntityFromRaw(entity: EntityWithFacts): string {
     memoryScope: evaluated.memoryScope,
     contextLimit: evaluated.contextLimit,
     isFreeform: evaluated.isFreeform,
+    modelSpec: evaluated.modelSpec,
   });
 }
 

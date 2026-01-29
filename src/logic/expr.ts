@@ -563,6 +563,7 @@ const STREAM_SIGIL = "$stream";
 const MEMORY_SIGIL = "$memory";
 const CONTEXT_SIGIL = "$context";
 const FREEFORM_SIGIL = "$freeform";
+const MODEL_SIGIL = "$model ";
 
 /** Memory retrieval scope */
 export type MemoryScope = "none" | "channel" | "guild" | "global";
@@ -605,6 +606,10 @@ export interface ProcessedFact {
   isFreeform: boolean;
   /** True if this fact is a permission directive ($edit, $view, $blacklist) */
   isPermission: boolean;
+  /** True if this fact is a $model directive */
+  isModel: boolean;
+  /** For $model directives, the model spec (e.g. "google:gemini-2.0-flash") */
+  modelSpec?: string;
 }
 
 /** Parse expression, expect ':', return position after ':' */
@@ -645,6 +650,7 @@ export function parseFact(fact: string): ProcessedFact {
         isContext: false,
         isFreeform: false,
         isPermission: false,
+        isModel: false,
       };
     } else {
       // $locked prefix - recursively parse the rest, then mark as locked
@@ -678,6 +684,7 @@ export function parseFact(fact: string): ProcessedFact {
         isContext: false,
         isFreeform: false,
         isPermission: false,
+        isModel: false,
       };
     }
 
@@ -699,6 +706,7 @@ export function parseFact(fact: string): ProcessedFact {
         isContext: false,
         isFreeform: false,
         isPermission: false,
+        isModel: false,
       };
     }
 
@@ -721,6 +729,7 @@ export function parseFact(fact: string): ProcessedFact {
         isContext: false,
         isFreeform: false,
         isPermission: false,
+        isModel: false,
       };
     }
 
@@ -742,6 +751,7 @@ export function parseFact(fact: string): ProcessedFact {
         isContext: false,
         isFreeform: false,
         isPermission: false,
+        isModel: false,
       };
     }
 
@@ -763,6 +773,7 @@ export function parseFact(fact: string): ProcessedFact {
         contextLimit: contextResultCond,
         isFreeform: false,
         isPermission: false,
+        isModel: false,
       };
     }
 
@@ -782,15 +793,38 @@ export function parseFact(fact: string): ProcessedFact {
         isContext: false,
         isFreeform: true,
         isPermission: false,
+        isModel: false,
+      };
+    }
+
+    // Check if content is a $model directive
+    const modelResultCond = parseModelDirective(content);
+    if (modelResultCond !== null) {
+      return {
+        content,
+        conditional: true,
+        expression,
+        isRespond: false,
+        isRetry: false,
+        isAvatar: false,
+        isLockedDirective: false,
+        isLockedFact: false,
+        isStream: false,
+        isMemory: false,
+        isContext: false,
+        isFreeform: false,
+        isPermission: false,
+        isModel: true,
+        modelSpec: modelResultCond,
       };
     }
 
     // Check if content is a permission directive ($edit, $view, $blacklist)
     if (content.startsWith(EDIT_SIGIL) || content.startsWith(VIEW_SIGIL) || content.startsWith(BLACKLIST_SIGIL)) {
-      return { content, conditional: true, expression, isRespond: false, isRetry: false, isAvatar: false, isLockedDirective: false, isLockedFact: false, isStream: false, isMemory: false, isContext: false, isFreeform: false, isPermission: true };
+      return { content, conditional: true, expression, isRespond: false, isRetry: false, isAvatar: false, isLockedDirective: false, isLockedFact: false, isStream: false, isMemory: false, isContext: false, isFreeform: false, isPermission: true, isModel: false };
     }
 
-    return { content, conditional: true, expression, isRespond: false, isRetry: false, isAvatar: false, isLockedDirective: false, isLockedFact: false, isStream: false, isMemory: false, isContext: false, isFreeform: false, isPermission: false };
+    return { content, conditional: true, expression, isRespond: false, isRetry: false, isAvatar: false, isLockedDirective: false, isLockedFact: false, isStream: false, isMemory: false, isContext: false, isFreeform: false, isPermission: false, isModel: false };
   }
 
   // Check for unconditional $respond
@@ -810,6 +844,7 @@ export function parseFact(fact: string): ProcessedFact {
       isContext: false,
       isFreeform: false,
       isPermission: false,
+      isModel: false,
     };
   }
 
@@ -830,6 +865,7 @@ export function parseFact(fact: string): ProcessedFact {
       isContext: false,
       isFreeform: false,
       isPermission: false,
+      isModel: false,
     };
   }
 
@@ -850,6 +886,7 @@ export function parseFact(fact: string): ProcessedFact {
       isContext: false,
       isFreeform: false,
       isPermission: false,
+      isModel: false,
     };
   }
 
@@ -871,6 +908,7 @@ export function parseFact(fact: string): ProcessedFact {
       isContext: false,
       isFreeform: false,
       isPermission: false,
+      isModel: false,
     };
   }
 
@@ -891,6 +929,7 @@ export function parseFact(fact: string): ProcessedFact {
       isContext: false,
       isFreeform: false,
       isPermission: false,
+      isModel: false,
     };
   }
 
@@ -911,6 +950,7 @@ export function parseFact(fact: string): ProcessedFact {
       contextLimit: contextResult,
       isFreeform: false,
       isPermission: false,
+      isModel: false,
     };
   }
 
@@ -929,15 +969,37 @@ export function parseFact(fact: string): ProcessedFact {
       isContext: false,
         isFreeform: true,
         isPermission: false,
+        isModel: false,
       };
+  }
+
+  // Check for unconditional $model
+  const modelResult = parseModelDirective(trimmed);
+  if (modelResult !== null) {
+    return {
+      content: trimmed,
+      conditional: false,
+      isRespond: false,
+      isRetry: false,
+      isAvatar: false,
+      isLockedDirective: false,
+      isLockedFact: false,
+      isStream: false,
+      isMemory: false,
+      isContext: false,
+      isFreeform: false,
+      isPermission: false,
+      isModel: true,
+      modelSpec: modelResult,
+    };
   }
 
   // Check for permission directives ($edit, $view, $blacklist)
   if (trimmed.startsWith(EDIT_SIGIL) || trimmed.startsWith(VIEW_SIGIL) || trimmed.startsWith(BLACKLIST_SIGIL)) {
-    return { content: trimmed, conditional: false, isRespond: false, isRetry: false, isAvatar: false, isLockedDirective: false, isLockedFact: false, isStream: false, isMemory: false, isContext: false, isFreeform: false, isPermission: true };
+    return { content: trimmed, conditional: false, isRespond: false, isRetry: false, isAvatar: false, isLockedDirective: false, isLockedFact: false, isStream: false, isMemory: false, isContext: false, isFreeform: false, isPermission: true, isModel: false };
   }
 
-  return { content: trimmed, conditional: false, isRespond: false, isRetry: false, isAvatar: false, isLockedDirective: false, isLockedFact: false, isStream: false, isMemory: false, isContext: false, isFreeform: false, isPermission: false };
+  return { content: trimmed, conditional: false, isRespond: false, isRetry: false, isAvatar: false, isLockedDirective: false, isLockedFact: false, isStream: false, isMemory: false, isContext: false, isFreeform: false, isPermission: false, isModel: false };
 }
 
 /**
@@ -1067,6 +1129,22 @@ function parseStreamDirective(content: string): StreamDirectiveResult | null {
 }
 
 /**
+ * Parse a $model directive.
+ * Returns null if not a model directive, or the model spec string.
+ * Validates provider:model format.
+ */
+function parseModelDirective(content: string): string | null {
+  if (!content.startsWith(MODEL_SIGIL)) {
+    return null;
+  }
+  const spec = content.slice(MODEL_SIGIL.length).trim();
+  if (!spec || !/^[^:]+:.+$/.test(spec)) {
+    return null;
+  }
+  return spec;
+}
+
+/**
  * Parse a $memory directive.
  * Returns null if not a memory directive, or the scope.
  *
@@ -1160,6 +1238,8 @@ export interface EvaluatedFacts {
   contextLimit: number | null;
   /** True if $freeform directive present (multi-char responses not split) */
   isFreeform: boolean;
+  /** Model spec from $model directive (e.g. "google:gemini-2.0-flash"), last wins */
+  modelSpec: string | null;
 }
 
 /**
@@ -1189,6 +1269,7 @@ export function evaluateFacts(
   let memoryScope: MemoryScope = "none";
   let contextLimit: number | null = null;
   let isFreeform = false;
+  let modelSpec: string | null = null;
 
   // Strip comments first
   const uncommented = stripComments(facts);
@@ -1261,6 +1342,12 @@ export function evaluateFacts(
       continue;
     }
 
+    // Handle $model directives - last one wins, strip from LLM context
+    if (parsed.isModel) {
+      modelSpec = parsed.modelSpec ?? null;
+      continue;
+    }
+
     // Handle permission directives ($edit, $view, $blacklist) - strip from LLM context
     if (parsed.isPermission) {
       continue;
@@ -1269,7 +1356,7 @@ export function evaluateFacts(
     results.push(parsed.content);
   }
 
-  return { facts: results, shouldRespond, respondSource, retryMs, avatarUrl, isLocked, lockedFacts, streamMode, streamDelimiter, memoryScope, contextLimit, isFreeform };
+  return { facts: results, shouldRespond, respondSource, retryMs, avatarUrl, isLocked, lockedFacts, streamMode, streamDelimiter, memoryScope, contextLimit, isFreeform, modelSpec };
 }
 
 // =============================================================================

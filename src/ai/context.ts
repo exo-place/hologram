@@ -22,6 +22,8 @@ export interface EvaluatedEntity {
   contextLimit: number | null;
   /** Freeform multi-char responses (no XML parsing) from $freeform directive */
   isFreeform: boolean;
+  /** Model spec from $model directive (e.g. "google:gemini-2.0-flash") */
+  modelSpec: string | null;
 }
 
 // =============================================================================

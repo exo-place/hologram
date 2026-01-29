@@ -99,3 +99,43 @@ export function getTextEmbeddingModel(modelSpec: string, apiKey?: string) {
 
 export const DEFAULT_MODEL =
   process.env.DEFAULT_MODEL || "google:gemini-3-flash-preview";
+
+// =============================================================================
+// Model Allowlist
+// =============================================================================
+
+/** Parsed ALLOWED_MODELS entries (supports "provider:model" exact or "provider:*" wildcard) */
+const ALLOWED_MODELS: string[] | null = process.env.ALLOWED_MODELS
+  ? process.env.ALLOWED_MODELS.split(",").map(s => s.trim()).filter(s => s.length > 0)
+  : null;
+
+/**
+ * Check if a model spec is allowed by the ALLOWED_MODELS allowlist.
+ * Returns true if no allowlist is configured, or if the spec matches an entry.
+ * Supports exact match ("google:gemini-2.0-flash") and provider wildcard ("google:*").
+ */
+export function isModelAllowed(modelSpec: string): boolean {
+  if (!ALLOWED_MODELS) return true;
+  const { providerName } = parseModelSpec(modelSpec);
+  return ALLOWED_MODELS.some(entry => {
+    if (entry === modelSpec) return true;
+    if (entry.endsWith(":*")) {
+      return entry.slice(0, -2) === providerName;
+    }
+    return false;
+  });
+}
+
+// =============================================================================
+// Inference Error
+// =============================================================================
+
+/** Error thrown when LLM inference fails, carrying the model spec for error reporting */
+export class InferenceError extends Error {
+  modelSpec: string;
+  constructor(message: string, modelSpec: string, cause?: unknown) {
+    super(message, { cause });
+    this.name = "InferenceError";
+    this.modelSpec = modelSpec;
+  }
+}

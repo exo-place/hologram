@@ -1,6 +1,6 @@
 import { generateText, streamText, tool, stepCountIs } from "ai";
 import { z } from "zod";
-import { getLanguageModel, DEFAULT_MODEL } from "./models";
+import { getLanguageModel, DEFAULT_MODEL, InferenceError } from "./models";
 import { debug, error } from "../logger";
 import {
   getEntityWithFacts,
@@ -29,8 +29,9 @@ import {
   type EvaluatedEntity,
 } from "./context";
 
-// Re-export from context for backwards compatibility
+// Re-export from context/models for backwards compatibility
 export { formatEntityDisplay, formatEvaluatedEntity, formatRawEntity, buildMessageHistory, type EvaluatedEntity };
+export { InferenceError };
 
 // =============================================================================
 // Constants
@@ -338,14 +339,14 @@ function buildSystemPrompt(
       // Freeform mode: no structured format required
       multiEntityGuidance = `\n\nYou are writing as: ${names}. They may interact naturally in your response. Not everyone needs to respond to every message - only include those who would naturally engage. If none would respond, reply with only: none`;
     } else {
-      // Structured mode: use XML tags
-      multiEntityGuidance = `\n\nYou are: ${names}. Format your response with XML tags:
-<${respondingEntities[0]?.name ?? "Name"}>*waves* Hello there!</${respondingEntities[0]?.name ?? "Name"}>
-<${respondingEntities[1]?.name ?? "Other"}>Nice to meet you.</${respondingEntities[1]?.name ?? "Other"}>
+      // Structured mode: use Name: prefix format
+      multiEntityGuidance = `\n\nYou are: ${names}. Format your response with name prefixes:
+${respondingEntities[0]?.name ?? "Name"}: *waves* Hello there!
+${respondingEntities[1]?.name ?? "Other"}: Nice to meet you.
 
-Wrap everyone's dialogue in their name tag. They may interact naturally.
+Start each character's dialogue with their name followed by a colon. They may interact naturally.
 
-Not everyone needs to respond to every message. Only respond as those who would naturally engage with what was said. If none would respond, reply with only <none/>.`;
+Not everyone needs to respond to every message. Only respond as those who would naturally engage with what was said. If none would respond, reply with only: none`;
     }
   }
 
@@ -398,6 +399,71 @@ function parseMultiEntityResponse(
 
   // Remove position from results
   return results.map(({ position: _, ...rest }) => rest);
+}
+
+// =============================================================================
+// Name Prefix Parsing
+// =============================================================================
+
+/**
+ * Strip "Name:" prefix from single-entity responses.
+ * Case-insensitive match at start of response.
+ */
+function stripNamePrefix(text: string, entityName: string): string {
+  const pattern = new RegExp(`^${entityName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}:\\s*`, "i");
+  return text.replace(pattern, "");
+}
+
+/**
+ * Parse LLM response into per-entity segments using "Name:" prefix format.
+ * Each entity's content starts with "Name:" at the beginning of a line.
+ * Returns undefined if no valid name prefixes found.
+ */
+function parseNamePrefixResponse(
+  response: string,
+  entities: EvaluatedEntity[]
+): EntityResponse[] | undefined {
+  if (entities.length <= 1) return undefined;
+
+  // Build regex matching any entity name at line start
+  const names = entities.map(e => e.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const pattern = new RegExp(`^(${names.join("|")}):\\s*`, "gim");
+
+  // Find all name prefix positions
+  const matches: Array<{ name: string; contentStart: number }> = [];
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(response)) !== null) {
+    matches.push({ name: match[1], contentStart: match.index + match[0].length });
+  }
+
+  if (matches.length === 0) return undefined;
+
+  // Extract content between consecutive name prefixes
+  const results: EntityResponse[] = [];
+  for (let i = 0; i < matches.length; i++) {
+    const start = matches[i].contentStart;
+    const end = i + 1 < matches.length
+      ? response.lastIndexOf("\n", matches[i + 1].contentStart) !== -1
+        ? response.lastIndexOf("\n", matches[i + 1].contentStart - matches[i + 1].name.length - 2) + 1
+        : matches[i + 1].contentStart - matches[i + 1].name.length - 2
+      : response.length;
+    const content = response.slice(start, end).trim();
+    if (!content) continue;
+
+    // Find matching entity (case-insensitive)
+    const entity = entities.find(e => e.name.toLowerCase() === matches[i].name.toLowerCase());
+    if (entity) {
+      results.push({
+        entityId: entity.id,
+        name: entity.name,
+        content,
+        avatarUrl: entity.avatarUrl ?? undefined,
+        streamMode: entity.streamMode,
+      });
+    }
+  }
+
+  return results.length > 0 ? results : undefined;
 }
 
 // =============================================================================
@@ -460,8 +526,10 @@ export async function handleMessage(ctx: MessageContext): Promise<ResponseResult
   let memoriesUpdated = 0;
   let memoriesRemoved = 0;
 
+  const modelSpec = evaluated[0]?.modelSpec ?? DEFAULT_MODEL;
+
   try {
-    const model = getLanguageModel(DEFAULT_MODEL);
+    const model = getLanguageModel(modelSpec);
     const tools = createTools(channelId, guildId);
 
     const result = await generateText({
@@ -499,12 +567,20 @@ export async function handleMessage(ctx: MessageContext): Promise<ResponseResult
       return null;
     }
 
+    // Strip "Name:" prefix from single-entity responses
+    let responseText = result.text;
+    if (evaluated.length === 1) {
+      responseText = stripNamePrefix(responseText, evaluated[0].name);
+    }
+
     // Parse multi-entity response (skip if any entity has $freeform)
     const isFreeform = evaluated.some(e => e.isFreeform);
-    const entityResponses = isFreeform ? undefined : parseMultiEntityResponse(result.text, evaluated);
+    const entityResponses = isFreeform ? undefined
+      : (parseMultiEntityResponse(responseText, evaluated)
+        ?? parseNamePrefixResponse(responseText, evaluated));
 
     return {
-      response: result.text,
+      response: responseText,
       entityResponses,
       factsAdded,
       factsUpdated,
@@ -515,7 +591,11 @@ export async function handleMessage(ctx: MessageContext): Promise<ResponseResult
     };
   } catch (err) {
     error("LLM error", err);
-    return null;
+    throw new InferenceError(
+      err instanceof Error ? err.message : String(err),
+      modelSpec,
+      err,
+    );
   }
 }
 
@@ -600,8 +680,10 @@ export async function* handleMessageStreaming(
     hasMemories: !!ctx.entityMemories?.size,
   });
 
+  const modelSpec = entities[0]?.modelSpec ?? DEFAULT_MODEL;
+
   try {
-    const model = getLanguageModel(DEFAULT_MODEL);
+    const model = getLanguageModel(modelSpec);
     const tools = createTools(channelId, guildId);
 
     const result = streamText({
@@ -616,9 +698,9 @@ export async function* handleMessageStreaming(
     // In freeform mode, treat multi-entity like single (no XML parsing)
     const isFreeform = entities.some(e => e.isFreeform);
     if (entities.length === 1 || isFreeform) {
-      yield* streamSingleEntity(result.textStream, streamMode, delimiter);
+      yield* streamSingleEntity(result.textStream, streamMode, delimiter, entities[0]?.name);
     } else {
-      yield* streamMultiEntity(result.textStream, entities, streamMode, delimiter);
+      yield* streamMultiEntityNamePrefix(result.textStream, entities, streamMode, delimiter);
     }
 
     // Yield done event with full text
@@ -633,6 +715,11 @@ export async function* handleMessageStreaming(
 
   } catch (err) {
     error("LLM streaming error", err);
+    throw new InferenceError(
+      err instanceof Error ? err.message : String(err),
+      modelSpec,
+      err,
+    );
   }
 }
 
@@ -683,18 +770,39 @@ function splitOnDelimiters(content: string, delimiters: string[]): string[] {
 async function* streamSingleEntity(
   textStream: AsyncIterable<string>,
   streamMode: "lines" | "full",
-  delimiter: string[] | undefined
+  delimiter: string[] | undefined,
+  entityName?: string
 ): AsyncGenerator<StreamEvent, void, unknown> {
   let buffer = "";
   let fullContent = "";
   let lineContent = "";  // For full mode with delimiter
   let lineStarted = false;
+  let prefixStripped = false;
 
   const hasDelimiter = delimiter !== undefined;
+
+  // Build prefix pattern if entity name provided
+  const prefixPattern = entityName
+    ? new RegExp(`^${entityName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}:\\s*`, "i")
+    : null;
 
   for await (const delta of textStream) {
     buffer += delta;
     fullContent += delta;
+
+    // Strip "Name:" prefix from start of stream
+    if (!prefixStripped && prefixPattern) {
+      // Buffer until we have enough text to check
+      if (fullContent.length < entityName!.length + 2) continue;
+      prefixStripped = true;
+      const match = fullContent.match(prefixPattern);
+      if (match) {
+        const stripped = match[0].length;
+        fullContent = fullContent.slice(stripped);
+        buffer = buffer.slice(stripped);
+        if (!buffer && !fullContent) continue;
+      }
+    }
 
     if (streamMode === "full" && !hasDelimiter) {
       // Full mode without delimiter: single message, emit every delta
@@ -941,5 +1049,220 @@ async function* streamMultiEntity(
   // Handle any remaining content in currentChar
   if (currentChar && currentChar.content.trim()) {
     yield { type: "char_end", name: currentChar.name, content: currentChar.content.trim() };
+  }
+}
+
+/**
+ * Stream events for multiple entities using "Name:" prefix format.
+ * Detects "Name:" at start of text or after newline to switch between entities.
+ * Falls back to XML-based streaming if no Name: prefixes are detected.
+ *
+ * Modes:
+ * - "lines": new message per delimiter, sent when complete (emits "char_line" events)
+ * - "full" without delimiter: single message per entity, edited progressively (emits "char_delta" events)
+ * - "full" with delimiter: new message per delimiter, each edited progressively
+ *   (emits "char_line_start", "char_line_delta", "char_line_end" events)
+ */
+async function* streamMultiEntityNamePrefix(
+  textStream: AsyncIterable<string>,
+  entities: EvaluatedEntity[],
+  streamMode: "lines" | "full",
+  delimiter: string[] | undefined
+): AsyncGenerator<StreamEvent, void, unknown> {
+  let buffer = "";
+  let currentChar: { name: string; entityId: number; avatarUrl?: string; content: string; lineContent: string; lineStarted: boolean } | null = null;
+  let detectedFormat: "name_prefix" | "xml" | null = null;
+
+  const hasDelimiter = delimiter !== undefined;
+
+  // Build entity lookup map (case-insensitive)
+  const entityMap = new Map<string, EvaluatedEntity>();
+  for (const entity of entities) {
+    entityMap.set(entity.name.toLowerCase(), entity);
+  }
+
+  // Build regex for "Name:" at line start (case-insensitive)
+  const names = entities.map(e => e.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const namePrefixPattern = new RegExp(`^(${names.join("|")}):\\s*`, "im");
+  // Also build XML tag pattern for fallback detection
+  const xmlOpenPattern = new RegExp(`<(${names.join("|")})>`, "i");
+
+  /** Emit content for current character based on stream mode */
+  function* emitCharContent(
+    char: NonNullable<typeof currentChar>,
+    content: string,
+    isDelta: boolean
+  ): Generator<StreamEvent> {
+    if (!content) return;
+
+    if (streamMode === "lines") {
+      const effectiveDelims = delimiter ?? ["\n"];
+      if (isDelta) {
+        // Process buffer for complete chunks
+        let remaining = content;
+        let delimMatch: { index: number; length: number };
+        while ((delimMatch = findFirstDelimiter(remaining, effectiveDelims)).index !== -1) {
+          const chunk = remaining.slice(0, delimMatch.index).trim();
+          remaining = remaining.slice(delimMatch.index + delimMatch.length);
+          if (chunk) {
+            yield { type: "char_line", name: char.name, content: chunk };
+          }
+        }
+        // Return remaining unprocessed content
+        char.lineContent = remaining;
+      } else {
+        // Final flush
+        const chunks = splitOnDelimiters(content, effectiveDelims);
+        for (const chunk of chunks) {
+          const trimmed = chunk.trim();
+          if (trimmed) {
+            yield { type: "char_line", name: char.name, content: trimmed };
+          }
+        }
+      }
+    } else if (streamMode === "full" && hasDelimiter) {
+      if (isDelta) {
+        let remaining = content;
+        let delimMatch: { index: number; length: number };
+        while ((delimMatch = findFirstDelimiter(remaining, delimiter)).index !== -1) {
+          const chunk = remaining.slice(0, delimMatch.index);
+          remaining = remaining.slice(delimMatch.index + delimMatch.length);
+          char.lineContent += chunk;
+          const trimmed = char.lineContent.trim();
+          if (trimmed) {
+            if (!char.lineStarted) {
+              yield { type: "char_line_start", name: char.name };
+            }
+            yield { type: "char_line_end", name: char.name, content: trimmed };
+          }
+          char.lineContent = "";
+          char.lineStarted = false;
+        }
+        if (remaining) {
+          if (!char.lineStarted) {
+            yield { type: "char_line_start", name: char.name };
+            char.lineStarted = true;
+          }
+          char.lineContent += remaining;
+          const trimmed = char.lineContent.trim();
+          if (trimmed) {
+            yield { type: "char_line_delta", name: char.name, delta: remaining, content: trimmed };
+          }
+        }
+      } else {
+        // Final flush
+        char.lineContent += content;
+        const trimmed = char.lineContent.trim();
+        if (trimmed) {
+          if (!char.lineStarted) {
+            yield { type: "char_line_start", name: char.name };
+          }
+          yield { type: "char_line_end", name: char.name, content: trimmed };
+        }
+      }
+    } else {
+      // Full mode without delimiter
+      char.content += content;
+      yield { type: "char_delta", name: char.name, delta: content, content: char.content };
+    }
+  }
+
+  for await (const delta of textStream) {
+    buffer += delta;
+
+    // Early format detection: check first meaningful content
+    if (detectedFormat === null && buffer.trim().length > 0) {
+      if (namePrefixPattern.test(buffer)) {
+        detectedFormat = "name_prefix";
+      } else if (xmlOpenPattern.test(buffer)) {
+        // Fall back to XML streaming
+        detectedFormat = "xml";
+        // Re-yield using XML-based streaming with remaining buffer + stream
+        async function* prependBuffer(buf: string, stream: AsyncIterable<string>): AsyncIterable<string> {
+          yield buf;
+          yield* stream;
+        }
+        yield* streamMultiEntity(prependBuffer(buffer, textStream), entities, streamMode, delimiter);
+        return;
+      }
+      // If neither detected yet, keep buffering
+      if (detectedFormat === null) continue;
+    }
+
+    if (detectedFormat !== "name_prefix") continue;
+
+    // Process buffer for Name: prefixes
+    while (buffer.length > 0) {
+      const match = buffer.match(namePrefixPattern);
+      if (match && match.index !== undefined) {
+        // Text before the match belongs to current character
+        if (match.index > 0 && currentChar) {
+          const beforeText = buffer.slice(0, match.index);
+          yield* emitCharContent(currentChar, beforeText, true);
+        }
+
+        // End previous character
+        if (currentChar) {
+          // Flush remaining line content
+          if (currentChar.lineContent.trim()) {
+            if (streamMode === "lines") {
+              yield { type: "char_line", name: currentChar.name, content: currentChar.lineContent.trim() };
+            } else if (streamMode === "full" && hasDelimiter && currentChar.lineStarted) {
+              yield { type: "char_line_end", name: currentChar.name, content: currentChar.lineContent.trim() };
+            }
+          }
+          yield { type: "char_end", name: currentChar.name, content: currentChar.content.trim() };
+        }
+
+        // Start new character
+        const charName = match[1];
+        const entity = entityMap.get(charName.toLowerCase());
+        if (entity) {
+          currentChar = {
+            name: entity.name,
+            entityId: entity.id,
+            avatarUrl: entity.avatarUrl ?? undefined,
+            content: "",
+            lineContent: "",
+            lineStarted: false,
+          };
+          yield { type: "char_start", name: entity.name, entityId: entity.id, avatarUrl: entity.avatarUrl ?? undefined };
+        }
+
+        buffer = buffer.slice(match.index + match[0].length);
+      } else {
+        // No name prefix found in buffer
+        if (currentChar) {
+          // Check if buffer might contain a partial name prefix at the end
+          const hasNewline = buffer.includes("\n");
+          if (hasNewline) {
+            // Process up to last newline, keep the rest for potential name detection
+            const lastNewline = buffer.lastIndexOf("\n");
+            const processable = buffer.slice(0, lastNewline + 1);
+            buffer = buffer.slice(lastNewline + 1);
+            yield* emitCharContent(currentChar, processable, true);
+          } else {
+            // No newline - buffer might be mid-content, keep it
+            // But if it's getting long, emit what we have
+            const maxNameLen = Math.max(...entities.map(e => e.name.length)) + 2;
+            if (buffer.length > maxNameLen * 2) {
+              yield* emitCharContent(currentChar, buffer, true);
+              buffer = "";
+            }
+          }
+        }
+        break;
+      }
+    }
+  }
+
+  // Flush remaining buffer and close current character
+  if (currentChar) {
+    if (buffer.trim()) {
+      yield* emitCharContent(currentChar, buffer, false);
+    }
+    if (currentChar.content.trim() || buffer.trim()) {
+      yield { type: "char_end", name: currentChar.name, content: (currentChar.content + buffer).trim() };
+    }
   }
 }

@@ -119,11 +119,31 @@ $if mentioned: $stream             # Conditional streaming
 
 **Custom delimiters:** Use `$stream "delimiter"` to split on custom text instead of newlines. Multiple delimiters can be specified: `$stream "a" "b" "c"` splits on any of them. E.g., `$stream "kitten:"` sends a new message each time the LLM outputs "kitten:".
 
-**Multi-character streaming:** When streaming with multiple characters bound to a channel, the system uses heuristic XML parsing to detect `<CharName>...</CharName>` tags and streams each character's response separately.
+**Multi-character streaming:** When streaming with multiple characters bound to a channel, the system detects `Name:` prefixes at line starts and streams each character's response separately. Falls back to XML tag parsing (`<CharName>...</CharName>`) if the LLM uses that format instead.
+
+### Model Selection
+
+Override the default LLM model per entity using `$model`:
+
+```
+$model google:gemini-2.0-flash      # Use specific model
+$model anthropic:claude-3-5-sonnet  # Use Anthropic model
+$if mentioned: $model openai:gpt-4o # Conditional model selection
+```
+
+**Format:** `provider:model` (same as `DEFAULT_MODEL` env var). Last `$model` directive wins.
+
+**Allowlist:** Set `ALLOWED_MODELS` env var to restrict which models entities can use:
+```
+ALLOWED_MODELS=google:*,anthropic:claude-3-5-sonnet  # Allow all Google + specific Anthropic
+```
+Comma-separated. Supports `provider:*` wildcards. If unset, all models are allowed. Blocked models trigger a DM to entity editors.
+
+**Error handling:** LLM errors with custom models are reported via DM to entity owner and editors.
 
 ### Freeform Multi-Character
 
-By default, when multiple entities are bound to a channel, responses are split using XML tags (`<Name>...</Name>`). Use `$freeform` to allow natural prose responses without structured formatting:
+By default, when multiple entities are bound to a channel, responses are split using `Name:` prefix format (with XML tags as fallback). Use `$freeform` to allow natural prose responses without structured formatting:
 
 ```
 $freeform                          # Enable freeform multi-char responses
@@ -219,6 +239,7 @@ DEFAULT_MODEL=       # Default LLM (google:gemini-3-flash-preview)
 GOOGLE_API_KEY=      # For Google/Gemini
 ANTHROPIC_API_KEY=   # For Anthropic/Claude (optional)
 OPENAI_API_KEY=      # For OpenAI (optional)
+ALLOWED_MODELS=      # Comma-separated allowlist for $model (e.g. "google:*,anthropic:*")
 LOG_LEVEL=           # debug, info (default), warn, error
 ```
 
