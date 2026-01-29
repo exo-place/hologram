@@ -9,7 +9,7 @@ import { getEntity, getEntityWithFacts, getSystemEntity, getFactsForEntity, type
 import { evaluateFacts, createBaseContext, parsePermissionDirectives, isUserBlacklisted } from "../logic/expr";
 import { executeWebhook, editWebhookMessage, setBot } from "./webhooks";
 import "./commands/commands"; // Register all commands
-import { ensureHelpEntities } from "./commands/commands";
+import { ensureHelpEntities } from "./commands/help";
 
 const token = process.env.DISCORD_TOKEN;
 if (!token) {
