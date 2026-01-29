@@ -957,8 +957,7 @@ async function handleInfoPrompt(ctx: CommandContext, options: Record<string, unk
   }
 
   const systemPrompt = elideText(contextParts.join("\n\n"));
-  const output = `**System prompt for ${targetEntity.name}:**\n\`\`\`\n${systemPrompt}\n\`\`\``;
-  await respond(ctx.bot, ctx.interaction, output, true);
+  await respond(ctx.bot, ctx.interaction, systemPrompt, true);
 }
 
 /** Evaluate an entity's facts with a mock context and format for display */
@@ -990,8 +989,7 @@ async function handleInfoHistory(ctx: CommandContext, options: Record<string, un
 
   const messages = getMessages(ctx.channelId, 100);
   const userMessage = elideText(buildMessageHistory(messages));
-  const output = `**Message history for ${targetEntity.name}:**\n\`\`\`\n${userMessage}\n\`\`\``;
-  await respond(ctx.bot, ctx.interaction, output, true);
+  await respond(ctx.bot, ctx.interaction, userMessage, true);
 }
 
 // =============================================================================
