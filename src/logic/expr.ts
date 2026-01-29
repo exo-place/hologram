@@ -603,6 +603,8 @@ export interface ProcessedFact {
   contextLimit?: number;
   /** True if this fact is a $freeform directive */
   isFreeform: boolean;
+  /** True if this fact is a permission directive ($edit, $view, $blacklist) */
+  isPermission: boolean;
 }
 
 /** Parse expression, expect ':', return position after ':' */
@@ -642,6 +644,7 @@ export function parseFact(fact: string): ProcessedFact {
         isMemory: false,
         isContext: false,
         isFreeform: false,
+        isPermission: false,
       };
     } else {
       // $locked prefix - recursively parse the rest, then mark as locked
@@ -674,6 +677,7 @@ export function parseFact(fact: string): ProcessedFact {
         isMemory: false,
         isContext: false,
         isFreeform: false,
+        isPermission: false,
       };
     }
 
@@ -694,6 +698,7 @@ export function parseFact(fact: string): ProcessedFact {
         isMemory: false,
         isContext: false,
         isFreeform: false,
+        isPermission: false,
       };
     }
 
@@ -715,6 +720,7 @@ export function parseFact(fact: string): ProcessedFact {
         isMemory: false,
         isContext: false,
         isFreeform: false,
+        isPermission: false,
       };
     }
 
@@ -735,6 +741,7 @@ export function parseFact(fact: string): ProcessedFact {
         memoryScope: memoryResultCond,
         isContext: false,
         isFreeform: false,
+        isPermission: false,
       };
     }
 
@@ -755,6 +762,7 @@ export function parseFact(fact: string): ProcessedFact {
         isContext: true,
         contextLimit: contextResultCond,
         isFreeform: false,
+        isPermission: false,
       };
     }
 
@@ -773,10 +781,16 @@ export function parseFact(fact: string): ProcessedFact {
         isMemory: false,
         isContext: false,
         isFreeform: true,
+        isPermission: false,
       };
     }
 
-    return { content, conditional: true, expression, isRespond: false, isRetry: false, isAvatar: false, isLockedDirective: false, isLockedFact: false, isStream: false, isMemory: false, isContext: false, isFreeform: false };
+    // Check if content is a permission directive ($edit, $view, $blacklist)
+    if (content.startsWith(EDIT_SIGIL) || content.startsWith(VIEW_SIGIL) || content.startsWith(BLACKLIST_SIGIL)) {
+      return { content, conditional: true, expression, isRespond: false, isRetry: false, isAvatar: false, isLockedDirective: false, isLockedFact: false, isStream: false, isMemory: false, isContext: false, isFreeform: false, isPermission: true };
+    }
+
+    return { content, conditional: true, expression, isRespond: false, isRetry: false, isAvatar: false, isLockedDirective: false, isLockedFact: false, isStream: false, isMemory: false, isContext: false, isFreeform: false, isPermission: false };
   }
 
   // Check for unconditional $respond
@@ -795,6 +809,7 @@ export function parseFact(fact: string): ProcessedFact {
       isMemory: false,
       isContext: false,
       isFreeform: false,
+      isPermission: false,
     };
   }
 
@@ -814,6 +829,7 @@ export function parseFact(fact: string): ProcessedFact {
       isMemory: false,
       isContext: false,
       isFreeform: false,
+      isPermission: false,
     };
   }
 
@@ -833,6 +849,7 @@ export function parseFact(fact: string): ProcessedFact {
       isMemory: false,
       isContext: false,
       isFreeform: false,
+      isPermission: false,
     };
   }
 
@@ -853,6 +870,7 @@ export function parseFact(fact: string): ProcessedFact {
       isMemory: false,
       isContext: false,
       isFreeform: false,
+      isPermission: false,
     };
   }
 
@@ -872,6 +890,7 @@ export function parseFact(fact: string): ProcessedFact {
       memoryScope: memoryResult,
       isContext: false,
       isFreeform: false,
+      isPermission: false,
     };
   }
 
@@ -891,6 +910,7 @@ export function parseFact(fact: string): ProcessedFact {
       isContext: true,
       contextLimit: contextResult,
       isFreeform: false,
+      isPermission: false,
     };
   }
 
@@ -907,11 +927,17 @@ export function parseFact(fact: string): ProcessedFact {
       isStream: false,
       isMemory: false,
       isContext: false,
-      isFreeform: true,
-    };
+        isFreeform: true,
+        isPermission: false,
+      };
   }
 
-  return { content: trimmed, conditional: false, isRespond: false, isRetry: false, isAvatar: false, isLockedDirective: false, isLockedFact: false, isStream: false, isMemory: false, isContext: false, isFreeform: false };
+  // Check for permission directives ($edit, $view, $blacklist)
+  if (trimmed.startsWith(EDIT_SIGIL) || trimmed.startsWith(VIEW_SIGIL) || trimmed.startsWith(BLACKLIST_SIGIL)) {
+    return { content: trimmed, conditional: false, isRespond: false, isRetry: false, isAvatar: false, isLockedDirective: false, isLockedFact: false, isStream: false, isMemory: false, isContext: false, isFreeform: false, isPermission: true };
+  }
+
+  return { content: trimmed, conditional: false, isRespond: false, isRetry: false, isAvatar: false, isLockedDirective: false, isLockedFact: false, isStream: false, isMemory: false, isContext: false, isFreeform: false, isPermission: false };
 }
 
 /**
@@ -1230,6 +1256,11 @@ export function evaluateFacts(
     // Handle $freeform directive
     if (parsed.isFreeform) {
       isFreeform = true;
+      continue;
+    }
+
+    // Handle permission directives ($edit, $view, $blacklist) - strip from LLM context
+    if (parsed.isPermission) {
       continue;
     }
 
