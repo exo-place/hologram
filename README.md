@@ -92,16 +92,34 @@ Scope precedence: channel > server > global
 
 1. Create app at [Discord Developer Portal](https://discord.com/developers/applications)
 2. Go to **Bot** tab, click **Reset Token**, copy it
-3. Enable **Message Content Intent**
-4. Invite with `bot` + `applications.commands` scopes
+3. Under **Privileged Gateway Intents**, enable **Message Content Intent**
+4. Generate invite URL under **OAuth2 → URL Generator**:
+   - Scopes: `bot`, `applications.commands`
+   - Bot permissions: `Send Messages`, `Manage Webhooks`, `Read Message History`
 
 ### 2. LLM API Key
 
-| Provider | Get Key | Env Variable |
-|----------|---------|--------------|
-| Google AI | [aistudio.google.com](https://aistudio.google.com/apikey) | `GOOGLE_API_KEY` |
-| Anthropic | [console.anthropic.com](https://console.anthropic.com/) | `ANTHROPIC_API_KEY` |
-| OpenAI | [platform.openai.com](https://platform.openai.com/api-keys) | `OPENAI_API_KEY` |
+Set the env var for whichever provider(s) you want to use. At least one is required.
+
+| Provider | Env Variable | Get Key |
+|----------|--------------|---------|
+| Google AI | `GOOGLE_GENERATIVE_AI_API_KEY` | [aistudio.google.com](https://aistudio.google.com/apikey) |
+| Anthropic | `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com/) |
+| OpenAI | `OPENAI_API_KEY` | [platform.openai.com](https://platform.openai.com/api-keys) |
+| Groq | `GROQ_API_KEY` | [console.groq.com](https://console.groq.com/keys) |
+| Mistral | `MISTRAL_API_KEY` | [console.mistral.ai](https://console.mistral.ai/api-keys/) |
+| xAI | `XAI_API_KEY` | [console.x.ai](https://console.x.ai/) |
+| DeepSeek | `DEEPSEEK_API_KEY` | [platform.deepseek.com](https://platform.deepseek.com/api_keys) |
+| Cohere | `COHERE_API_KEY` | [dashboard.cohere.com](https://dashboard.cohere.com/api-keys) |
+| Cerebras | `CEREBRAS_API_KEY` | [cloud.cerebras.ai](https://cloud.cerebras.ai/) |
+| Perplexity | `PERPLEXITY_API_KEY` | [perplexity.ai](https://www.perplexity.ai/settings/api) |
+| Together AI | `TOGETHER_AI_API_KEY` | [api.together.xyz](https://api.together.xyz/settings/api-keys) |
+| Fireworks | `FIREWORKS_API_KEY` | [fireworks.ai](https://fireworks.ai/api-keys) |
+| DeepInfra | `DEEPINFRA_API_KEY` | [deepinfra.com](https://deepinfra.com/dash/api_keys) |
+| Hugging Face | `HUGGINGFACE_API_KEY` | [huggingface.co](https://huggingface.co/settings/tokens) |
+| Azure OpenAI | `AZURE_API_KEY` | [portal.azure.com](https://portal.azure.com/) |
+| Google Vertex | `GOOGLE_VERTEX_API_KEY` | [console.cloud.google.com](https://console.cloud.google.com/) |
+| Amazon Bedrock | AWS credentials | [aws.amazon.com](https://aws.amazon.com/) |
 
 ### 3. Run
 
@@ -114,12 +132,13 @@ bun run dev
 ## Environment Variables
 
 ```bash
-DISCORD_TOKEN=        # Required
+DISCORD_TOKEN=                     # Required
 DEFAULT_MODEL=google:gemini-3-flash-preview
-GOOGLE_API_KEY=       # For google:* models
-ANTHROPIC_API_KEY=    # Optional
-OPENAI_API_KEY=       # Optional
-LOG_LEVEL=info        # debug, info, warn, error
+GOOGLE_GENERATIVE_AI_API_KEY=      # For google:* models
+ANTHROPIC_API_KEY=                 # For anthropic:* models
+OPENAI_API_KEY=                    # For openai:* models
+LOG_LEVEL=info                     # debug, info, warn, error
+# See full provider list in Setup section above
 ```
 
 ## Development

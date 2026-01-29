@@ -261,9 +261,10 @@ bun run check:types  # TypeScript check
 ```
 DISCORD_TOKEN=       # Required: Discord bot token
 DEFAULT_MODEL=       # Default LLM (google:gemini-3-flash-preview)
-GOOGLE_API_KEY=      # For Google/Gemini
-ANTHROPIC_API_KEY=   # For Anthropic/Claude (optional)
-OPENAI_API_KEY=      # For OpenAI (optional)
+GOOGLE_GENERATIVE_AI_API_KEY=  # For google:* models
+ANTHROPIC_API_KEY=             # For anthropic:* models (optional)
+OPENAI_API_KEY=                # For openai:* models (optional)
+# + 14 more providers, each with standard env var (see .env.example)
 ALLOWED_MODELS=      # Comma-separated allowlist for $model (e.g. "google:*,anthropic:*")
 LOG_LEVEL=           # debug, info (default), warn, error
 ```
