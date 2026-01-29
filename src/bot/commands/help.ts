@@ -1,9 +1,9 @@
-import { ensureSystemEntity } from "../../db/entities";
+import { ensureSystemEntity, getSystemEntities, deleteEntity } from "../../db/entities";
 
 const HELP_ENTITY_FACTS: Record<string, string[]> = {
   help: [
     "is the help system",
-    "topics: start, commands, expressions, patterns, facts, bindings, permissions, models",
+    "topics: start, commands, expressions, patterns, facts, bindings, permissions, models, output",
     "use `/view help:<topic>` for details",
     "---",
     "**Hologram** - Collaborative worldbuilding and roleplay",
@@ -62,9 +62,9 @@ const HELP_ENTITY_FACTS: Record<string, string[]> = {
     "Expressions are JavaScript. Strings need quotes: `\"hello\"` not `hello`",
     "---",
     "**Directives:**",
-    "• `$respond` - respond to this message",
-    "• `$respond false` - suppress response",
+    "• `$respond` / `$respond false` - control response",
     "• `$retry <ms>` - re-evaluate after delay",
+    "• `$stream` / `$model` / `$context` / `$strip` - see `/view help:output`",
     "---",
     "**Operators:**",
     "`&&` `||` `!` `==` `!=` `<` `>` `<=` `>=`",
@@ -206,10 +206,47 @@ const HELP_ENTITY_FACTS: Record<string, string[]> = {
     "• `anthropic:claude-sonnet-4-20250514`",
     "• `openai:gpt-4o`",
   ],
+  "help:output": [
+    "is help for output directives",
+    "---",
+    "**Output directives** control how the LLM generates and delivers responses.",
+    "---",
+    "**`$model provider:model`** - Override the LLM model",
+    '`$model google:gemini-2.0-flash`',
+    '`$if mentioned: $model openai:gpt-4o`',
+    "See `/view help:models` for available models.",
+    "---",
+    "**`$stream`** - Stream responses progressively",
+    "`$stream` - new message per line",
+    '`$stream full` - single message, edited as it streams',
+    '`$stream "delimiter"` - split on custom text',
+    "---",
+    "**`$context <limit>`** - Control message history size",
+    "`$context 8k` - 8,000 characters of history",
+    "`$context 32k` - 32,000 characters",
+    "Default: 16k. Supports `k` suffix.",
+    "---",
+    '**`$strip "<pattern>"`** - Strip strings from message history',
+    '`$strip "</blockquote>"` - strip this pattern',
+    '`$strip "</blockquote>" "<br>"` - strip multiple',
+    "`$strip` - explicitly disable stripping",
+    "Default: strips `</blockquote>` on gemini-2.5-flash-preview only.",
+    "---",
+    "**`$freeform`** - Allow natural multi-character prose",
+    "Disables per-character message splitting in multi-char channels.",
+  ],
 };
 
 export function ensureHelpEntities(): void {
   for (const [name, facts] of Object.entries(HELP_ENTITY_FACTS)) {
     ensureSystemEntity(name, facts);
+  }
+
+  // Delete stale system entities no longer in the help map
+  const validNames = new Set(Object.keys(HELP_ENTITY_FACTS));
+  for (const entity of getSystemEntities()) {
+    if (!validNames.has(entity.name)) {
+      deleteEntity(entity.id);
+    }
   }
 }

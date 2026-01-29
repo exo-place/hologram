@@ -246,6 +246,13 @@ export function getSystemEntity(name: string): Entity | null {
   `).get(name) as Entity | null;
 }
 
+export function getSystemEntities(): Entity[] {
+  const db = getDb();
+  return db.prepare(`
+    SELECT * FROM entities WHERE owned_by = 'system'
+  `).all() as Entity[];
+}
+
 export function ensureSystemEntity(name: string, facts: string[]): EntityWithFacts {
   let entity = getSystemEntity(name);
   if (!entity) {

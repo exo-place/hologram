@@ -9,8 +9,9 @@ Directives fall into three distinct categories:
 | Category | Directives | Purpose |
 |----------|------------|---------|
 | **Flow Control** | `$if`, `$respond`, `$retry` | When and whether to respond |
-| **Metadata** | `$avatar` | Entity presentation |
-| **Permissions** | `$locked`, `$edit`, `$view` | Access control |
+| **Output** | `$stream`, `$freeform`, `$model`, `$context`, `$strip` | How and what the LLM produces |
+| **Metadata** | `$avatar`, `$memory` | Entity presentation and memory |
+| **Permissions** | `$locked`, `$edit`, `$view`, `$blacklist` | Access control |
 
 This separation is intentional. Each category handles a different concern, and directives within a category don't overlap in function.
 
@@ -65,6 +66,23 @@ $avatar https://example.com/aria.png
 ```
 
 If not set, the webhook uses Discord's default avatar.
+
+## Output
+
+### `$strip` / `$strip "<pattern>"`
+
+Strip specified strings from message history before sending to the LLM. Useful for removing Discord formatting artifacts from context.
+
+```
+$strip "</blockquote>"             # Strip this pattern from context
+$strip "</blockquote>" "<br>"      # Strip multiple patterns
+$strip                             # Explicitly disable stripping (even on default models)
+$if mentioned: $strip "</blockquote>"  # Conditional stripping
+```
+
+**Default behavior:** When no `$strip` directive is present, `</blockquote>` is automatically stripped for `gemini-2.5-flash-preview` models only. All other models default to no stripping. Use bare `$strip` (no arguments) to explicitly disable this default.
+
+Patterns are quoted strings. Supports escape sequences: `\n`, `\t`, `\\`. Multiple `$strip` directives are evaluated in order; the last one wins.
 
 ## Permissions
 
