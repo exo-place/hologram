@@ -540,11 +540,11 @@ export function evalExpr(expr: string, context: ExprContext): boolean {
 
 /**
  * Strip comments from facts.
- * Comments are lines starting with # in the FIRST column only.
- * Lines starting with space then # are NOT comments (escape mechanism).
+ * Comments are lines starting with $# in the FIRST column only.
+ * Lines starting with space then $# are NOT comments (escape mechanism).
  */
 export function stripComments(facts: string[]): string[] {
-  return facts.filter((fact) => !fact.startsWith("#"));
+  return facts.filter((fact) => !fact.startsWith("$#"));
 }
 
 // =============================================================================
@@ -1319,7 +1319,7 @@ export function parseSelfContext(facts: string[]): SelfContext {
 
   for (const fact of facts) {
     // Skip comments
-    if (fact.startsWith("#")) continue;
+    if (fact.startsWith("$#")) continue;
 
     // Skip $if directives (we want raw facts)
     if (fact.trim().startsWith("$if ")) continue;
@@ -1491,7 +1491,7 @@ export function parsePermissionDirectives(facts: string[]): EntityPermissions {
     const trimmed = fact.trim();
 
     // Skip comments
-    if (trimmed.startsWith("#")) continue;
+    if (trimmed.startsWith("$#")) continue;
 
     // Check for $locked
     if (trimmed === LOCKED_SIGIL) {

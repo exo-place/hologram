@@ -359,13 +359,13 @@ $if dt_ms < 30000: $retry 30000
 
 ### Comments
 
-Lines starting with `#` in the first column are comments:
+Lines starting with `$#` in the first column are comments:
 
 ```
-# This is a comment
+$# This is a comment
 is a character
- # This is NOT a comment (starts with space)
-plays #1 hits  # inline # is fine
+ $# This is NOT a comment (starts with space)
+plays #1 hits
 ```
 
 ### Processing Model

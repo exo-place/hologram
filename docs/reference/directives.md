@@ -113,13 +113,13 @@ $view alice, bob          # Only these usernames
 
 ## Other Syntax
 
-### Comments (`#`)
+### Comments (`$#`)
 
-Lines starting with `#` in the first column are stripped entirely.
+Lines starting with `$#` in the first column are stripped entirely.
 
 ```
-# This is a comment - won't be shown to LLM
- # This is NOT a comment (starts with space) - will be shown
+$# This is a comment - won't be shown to LLM
+ $# This is NOT a comment (starts with space) - will be shown
 ```
 
 ### Key-Value Facts

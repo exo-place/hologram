@@ -376,7 +376,7 @@ describe("parseSelfContext", () => {
 
   test("ignores comments", () => {
     const self = parseSelfContext([
-      "# this is a comment",
+      "$# this is a comment",
       "name: Bob",
     ]);
     expect(self.name).toBe("Bob");
@@ -529,9 +529,9 @@ describe("evaluateFacts", () => {
   test("strips comments", () => {
     const ctx = makeContext();
     const result = evaluateFacts([
-      "# this is a comment",
+      "$# this is a comment",
       "visible fact",
-      "# another comment",
+      "$# another comment",
     ], ctx);
     expect(result.facts).toEqual(["visible fact"]);
   });
@@ -966,7 +966,7 @@ describe("permission directives", () => {
 
   test("ignores comments in permission parsing", () => {
     const facts = [
-      "# $edit everyone",
+      "$# $edit everyone",
       "$edit alice",
     ];
     const result = parsePermissionDirectives(facts);
