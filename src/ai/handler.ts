@@ -339,14 +339,14 @@ function buildSystemPrompt(
       // Freeform mode: no structured format required
       multiEntityGuidance = `\n\nYou are writing as: ${names}. They may interact naturally in your response. Not everyone needs to respond to every message - only include those who would naturally engage. If none would respond, reply with only: none`;
     } else {
-      // Structured mode: use Name: prefix format
-      multiEntityGuidance = `\n\nYou are: ${names}. Format your response with name prefixes:
-${respondingEntities[0]?.name ?? "Name"}: *waves* Hello there!
-${respondingEntities[1]?.name ?? "Other"}: Nice to meet you.
+      // Structured mode: use XML tags
+      multiEntityGuidance = `\n\nYou are: ${names}. Format your response with XML tags:
+<${respondingEntities[0]?.name ?? "Name"}>*waves* Hello there!</${respondingEntities[0]?.name ?? "Name"}>
+<${respondingEntities[1]?.name ?? "Other"}>Nice to meet you.</${respondingEntities[1]?.name ?? "Other"}>
 
-Start each character's dialogue with their name followed by a colon. They may interact naturally.
+Wrap everyone's dialogue in their name tag. They may interact naturally.
 
-Not everyone needs to respond to every message. Only respond as those who would naturally engage with what was said. If none would respond, reply with only: none`;
+Not everyone needs to respond to every message. Only respond as those who would naturally engage with what was said. If none would respond, reply with only <none/>.`;
     }
   }
 
@@ -380,7 +380,7 @@ function parseMultiEntityResponse(
         results.push({
           entityId: entity.id,
           name: entity.name,
-          content,
+          content: stripNamePrefix(content, entity.name),
           avatarUrl: entity.avatarUrl ?? undefined,
           streamMode: entity.streamMode,
           position: match.index,
@@ -406,12 +406,112 @@ function parseMultiEntityResponse(
 // =============================================================================
 
 /**
- * Strip "Name:" prefix from single-entity responses.
- * Case-insensitive match at start of response.
+ * Strip "Name:" prefix from single-entity responses at every line start.
+ * Case-insensitive, multiline (handles multiple lines like "Alice: hi\nAlice: bye").
  */
 function stripNamePrefix(text: string, entityName: string): string {
-  const pattern = new RegExp(`^${entityName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}:\\s*`, "i");
+  const pattern = new RegExp(`^${entityName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}:\\s*`, "gim");
   return text.replace(pattern, "");
+}
+
+/** Sentinel character used to mark Name: boundaries in the stream */
+const NAME_BOUNDARY = "\0";
+
+/**
+ * Wraps a text stream to strip "Name:" prefixes at every line start.
+ * Buffers at line boundaries to detect and remove prefixes before yielding.
+ *
+ * When boundaryChar is set, inserts it at Name: boundaries (replacing the
+ * preceding newline). This allows downstream code to split on the boundary
+ * character to create separate messages for each Name: segment.
+ */
+async function* stripNamePrefixFromStream(
+  textStream: AsyncIterable<string>,
+  entityName: string,
+  boundaryChar: string | null = null
+): AsyncGenerator<string, void, unknown> {
+  let buffer = "";
+  let atLineStart = true;
+  let skipSpaces = false;
+  let isFirst = true;
+  let pendingNewline = false;
+  const prefixLower = entityName.toLowerCase() + ":";
+
+  for await (const delta of textStream) {
+    buffer += delta;
+    let output = "";
+
+    while (buffer.length > 0) {
+      // After stripping a prefix, skip whitespace before content
+      if (skipSpaces) {
+        let i = 0;
+        while (i < buffer.length && buffer[i] === " ") i++;
+        if (i === buffer.length) { buffer = ""; break; }
+        buffer = buffer.slice(i);
+        skipSpaces = false;
+      }
+
+      if (atLineStart) {
+        // Not enough data to determine if this is a prefix
+        if (buffer.length < prefixLower.length) break;
+        if (buffer.slice(0, prefixLower.length).toLowerCase() === prefixLower) {
+          // Name: boundary detected
+          if (isFirst) {
+            isFirst = false;
+            pendingNewline = false;
+          } else if (boundaryChar) {
+            // Insert boundary marker instead of the pending newline
+            output += boundaryChar;
+            pendingNewline = false;
+          } else if (pendingNewline) {
+            // No boundary marker, just output the newline normally
+            output += "\n";
+            pendingNewline = false;
+          }
+          buffer = buffer.slice(prefixLower.length);
+          atLineStart = false;
+          skipSpaces = true;
+          continue;
+        }
+        // Not a Name: prefix — output pending newline
+        if (pendingNewline) {
+          output += "\n";
+          pendingNewline = false;
+        }
+        isFirst = false;
+        atLineStart = false;
+      }
+
+      // Output content up to next newline, holding newline for boundary check
+      const nlIdx = buffer.indexOf("\n");
+      if (nlIdx !== -1) {
+        output += buffer.slice(0, nlIdx);
+        buffer = buffer.slice(nlIdx + 1);
+        if (boundaryChar) {
+          // Hold the newline to check if next line starts with Name:
+          pendingNewline = true;
+        } else {
+          // No boundary tracking, output newline immediately
+          output += "\n";
+        }
+        atLineStart = true;
+      } else {
+        output += buffer;
+        buffer = "";
+      }
+    }
+
+    if (output) yield output;
+  }
+
+  // Flush remaining
+  if (pendingNewline) {
+    let out = "\n";
+    if (buffer) out += buffer;
+    yield out;
+  } else if (buffer) {
+    yield buffer;
+  }
 }
 
 /**
@@ -429,11 +529,11 @@ function parseNamePrefixResponse(
   const names = entities.map(e => e.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
   const pattern = new RegExp(`^(${names.join("|")}):\\s*`, "gim");
 
-  // Find all name prefix positions
-  const matches: Array<{ name: string; contentStart: number }> = [];
+  // Find all name prefix positions (both match start and content start)
+  const matches: Array<{ name: string; matchIndex: number; contentStart: number }> = [];
   let match: RegExpExecArray | null;
   while ((match = pattern.exec(response)) !== null) {
-    matches.push({ name: match[1], contentStart: match.index + match[0].length });
+    matches.push({ name: match[1], matchIndex: match.index, contentStart: match.index + match[0].length });
   }
 
   if (matches.length === 0) return undefined;
@@ -442,11 +542,7 @@ function parseNamePrefixResponse(
   const results: EntityResponse[] = [];
   for (let i = 0; i < matches.length; i++) {
     const start = matches[i].contentStart;
-    const end = i + 1 < matches.length
-      ? response.lastIndexOf("\n", matches[i + 1].contentStart) !== -1
-        ? response.lastIndexOf("\n", matches[i + 1].contentStart - matches[i + 1].name.length - 2) + 1
-        : matches[i + 1].contentStart - matches[i + 1].name.length - 2
-      : response.length;
+    const end = i + 1 < matches.length ? matches[i + 1].matchIndex : response.length;
     const content = response.slice(start, end).trim();
     if (!content) continue;
 
@@ -773,44 +869,33 @@ async function* streamSingleEntity(
   delimiter: string[] | undefined,
   entityName?: string
 ): AsyncGenerator<StreamEvent, void, unknown> {
+  // Wrap stream to strip "Name:" prefixes and insert boundary markers
+  const processedStream = entityName
+    ? stripNamePrefixFromStream(textStream, entityName, NAME_BOUNDARY)
+    : textStream;
+
   let buffer = "";
   let fullContent = "";
   let lineContent = "";  // For full mode with delimiter
   let lineStarted = false;
-  let prefixStripped = false;
 
-  const hasDelimiter = delimiter !== undefined;
+  // For full mode: split on user delimiters + NAME_BOUNDARY (if entity name present)
+  const fullDelimiters = entityName
+    ? [...(delimiter ?? []), NAME_BOUNDARY]
+    : delimiter;
+  const hasFullDelimiter = fullDelimiters !== undefined && fullDelimiters.length > 0;
 
-  // Build prefix pattern if entity name provided
-  const prefixPattern = entityName
-    ? new RegExp(`^${entityName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}:\\s*`, "i")
-    : null;
-
-  for await (const delta of textStream) {
+  for await (const delta of processedStream) {
     buffer += delta;
     fullContent += delta;
 
-    // Strip "Name:" prefix from start of stream
-    if (!prefixStripped && prefixPattern) {
-      // Buffer until we have enough text to check
-      if (fullContent.length < entityName!.length + 2) continue;
-      prefixStripped = true;
-      const match = fullContent.match(prefixPattern);
-      if (match) {
-        const stripped = match[0].length;
-        fullContent = fullContent.slice(stripped);
-        buffer = buffer.slice(stripped);
-        if (!buffer && !fullContent) continue;
-      }
-    }
-
-    if (streamMode === "full" && !hasDelimiter) {
+    if (streamMode === "full" && !hasFullDelimiter) {
       // Full mode without delimiter: single message, emit every delta
       yield { type: "delta", content: delta, fullContent };
-    } else if (streamMode === "full" && hasDelimiter) {
+    } else if (streamMode === "full" && hasFullDelimiter) {
       // Full mode with delimiter: new message per chunk, each edited progressively
       let match: { index: number; length: number };
-      while ((match = findFirstDelimiter(buffer, delimiter)).index !== -1) {
+      while ((match = findFirstDelimiter(buffer, fullDelimiters!)).index !== -1) {
         const chunk = buffer.slice(0, match.index);
         buffer = buffer.slice(match.index + match.length);
 
@@ -842,7 +927,9 @@ async function* streamSingleEntity(
       }
     } else {
       // Lines mode: split on delimiter, emit complete chunks
-      const effectiveDelims = delimiter ?? ["\n"];
+      const effectiveDelims = entityName
+        ? [...(delimiter ?? ["\n"]), NAME_BOUNDARY]
+        : (delimiter ?? ["\n"]);
       let match: { index: number; length: number };
       while ((match = findFirstDelimiter(buffer, effectiveDelims)).index !== -1) {
         const chunk = buffer.slice(0, match.index).trim();
@@ -855,23 +942,23 @@ async function* streamSingleEntity(
     }
   }
 
-  // Handle remaining buffer
-  const remaining = buffer.trim();
-  if (remaining && remaining !== "<none/>") {
-    if (streamMode === "lines") {
+  // Handle remaining content
+  if (streamMode === "lines") {
+    const remaining = buffer.trim();
+    if (remaining && remaining !== "<none/>") {
       yield { type: "line", content: remaining };
-    } else if (streamMode === "full" && hasDelimiter) {
-      lineContent += buffer;
-      const trimmed = lineContent.trim();
-      if (trimmed && trimmed !== "<none/>") {
-        if (!lineStarted) {
-          yield { type: "line_start" };
-        }
-        yield { type: "line_end", content: trimmed };
-      }
     }
-    // For full mode without delimiter, already emitted as deltas
+  } else if (streamMode === "full" && hasFullDelimiter) {
+    lineContent += buffer;
+    const trimmed = lineContent.trim();
+    if (trimmed && trimmed !== "<none/>") {
+      if (!lineStarted) {
+        yield { type: "line_start" };
+      }
+      yield { type: "line_end", content: trimmed };
+    }
   }
+  // For full mode without delimiter, already emitted as deltas
 }
 
 /**
@@ -1094,30 +1181,26 @@ async function* streamMultiEntityNamePrefix(
     isDelta: boolean
   ): Generator<StreamEvent> {
     if (!content) return;
+    char.content += content;
 
     if (streamMode === "lines") {
       const effectiveDelims = delimiter ?? ["\n"];
-      if (isDelta) {
-        // Process buffer for complete chunks
-        let remaining = content;
-        let delimMatch: { index: number; length: number };
-        while ((delimMatch = findFirstDelimiter(remaining, effectiveDelims)).index !== -1) {
-          const chunk = remaining.slice(0, delimMatch.index).trim();
-          remaining = remaining.slice(delimMatch.index + delimMatch.length);
-          if (chunk) {
-            yield { type: "char_line", name: char.name, content: chunk };
-          }
+      let remaining = char.lineContent + content;
+      char.lineContent = "";
+      let delimMatch: { index: number; length: number };
+      while ((delimMatch = findFirstDelimiter(remaining, effectiveDelims)).index !== -1) {
+        const chunk = remaining.slice(0, delimMatch.index).trim();
+        remaining = remaining.slice(delimMatch.index + delimMatch.length);
+        if (chunk) {
+          yield { type: "char_line", name: char.name, content: chunk };
         }
-        // Return remaining unprocessed content
+      }
+      if (isDelta) {
         char.lineContent = remaining;
       } else {
-        // Final flush
-        const chunks = splitOnDelimiters(content, effectiveDelims);
-        for (const chunk of chunks) {
-          const trimmed = chunk.trim();
-          if (trimmed) {
-            yield { type: "char_line", name: char.name, content: trimmed };
-          }
+        const trimmed = remaining.trim();
+        if (trimmed) {
+          yield { type: "char_line", name: char.name, content: trimmed };
         }
       }
     } else if (streamMode === "full" && hasDelimiter) {
@@ -1162,7 +1245,6 @@ async function* streamMultiEntityNamePrefix(
       }
     } else {
       // Full mode without delimiter
-      char.content += content;
       yield { type: "char_delta", name: char.name, delta: content, content: char.content };
     }
   }
@@ -1261,8 +1343,8 @@ async function* streamMultiEntityNamePrefix(
     if (buffer.trim()) {
       yield* emitCharContent(currentChar, buffer, false);
     }
-    if (currentChar.content.trim() || buffer.trim()) {
-      yield { type: "char_end", name: currentChar.name, content: (currentChar.content + buffer).trim() };
+    if (currentChar.content.trim()) {
+      yield { type: "char_end", name: currentChar.name, content: currentChar.content.trim() };
     }
   }
 }

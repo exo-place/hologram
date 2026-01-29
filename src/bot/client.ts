@@ -150,6 +150,18 @@ function markProcessed(messageId: bigint): boolean {
   return true;
 }
 
+/** Strip trailing </blockquote> tags that have no matching opening <blockquote> */
+function stripTrailingBlockquotes(text: string): string {
+  const opens = (text.match(/<blockquote>/gi) || []).length;
+  let closes = (text.match(/<\/blockquote>/gi) || []).length;
+  let result = text;
+  while (closes > opens && /<\/blockquote>\s*$/i.test(result)) {
+    result = result.replace(/<\/blockquote>\s*$/i, "");
+    closes--;
+  }
+  return result;
+}
+
 bot.events.ready = async (payload) => {
   info("Bot ready", { username: payload.user.username });
   botUserId = payload.user.id;
@@ -168,6 +180,8 @@ bot.events.messageCreate = async (message) => {
 
   // Serialize stickers as action text appended to content
   let content = message.content ?? "";
+  content = stripTrailingBlockquotes(content);
+
   if (message.stickerItems?.length) {
     const stickerText = message.stickerItems
       .map(s => `*sent a sticker: ${s.name}*`)

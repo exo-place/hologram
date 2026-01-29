@@ -119,7 +119,9 @@ $if mentioned: $stream             # Conditional streaming
 
 **Custom delimiters:** Use `$stream "delimiter"` to split on custom text instead of newlines. Multiple delimiters can be specified: `$stream "a" "b" "c"` splits on any of them. E.g., `$stream "kitten:"` sends a new message each time the LLM outputs "kitten:".
 
-**Multi-character streaming:** When streaming with multiple characters bound to a channel, the system detects `Name:` prefixes at line starts and streams each character's response separately. Falls back to XML tag parsing (`<CharName>...</CharName>`) if the LLM uses that format instead.
+**Name: prefix handling:** When an LLM response includes `EntityName:` prefixes at line starts, they are stripped. For single entities in streaming mode, each `Name:` prefix creates a message boundary (separate Discord messages). For non-streaming single entities, all prefixes are stripped into one message.
+
+**Multi-character streaming:** When streaming with multiple characters bound to a channel, the system uses XML tag parsing (`<CharName>...</CharName>`) as the primary format (matching the system prompt). Falls back to `Name:` prefix detection at line starts if the LLM doesn't use XML tags.
 
 ### Model Selection
 
@@ -143,7 +145,7 @@ Comma-separated. Supports `provider:*` wildcards. If unset, all models are allow
 
 ### Freeform Multi-Character
 
-By default, when multiple entities are bound to a channel, responses are split using `Name:` prefix format (with XML tags as fallback). Use `$freeform` to allow natural prose responses without structured formatting:
+By default, when multiple entities are bound to a channel, responses are split using XML tags (`<Name>...</Name>`, with `Name:` prefix format as fallback). Use `$freeform` to allow natural prose responses without structured formatting:
 
 ```
 $freeform                          # Enable freeform multi-char responses
@@ -166,6 +168,12 @@ $if mentioned: $context 32k        # Conditional context size
 ```
 
 Default is 16k characters. Supports `k` suffix (e.g., `16k` = 16,000). Hard cap is 1M.
+
+### Message Preprocessing
+
+Incoming Discord messages are preprocessed before storage and LLM context:
+- **Blockquote stripping:** Trailing `</blockquote>` tags without matching opening `<blockquote>` are removed (Discord quote formatting artifacts)
+- **Sticker serialization:** Stickers become `*sent a sticker: name*` appended to message content
 
 ### Stickers
 
