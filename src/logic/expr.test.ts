@@ -336,6 +336,7 @@ describe("injection prevention", () => {
     const ctx = makeContext({ content: "test" });
     expect(() => evalExpr("content.toLowerCase().constructor", ctx)).toThrow("Blocked property access: constructor");
     expect(() => evalExpr("content.constructor.constructor", ctx)).toThrow("Blocked property access: constructor");
+    expect(() => evalExpr("content.includes['con'+'foso'[2]+'tructor']('return gl' + 'obal.pro' + 'cess.ver' + 'sions')()", ctx)).toThrow();
   });
 
   test("string escaping prevents code injection", () => {
