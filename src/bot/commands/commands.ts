@@ -33,8 +33,11 @@ import {
   getMessages,
   setChannelForgetTime,
 } from "../../db/discord";
-import { parsePermissionDirectives, matchesUserEntry, isUserBlacklisted, evaluateFacts, createBaseContext } from "../../logic/expr";
+import { parsePermissionDirectives, matchesUserEntry, isUserBlacklisted, isUserAllowed, evaluateFacts, createBaseContext } from "../../logic/expr";
 import { formatEntityDisplay, formatEvaluatedEntity, buildMessageHistory } from "../../ai/context";
+import { sendResponse } from "../client";
+import { debug } from "../../logger";
+import { formatMessagesForContext, getFilteredMessages } from "../../db/discord";
 
 // =============================================================================
 // Text Helpers
@@ -81,7 +84,7 @@ function elideText(text: string, maxLen = MAX_OUTPUT_CHARS): string {
  * Owner always can. Blacklist blocks everyone except owner.
  * Otherwise check $edit directive. Default = owner-only.
  */
-function canUserEdit(entity: EntityWithFacts, userId: string, username: string): boolean {
+function canUserEdit(entity: EntityWithFacts, userId: string, username: string, userRoles: string[] = []): boolean {
   // Owner always can
   if (entity.owned_by === userId) return true;
 
@@ -90,11 +93,11 @@ function canUserEdit(entity: EntityWithFacts, userId: string, username: string):
   const permissions = parsePermissionDirectives(facts);
 
   // Check blacklist first (deny overrides allow)
-  if (isUserBlacklisted(permissions, userId, username, entity.owned_by)) return false;
+  if (isUserBlacklisted(permissions, userId, username, entity.owned_by, userRoles)) return false;
 
-  // Check $edit directive (supports both usernames and Discord IDs)
+  // Check $edit directive (supports both usernames, Discord IDs, and role IDs)
   if (permissions.editList === "everyone") return true;
-  if (permissions.editList && permissions.editList.some(u => matchesUserEntry(u, userId, username))) return true;
+  if (permissions.editList && permissions.editList.some(u => matchesUserEntry(u, userId, username, userRoles))) return true;
 
   // No $edit directive = owner only
   return false;
@@ -103,9 +106,9 @@ function canUserEdit(entity: EntityWithFacts, userId: string, username: string):
 /**
  * Check if a user can view an entity.
  * Owner always can. Blacklist blocks everyone except owner.
- * Otherwise check $view directive. Default = everyone (public).
+ * Otherwise check $view directive. Default = owner-only.
  */
-function canUserView(entity: EntityWithFacts, userId: string, username: string): boolean {
+function canUserView(entity: EntityWithFacts, userId: string, username: string, userRoles: string[] = []): boolean {
   // Owner always can
   if (entity.owned_by === userId) return true;
 
@@ -114,14 +117,14 @@ function canUserView(entity: EntityWithFacts, userId: string, username: string):
   const permissions = parsePermissionDirectives(facts);
 
   // Check blacklist first (deny overrides allow)
-  if (isUserBlacklisted(permissions, userId, username, entity.owned_by)) return false;
+  if (isUserBlacklisted(permissions, userId, username, entity.owned_by, userRoles)) return false;
 
-  // If no $view directive, default to public (everyone can view)
-  if (permissions.viewList === null) return true;
+  // If no $view directive, default to owner-only
+  if (permissions.viewList === null) return false;
 
-  // Check $view directive (supports both usernames and Discord IDs)
+  // Check $view directive (supports both usernames, Discord IDs, and role IDs)
   if (permissions.viewList === "everyone") return true;
-  if (permissions.viewList.some(u => matchesUserEntry(u, userId, username))) return true;
+  if (permissions.viewList.some(u => matchesUserEntry(u, userId, username, userRoles))) return true;
 
   return false;
 }
@@ -233,7 +236,7 @@ registerCommand({
     }
 
     // Check view permission
-    if (!canUserView(entity, ctx.userId, ctx.username)) {
+    if (!canUserView(entity, ctx.userId, ctx.username, ctx.userRoles)) {
       await respond(ctx.bot, ctx.interaction, "You don't have permission to view this entity", true);
       return;
     }
@@ -315,7 +318,7 @@ registerCommand({
     }
 
     // Check edit permission
-    if (!canUserEdit(entity, ctx.userId, ctx.username)) {
+    if (!canUserEdit(entity, ctx.userId, ctx.username, ctx.userRoles)) {
       await respond(ctx.bot, ctx.interaction, "You don't have permission to edit this entity", true);
       return;
     }
@@ -1116,6 +1119,106 @@ async function handleInfoHistory(ctx: CommandContext, options: Record<string, un
   const userMessage = elideText(buildMessageHistory(messages));
   await respond(ctx.bot, ctx.interaction, userMessage, true);
 }
+
+// =============================================================================
+// /trigger - Manually trigger an entity response
+// =============================================================================
+
+registerCommand({
+  name: "trigger",
+  description: "Manually trigger an entity to respond in this channel",
+  options: [
+    {
+      name: "entity",
+      description: "Entity name",
+      type: ApplicationCommandOptionTypes.String,
+      required: true,
+      autocomplete: true,
+    },
+  ],
+  async handler(ctx, options) {
+    const input = options.entity as string;
+
+    // Resolve entity
+    let entity: EntityWithFacts | null = null;
+    const id = parseInt(input);
+    if (!isNaN(id)) {
+      entity = getEntityWithFacts(id);
+    }
+    if (!entity) {
+      entity = getEntityWithFactsByName(input);
+    }
+
+    if (!entity) {
+      await respond(ctx.bot, ctx.interaction, `Entity not found: ${input}`, true);
+      return;
+    }
+
+    // Check permissions
+    const facts = entity.facts.map(f => f.content);
+    const permissions = parsePermissionDirectives(facts);
+
+    if (isUserBlacklisted(permissions, ctx.userId, ctx.username, entity.owned_by, ctx.userRoles)) {
+      await respond(ctx.bot, ctx.interaction, "You don't have permission to trigger this entity", true);
+      return;
+    }
+
+    if (!isUserAllowed(permissions, ctx.userId, ctx.username, entity.owned_by, ctx.userRoles)) {
+      await respond(ctx.bot, ctx.interaction, "You don't have permission to trigger this entity", true);
+      return;
+    }
+
+    // Get last message from channel for context
+    const lastMessages = getMessages(ctx.channelId, 1);
+    const lastAuthor = lastMessages.length > 0 ? lastMessages[0].author_name : ctx.username;
+    const lastContent = lastMessages.length > 0 ? lastMessages[0].content : "";
+
+    // Evaluate facts (ignore shouldRespond - we always trigger)
+    const ctx2 = createBaseContext({
+      facts,
+      has_fact: (pattern: string) => {
+        const regex = new RegExp(pattern, "i");
+        return facts.some(f => regex.test(f));
+      },
+      messages: (n = 1, format?: string, filter?: string) =>
+        filter
+          ? formatMessagesForContext(getFilteredMessages(ctx.channelId, n, filter), format)
+          : formatMessagesForContext(getMessages(ctx.channelId, n), format),
+      mentioned: true, // Treat as mentioned for fact evaluation
+      name: entity.name,
+      chars: [entity.name],
+    });
+
+    let result;
+    try {
+      result = evaluateFacts(facts, ctx2);
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      await respond(ctx.bot, ctx.interaction, `Fact evaluation error: ${errorMsg}`, true);
+      return;
+    }
+
+    // Respond ephemeral then trigger
+    await respond(ctx.bot, ctx.interaction, `Triggering **${entity.name}**...`, true);
+
+    debug("Manual trigger", { entity: entity.name, user: ctx.username });
+
+    await sendResponse(ctx.channelId, ctx.guildId, lastAuthor, lastContent, true, [{
+      id: entity.id,
+      name: entity.name,
+      facts: result.facts,
+      avatarUrl: result.avatarUrl,
+      streamMode: result.streamMode,
+      streamDelimiter: result.streamDelimiter,
+      memoryScope: result.memoryScope,
+      contextLimit: result.contextLimit,
+      isFreeform: result.isFreeform,
+      modelSpec: result.modelSpec,
+      stripPatterns: result.stripPatterns,
+      exprContext: ctx2,
+    }]);
+  },
+});
 
 // =============================================================================
 // /forget - Clear message history from context

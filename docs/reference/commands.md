@@ -163,6 +163,25 @@ Shows:
 
 ---
 
+## Trigger
+
+### `/trigger`
+
+Manually trigger an entity to respond in the current channel. Bypasses the normal response logic (`$respond` / `$if`) - the entity will always respond.
+
+```
+/trigger <entity>
+```
+
+Respects `$use` and `$blacklist` permissions - you must be allowed to trigger the entity.
+
+**Examples:**
+```
+/trigger Aria              # Force Aria to respond now
+```
+
+---
+
 ## Help
 
 Help is an entity! View it with `/view`:

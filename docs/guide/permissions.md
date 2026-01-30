@@ -48,7 +48,7 @@ likes tea
 
 In this example, the AI can modify "is a character" and "likes tea", but cannot touch "has silver hair".
 
-## User Permissions (`$edit`, `$view`)
+## User Permissions (`$edit`, `$view`, `$use`)
 
 Control which Discord users can edit or view an entity using the `$edit` and `$view` directives.
 
@@ -60,33 +60,49 @@ By default, only the owner can edit an entity. Use `$edit` to grant access to ot
 $edit @everyone
 ```
 
-Or specify usernames:
+Or specify usernames, Discord user IDs, or role IDs:
 
 ```
 $edit alice, bob
+$edit 123456789012345678
 ```
 
 ### View Permissions
 
-By default, everyone can view entities (public). Use `$view` to restrict viewing:
-
-```
-$view alice, bob
-```
-
-Or keep it public explicitly:
+By default, only the owner can view entities. Use `$view` to grant access to others:
 
 ```
 $view @everyone
 ```
 
+Or specify entries:
+
+```
+$view alice, bob
+$view 123456789012345678
+```
+
+### Use Permissions
+
+By default, anyone can trigger entity responses. Use `$use` to restrict who can trigger:
+
+```
+$use alice, bob
+$use 123456789012345678
+```
+
+This controls both chat responses and `/trigger` invocations.
+
 ## Permission Hierarchy
 
 | Check | Default | Override |
 |-------|---------|----------|
-| Edit | Owner only | `$edit @everyone` or `$edit <usernames>` |
-| View | Everyone | `$view <usernames>` (restricts to listed users) |
+| Edit | Owner only | `$edit @everyone` or `$edit <entries>` |
+| View | Owner only | `$view @everyone` or `$view <entries>` |
+| Use | Everyone | `$use <entries>` (restricts who can trigger) |
 | LLM Modify | Allowed | `$locked` (entity) or `$locked <fact>` |
+
+All permission directives accept usernames, Discord user IDs, and role IDs.
 
 ## Examples
 
@@ -111,14 +127,24 @@ $locked has silver hair
 personality is cheerful
 ```
 
-### Private Entity
+### Public Entity
 
-Only owner can see and edit:
+Visible to everyone:
 
 ```
-$view myusername
-is my private character
-has secrets
+$view @everyone
+is a character
+has silver hair
+```
+
+### Restricted Trigger
+
+Only specific users can make this entity respond:
+
+```
+$use alice, bob
+is a character
+has silver hair
 ```
 
 ### Fully Locked

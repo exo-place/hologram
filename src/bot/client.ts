@@ -9,7 +9,7 @@ import { isModelAllowed } from "../ai/models";
 import { retrieveRelevantMemories, type MemoryScope } from "../db/memories";
 import { resolveDiscordEntity, resolveDiscordEntities, isNewUser, markUserWelcomed, addMessage, updateMessageByDiscordId, deleteMessageByDiscordId, trackWebhookMessage, getWebhookMessageEntity, getMessages, getFilteredMessages, formatMessagesForContext, recordEvalError } from "../db/discord";
 import { getEntity, getEntityWithFacts, getSystemEntity, getFactsForEntity, type EntityWithFacts } from "../db/entities";
-import { evaluateFacts, createBaseContext, parsePermissionDirectives, isUserBlacklisted } from "../logic/expr";
+import { evaluateFacts, createBaseContext, parsePermissionDirectives, isUserBlacklisted, isUserAllowed } from "../logic/expr";
 import { executeWebhook, editWebhookMessage, setBot } from "./webhooks";
 import "./commands/commands"; // Register all commands
 import { ensureHelpEntities } from "./commands/help";
@@ -38,6 +38,7 @@ export const bot = createBot({
       channelId: true,
       guildId: true,
       author: true,
+      member: true,
       mentionedUserIds: true as const,
       messageReference: true,
       messageSnapshots: true as const,
@@ -280,6 +281,10 @@ bot.events.messageCreate = async (message) => {
     ?? message.author.globalName
     ?? message.author.username;
 
+  // Extract member roles (BigInt[] → string[])
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const authorRoles: string[] = ((message as any).member?.roles ?? []).map((r: bigint) => r.toString());
+
   debug("Message", {
     channel: channelId,
     author: authorName,
@@ -357,8 +362,14 @@ bot.events.messageCreate = async (message) => {
     // Check if message author is blacklisted from this entity
     const facts = entity.facts.map(f => f.content);
     const permissions = parsePermissionDirectives(facts);
-    if (isUserBlacklisted(permissions, authorId, authorName, entity.owned_by)) {
+    if (isUserBlacklisted(permissions, authorId, authorName, entity.owned_by, authorRoles)) {
       debug("User blacklisted from entity", { entity: entity.name, user: authorName });
+      continue;
+    }
+
+    // Check $use whitelist
+    if (!isUserAllowed(permissions, authorId, authorName, entity.owned_by, authorRoles)) {
+      debug("User not in $use whitelist", { entity: entity.name, user: authorName });
       continue;
     }
 
@@ -914,7 +925,7 @@ async function handleStreamingResponse(
   }
 }
 
-async function sendResponse(
+export async function sendResponse(
   channelId: string,
   guildId: string | undefined,
   username: string,

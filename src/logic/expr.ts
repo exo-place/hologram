@@ -631,6 +631,7 @@ const LOCKED_SIGIL = "$locked";
 const EDIT_SIGIL = "$edit ";
 const VIEW_SIGIL = "$view ";
 const BLACKLIST_SIGIL = "$blacklist ";
+const USE_SIGIL = "$use ";
 const STREAM_SIGIL = "$stream";
 const MEMORY_SIGIL = "$memory";
 const CONTEXT_SIGIL = "$context";
@@ -927,8 +928,8 @@ export function parseFact(fact: string): ProcessedFact {
       };
     }
 
-    // Check if content is a permission directive ($edit, $view, $blacklist)
-    if (content.startsWith(EDIT_SIGIL) || content.startsWith(VIEW_SIGIL) || content.startsWith(BLACKLIST_SIGIL)) {
+    // Check if content is a permission directive ($edit, $view, $blacklist, $use)
+    if (content.startsWith(EDIT_SIGIL) || content.startsWith(VIEW_SIGIL) || content.startsWith(BLACKLIST_SIGIL) || content.startsWith(USE_SIGIL)) {
       return { content, conditional: true, expression, isRespond: false, isRetry: false, isAvatar: false, isLockedDirective: false, isLockedFact: false, isStream: false, isMemory: false, isContext: false, isFreeform: false, isPermission: true, isModel: false, isStrip: false };
     }
 
@@ -1132,8 +1133,8 @@ export function parseFact(fact: string): ProcessedFact {
     };
   }
 
-  // Check for permission directives ($edit, $view, $blacklist)
-  if (trimmed.startsWith(EDIT_SIGIL) || trimmed.startsWith(VIEW_SIGIL) || trimmed.startsWith(BLACKLIST_SIGIL)) {
+  // Check for permission directives ($edit, $view, $blacklist, $use)
+  if (trimmed.startsWith(EDIT_SIGIL) || trimmed.startsWith(VIEW_SIGIL) || trimmed.startsWith(BLACKLIST_SIGIL) || trimmed.startsWith(USE_SIGIL)) {
     return { content: trimmed, conditional: false, isRespond: false, isRetry: false, isAvatar: false, isLockedDirective: false, isLockedFact: false, isStream: false, isMemory: false, isContext: false, isFreeform: false, isPermission: true, isModel: false, isStrip: false };
   }
 
@@ -1935,6 +1936,8 @@ export interface EntityPermissions {
   editList: string[] | "everyone" | null;
   /** User IDs allowed to view, "everyone" for public, null for owner-only */
   viewList: string[] | "everyone" | null;
+  /** Users/IDs/roles allowed to trigger responses, "everyone" for public, null for no restriction */
+  useList: string[] | "everyone" | null;
   /** Users/IDs blocked from all interactions (usernames or Discord IDs) */
   blacklist: string[];
 }
@@ -1949,6 +1952,7 @@ export function parsePermissionDirectives(facts: string[]): EntityPermissions {
   const lockedFacts = new Set<string>();
   let editList: string[] | "everyone" | null = null;
   let viewList: string[] | "everyone" | null = null;
+  let useList: string[] | "everyone" | null = null;
   const blacklist: string[] = [];
 
   for (const fact of facts) {
@@ -1992,9 +1996,16 @@ export function parsePermissionDirectives(facts: string[]): EntityPermissions {
       }
       continue;
     }
+
+    // Check for $use
+    if (trimmed.startsWith(USE_SIGIL)) {
+      const value = trimmed.slice(USE_SIGIL.length).trim();
+      useList = parseUserList(value);
+      continue;
+    }
   }
 
-  return { isLocked, lockedFacts, editList, viewList, blacklist };
+  return { isLocked, lockedFacts, editList, viewList, useList, blacklist };
 }
 
 /**
@@ -2012,12 +2023,12 @@ function parseUserList(value: string): string[] | "everyone" {
 
 /**
  * Check if a permission entry matches a user.
- * Entries can be Discord IDs (17-19 digits) or usernames (case-insensitive).
+ * Entries can be Discord IDs (17-19 digits, matching user ID or role IDs) or usernames (case-insensitive).
  */
-export function matchesUserEntry(entry: string, userId: string, username: string): boolean {
-  // Discord IDs are 17-19 digit snowflakes
+export function matchesUserEntry(entry: string, userId: string, username: string, userRoles: string[] = []): boolean {
+  // Discord IDs are 17-19 digit snowflakes - check user ID and role IDs
   if (/^\d{17,19}$/.test(entry)) {
-    return entry === userId;
+    return entry === userId || userRoles.includes(entry);
   }
   // Usernames are case-insensitive
   return entry.toLowerCase() === username.toLowerCase();
@@ -2031,10 +2042,38 @@ export function isUserBlacklisted(
   permissions: EntityPermissions,
   userId: string,
   username: string,
-  ownerId: string | null
+  ownerId: string | null,
+  userRoles: string[] = []
 ): boolean {
   // Owner is never blocked
   if (ownerId && userId === ownerId) return false;
 
-  return permissions.blacklist.some(entry => matchesUserEntry(entry, userId, username));
+  return permissions.blacklist.some(entry => matchesUserEntry(entry, userId, username, userRoles));
+}
+
+/**
+ * Check if a user is allowed to trigger entity responses ($use whitelist).
+ * Owner is always allowed.
+ * null useList = no restriction (everyone allowed, default).
+ * "everyone" = explicitly everyone allowed.
+ * Otherwise check the list entries.
+ */
+export function isUserAllowed(
+  permissions: EntityPermissions,
+  userId: string,
+  username: string,
+  ownerId: string | null,
+  userRoles: string[] = []
+): boolean {
+  // Owner always allowed
+  if (ownerId && userId === ownerId) return true;
+
+  // No $use directive = no restriction
+  if (permissions.useList === null) return true;
+
+  // Explicit everyone
+  if (permissions.useList === "everyone") return true;
+
+  // Check list entries
+  return permissions.useList.some(entry => matchesUserEntry(entry, userId, username, userRoles));
 }

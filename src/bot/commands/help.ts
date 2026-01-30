@@ -2,6 +2,7 @@ import { ensureSystemEntity, getSystemEntities, deleteEntity } from "../../db/en
 
 const HELP_ENTITY_FACTS: Record<string, string[]> = {
   help: [
+    "$view @everyone",
     "is the help system",
     "topics: start, commands, expressions, patterns, facts, bindings, permissions, models, output",
     "use `/view help:<topic>` for details",
@@ -12,6 +13,7 @@ const HELP_ENTITY_FACTS: Record<string, string[]> = {
     "New here? Try `/view help:start`",
   ],
   "help:start": [
+    "$view @everyone",
     "is the getting started guide",
     "---",
     "**Setting up a channel:**",
@@ -32,9 +34,10 @@ const HELP_ENTITY_FACTS: Record<string, string[]> = {
     "• Control responses with `$if` (`/view help:expressions`)",
   ],
   "help:commands": [
+    "$view @everyone",
     "is help for commands",
     "---",
-    "**Commands** (9 total)",
+    "**Commands** (10 total)",
     "`/create` - Create entity",
     "`/view` - View entity facts",
     "`/edit` - Edit entity facts",
@@ -43,6 +46,7 @@ const HELP_ENTITY_FACTS: Record<string, string[]> = {
     "`/bind` - Bind channel/user to entity",
     "`/unbind` - Remove entity binding",
     "`/info` - Channel state and debug",
+    "`/trigger` - Manually trigger an entity",
     "`/forget` - Forget history before now",
     "---",
     "**Info subcommands:**",
@@ -56,6 +60,7 @@ const HELP_ENTITY_FACTS: Record<string, string[]> = {
     "`/bind channel Aria` - Bind to channel",
   ],
   "help:expressions": [
+    "$view @everyone",
     "is help for $if expressions and response control",
     "---",
     "**Syntax:** `$if <expr>: <fact or directive>`",
@@ -105,6 +110,7 @@ const HELP_ENTITY_FACTS: Record<string, string[]> = {
     "See `/view help:patterns` for common examples",
   ],
   "help:patterns": [
+    "$view @everyone",
     "is help for common $if patterns",
     "---",
     "**Recommended defaults:**",
@@ -142,6 +148,7 @@ const HELP_ENTITY_FACTS: Record<string, string[]> = {
     "`$if retry_ms > 10000: $respond` - after 10s delay",
   ],
   "help:facts": [
+    "$view @everyone",
     "is help for facts",
     "---",
     "**Facts** - Define entities",
@@ -169,6 +176,7 @@ const HELP_ENTITY_FACTS: Record<string, string[]> = {
     "**Permissions:** See `/view help:permissions`",
   ],
   "help:bindings": [
+    "$view @everyone",
     "is help for bindings",
     "---",
     "**Bindings** - Connect Discord to entities",
@@ -182,6 +190,7 @@ const HELP_ENTITY_FACTS: Record<string, string[]> = {
     "**Scopes:** channel (default), guild, global",
   ],
   "help:permissions": [
+    "$view @everyone",
     "is help for entity permissions",
     "---",
     "**Ownership** - Each entity has an owner",
@@ -191,7 +200,7 @@ const HELP_ENTITY_FACTS: Record<string, string[]> = {
     "---",
     "**Blacklist** - Block specific users",
     "• `$blacklist username` - Block by username",
-    "• `$blacklist 123456789012345678` - Block by Discord ID",
+    "• `$blacklist 123456789012345678` - Block by Discord ID or role ID",
     "• `$blacklist user1, 123456789, user2` - Mixed",
     "• Blocked users cannot view, edit, or receive responses",
     "• Owner is never blocked",
@@ -201,20 +210,26 @@ const HELP_ENTITY_FACTS: Record<string, string[]> = {
     "• `$locked has silver hair` - Lock specific fact",
     "AI can still see locked facts, but cannot modify them.",
     "---",
-    "**User Access** - Control who can edit/view",
+    "**User Access** - Control who can edit/view/use",
     "• `$edit @everyone` - Anyone can edit",
     "• `$edit alice, bob` - Usernames (case-insensitive)",
-    "• `$edit 123456789012345678` - Discord IDs",
+    "• `$edit 123456789012345678` - Discord user or role IDs",
     "• `$view @everyone` - Anyone can view",
     "• `$view alice, 123456789` - Mixed usernames and IDs",
+    "• `$use @everyone` - Anyone can trigger responses",
+    "• `$use alice, 123456789` - Restrict who can trigger",
     "---",
     "**Defaults:**",
     "• Blacklist: empty (nobody blocked)",
     "• Edit: owner only",
-    "• View: everyone (public)",
+    "• View: owner only",
+    "• Use: everyone (no restriction)",
     "• LLM: not locked",
+    "---",
+    "All permission directives accept usernames, Discord user IDs, and role IDs.",
   ],
   "help:models": [
+    "$view @everyone",
     "is help for models",
     "---",
     "**Models** - `provider:model` format",
@@ -225,6 +240,7 @@ const HELP_ENTITY_FACTS: Record<string, string[]> = {
     "• `openai:gpt-4o`",
   ],
   "help:output": [
+    "$view @everyone",
     "is help for output directives",
     "---",
     "**Output directives** control how the LLM generates and delivers responses.",

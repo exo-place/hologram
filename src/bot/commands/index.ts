@@ -12,7 +12,7 @@ type Bot = any;
 type Interaction = any;
 import { info, warn, error } from "../../logger";
 import { searchEntities, searchEntitiesOwnedBy, getEntitiesWithFacts } from "../../db/entities";
-import { parsePermissionDirectives, matchesUserEntry, isUserBlacklisted } from "../../logic/expr";
+import { parsePermissionDirectives, matchesUserEntry, isUserBlacklisted, isUserAllowed } from "../../logic/expr";
 import { getBoundEntityIds, type DiscordType } from "../../db/discord";
 
 // =============================================================================
@@ -26,6 +26,7 @@ export interface CommandContext {
   guildId: string | undefined;
   userId: string;
   username: string;
+  userRoles: string[];
 }
 
 export type CommandHandler = (ctx: CommandContext, options: Record<string, unknown>) => Promise<void>;
@@ -220,6 +221,7 @@ export async function handleInteraction(bot: Bot, interaction: Interaction) {
       guildId: interaction.guildId?.toString(),
       userId: interaction.user?.id?.toString() ?? "",
       username: interaction.user?.username ?? "unknown",
+      userRoles: (interaction.member?.roles ?? []).map((r: bigint) => r.toString()),
     };
 
     // Parse options (handles subcommands)
@@ -289,6 +291,7 @@ async function handleAutocomplete(bot: Bot, interaction: Interaction) {
   const commandName = interaction.data?.name;
   const userId = interaction.user?.id?.toString() ?? "";
   const username = interaction.user?.username ?? "";
+  const userRoles: string[] = (interaction.member?.roles ?? []).map((r: bigint) => r.toString());
 
   let results;
 
@@ -312,9 +315,9 @@ async function handleAutocomplete(bot: Bot, interaction: Interaction) {
         if (!entityWithFacts) return false;
         const facts = entityWithFacts.facts.map(f => f.content);
         const permissions = parsePermissionDirectives(facts);
-        if (isUserBlacklisted(permissions, userId, username, entity.owned_by)) return false;
+        if (isUserBlacklisted(permissions, userId, username, entity.owned_by, userRoles)) return false;
         if (permissions.editList === "everyone") return true;
-        if (permissions.editList?.some(u => matchesUserEntry(u, userId, username))) return true;
+        if (permissions.editList?.some(u => matchesUserEntry(u, userId, username, userRoles))) return true;
         return false;
       }).slice(0, 25);
     } else {
@@ -350,9 +353,9 @@ async function handleAutocomplete(bot: Bot, interaction: Interaction) {
         if (entityWithFacts.owned_by !== userId) {
           const facts = entityWithFacts.facts.map(f => f.content);
           const permissions = parsePermissionDirectives(facts);
-          if (isUserBlacklisted(permissions, userId, username, entityWithFacts.owned_by)) continue;
+          if (isUserBlacklisted(permissions, userId, username, entityWithFacts.owned_by, userRoles)) continue;
           if (permissions.editList !== "everyone" &&
-              !permissions.editList?.some(u => matchesUserEntry(u, userId, username))) {
+              !permissions.editList?.some(u => matchesUserEntry(u, userId, username, userRoles))) {
             continue;
           }
         }
@@ -372,9 +375,9 @@ async function handleAutocomplete(bot: Bot, interaction: Interaction) {
       if (!entityWithFacts) return false;
       const facts = entityWithFacts.facts.map(f => f.content);
       const permissions = parsePermissionDirectives(facts);
-      if (isUserBlacklisted(permissions, userId, username, entity.owned_by)) return false;
+      if (isUserBlacklisted(permissions, userId, username, entity.owned_by, userRoles)) return false;
       if (permissions.editList === "everyone") return true;
-      if (permissions.editList?.some(u => matchesUserEntry(u, userId, username))) return true;
+      if (permissions.editList?.some(u => matchesUserEntry(u, userId, username, userRoles))) return true;
       return false;
     }).slice(0, 25);
   } else if (commandName === "view" || commandName === "info") {
@@ -388,12 +391,27 @@ async function handleAutocomplete(bot: Bot, interaction: Interaction) {
       if (!entityWithFacts) return false;
       const facts = entityWithFacts.facts.map(f => f.content);
       const permissions = parsePermissionDirectives(facts);
-      if (isUserBlacklisted(permissions, userId, username, entity.owned_by)) return false;
-      // No $view directive = public by default
-      if (permissions.viewList === null) return true;
+      if (isUserBlacklisted(permissions, userId, username, entity.owned_by, userRoles)) return false;
+      // No $view directive = owner-only by default
+      if (permissions.viewList === null) return false;
       if (permissions.viewList === "everyone") return true;
-      if (permissions.viewList.some(u => matchesUserEntry(u, userId, username))) return true;
+      if (permissions.viewList.some(u => matchesUserEntry(u, userId, username, userRoles))) return true;
       return false;
+    }).slice(0, 25);
+  } else if (commandName === "trigger") {
+    // Trigger requires $use whitelist check - batch load facts
+    const allResults = searchEntities(query, 100);
+    const entitiesWithFacts = getEntitiesWithFacts(allResults.map(e => e.id));
+
+    results = allResults.filter(entity => {
+      if (entity.owned_by === userId) return true;
+      const entityWithFacts = entitiesWithFacts.get(entity.id);
+      if (!entityWithFacts) return false;
+      const facts = entityWithFacts.facts.map(f => f.content);
+      const permissions = parsePermissionDirectives(facts);
+      if (isUserBlacklisted(permissions, userId, username, entity.owned_by, userRoles)) return false;
+      if (!isUserAllowed(permissions, userId, username, entity.owned_by, userRoles)) return false;
+      return true;
     }).slice(0, 25);
   } else {
     // Fallback - show all

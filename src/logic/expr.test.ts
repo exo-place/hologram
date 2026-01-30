@@ -1845,7 +1845,135 @@ describe("messages() with filter", () => {
 });
 
 // =============================================================================
-// Import parsePermissionDirectives for permission tests
+// Import permission functions for tests
 // =============================================================================
 
-import { parsePermissionDirectives } from "./expr";
+import { parsePermissionDirectives, matchesUserEntry, isUserBlacklisted, isUserAllowed } from "./expr";
+
+// =============================================================================
+// $use directive tests
+// =============================================================================
+
+describe("$use directive", () => {
+  test("parsePermissionDirectives: $use with usernames", () => {
+    const perms = parsePermissionDirectives(["$use alice, bob"]);
+    expect(perms.useList).toEqual(["alice", "bob"]);
+  });
+
+  test("parsePermissionDirectives: $use @everyone", () => {
+    const perms = parsePermissionDirectives(["$use @everyone"]);
+    expect(perms.useList).toBe("everyone");
+  });
+
+  test("parsePermissionDirectives: no $use = null (no restriction)", () => {
+    const perms = parsePermissionDirectives(["is a character"]);
+    expect(perms.useList).toBeNull();
+  });
+
+  test("parseFact: $use is treated as permission directive", () => {
+    const result = parseFact("$use alice, bob");
+    expect(result.isPermission).toBe(true);
+  });
+
+  test("parseFact: conditional $use is treated as permission directive", () => {
+    const result = parseFact("$if true: $use alice");
+    expect(result.isPermission).toBe(true);
+  });
+
+  test("evaluateFacts: $use is stripped from output facts", () => {
+    const facts = ["is a character", "$use alice", "has silver hair"];
+    const ctx = createBaseContext({ facts, has_fact: (p: string) => facts.some(f => new RegExp(p, "i").test(f)), name: "Test" });
+    const result = evaluateFacts(facts, ctx);
+    expect(result.facts).not.toContain("$use alice");
+    expect(result.facts).toContain("is a character");
+    expect(result.facts).toContain("has silver hair");
+  });
+});
+
+// =============================================================================
+// matchesUserEntry with roles
+// =============================================================================
+
+describe("matchesUserEntry with roles", () => {
+  test("matches role ID in userRoles", () => {
+    expect(matchesUserEntry("111222333444555666", "999888777666555444", "alice", ["111222333444555666"])).toBe(true);
+  });
+
+  test("does not match role ID not in userRoles", () => {
+    expect(matchesUserEntry("111222333444555666", "999888777666555444", "alice", ["000000000000000000"])).toBe(false);
+  });
+
+  test("still matches user ID directly", () => {
+    expect(matchesUserEntry("999888777666555444", "999888777666555444", "alice", [])).toBe(true);
+  });
+
+  test("still matches username without roles", () => {
+    expect(matchesUserEntry("alice", "999888777666555444", "alice")).toBe(true);
+  });
+
+  test("empty roles does not break snowflake matching", () => {
+    expect(matchesUserEntry("111222333444555666", "999888777666555444", "alice", [])).toBe(false);
+  });
+});
+
+// =============================================================================
+// isUserAllowed tests
+// =============================================================================
+
+describe("isUserAllowed", () => {
+  test("no $use directive = everyone allowed", () => {
+    const perms = parsePermissionDirectives(["is a character"]);
+    expect(isUserAllowed(perms, "123", "alice", "456")).toBe(true);
+  });
+
+  test("$use @everyone = everyone allowed", () => {
+    const perms = parsePermissionDirectives(["$use @everyone"]);
+    expect(isUserAllowed(perms, "123", "alice", "456")).toBe(true);
+  });
+
+  test("$use with matching username", () => {
+    const perms = parsePermissionDirectives(["$use alice, bob"]);
+    expect(isUserAllowed(perms, "123", "alice", "456")).toBe(true);
+  });
+
+  test("$use with non-matching username", () => {
+    const perms = parsePermissionDirectives(["$use alice, bob"]);
+    expect(isUserAllowed(perms, "123", "charlie", "456")).toBe(false);
+  });
+
+  test("owner is always allowed", () => {
+    const perms = parsePermissionDirectives(["$use alice"]);
+    expect(isUserAllowed(perms, "456", "owner", "456")).toBe(true);
+  });
+
+  test("$use with matching role ID", () => {
+    const perms = parsePermissionDirectives(["$use 111222333444555666"]);
+    expect(isUserAllowed(perms, "123", "alice", "456", ["111222333444555666"])).toBe(true);
+  });
+
+  test("$use with non-matching role ID", () => {
+    const perms = parsePermissionDirectives(["$use 111222333444555666"]);
+    expect(isUserAllowed(perms, "123", "alice", "456", ["000000000000000000"])).toBe(false);
+  });
+});
+
+// =============================================================================
+// isUserBlacklisted with roles
+// =============================================================================
+
+describe("isUserBlacklisted with roles", () => {
+  test("blacklist role ID blocks user with that role", () => {
+    const perms = parsePermissionDirectives(["$blacklist 111222333444555666"]);
+    expect(isUserBlacklisted(perms, "123", "alice", "456", ["111222333444555666"])).toBe(true);
+  });
+
+  test("blacklist role ID does not block user without that role", () => {
+    const perms = parsePermissionDirectives(["$blacklist 111222333444555666"]);
+    expect(isUserBlacklisted(perms, "123", "alice", "456", ["000000000000000000"])).toBe(false);
+  });
+
+  test("owner is never blacklisted even with role match", () => {
+    const perms = parsePermissionDirectives(["$blacklist 111222333444555666"]);
+    expect(isUserBlacklisted(perms, "456", "owner", "456", ["111222333444555666"])).toBe(false);
+  });
+});

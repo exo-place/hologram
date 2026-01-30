@@ -11,7 +11,7 @@ Directives fall into three distinct categories:
 | **Flow Control** | `$if`, `$respond`, `$retry` | When and whether to respond |
 | **Output** | `$stream`, `$freeform`, `$model`, `$context`, `$strip` | How and what the LLM produces |
 | **Metadata** | `$avatar`, `$memory` | Entity presentation and memory |
-| **Permissions** | `$locked`, `$edit`, `$view`, `$blacklist` | Access control |
+| **Permissions** | `$locked`, `$edit`, `$view`, `$use`, `$blacklist` | Access control |
 
 This separation is intentional. Each category handles a different concern, and directives within a category don't overlap in function.
 
@@ -107,27 +107,43 @@ $locked is loyal to the queen
 
 The fact content (without the `$locked` prefix) is shown to the LLM, but tool calls targeting that fact will fail.
 
-### `$edit @everyone` / `$edit <usernames>`
+### `$edit @everyone` / `$edit <entries>`
 
 Control which Discord users can edit this entity via `/edit`.
 
 ```
 $edit @everyone           # Anyone can edit
 $edit alice, bob          # Only these usernames
+$edit 123456789012345678  # Discord user or role IDs
 ```
 
 **Default:** Owner only (the user who created the entity).
 
-### `$view @everyone` / `$view <usernames>`
+### `$view @everyone` / `$view <entries>`
 
 Control which Discord users can view this entity via `/view`.
 
 ```
-$view @everyone           # Anyone can view (default)
+$view @everyone           # Anyone can view
 $view alice, bob          # Only these usernames
+$view 123456789012345678  # Discord user or role IDs
 ```
 
-**Default:** Everyone can view.
+**Default:** Owner only.
+
+### `$use @everyone` / `$use <entries>`
+
+Control which Discord users can trigger entity responses in chat or via `/trigger`.
+
+```
+$use @everyone            # Anyone can trigger (same as default)
+$use alice, bob           # Only these usernames
+$use 123456789012345678   # Discord user or role IDs
+```
+
+**Default:** No restriction (everyone can trigger).
+
+All permission directives accept usernames, Discord user IDs, and role IDs.
 
 ## Other Syntax
 
@@ -162,7 +178,7 @@ The directive system was built incrementally, which raised concerns about cohere
 
 2. **Metadata** (`$avatar`) - Presentation concerns, separate from behavior. Could expand to `$name`, `$color`, etc. without touching other categories.
 
-3. **Permissions** (`$locked`, `$edit`, `$view`) - Access control is orthogonal to behavior. `$locked` controls LLM access; `$edit`/`$view` control Discord user access. These don't interfere with each other or with flow control.
+3. **Permissions** (`$locked`, `$edit`, `$view`, `$use`) - Access control is orthogonal to behavior. `$locked` controls LLM access; `$edit`/`$view`/`$use` control Discord user access. These don't interfere with each other or with flow control.
 
 **Why `$retry` isn't a bandaid:**
 
