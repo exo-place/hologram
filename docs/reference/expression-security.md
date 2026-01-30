@@ -189,7 +189,7 @@ Full analysis of `String.prototype`. Accessible on: `content`, `author`, `name`,
 | `localeCompare(other)` | number | Returns -1, 0, or 1 |
 | `isWellFormed()` | boolean | ES2024 |
 | `toWellFormed()` | string | ES2024, output = input length |
-| `replaceAll(search, replacement)` | string | With string args: **literal** string replacement (no regex). Output bounded by input * (replacement/search) ratio. |
+| `replaceAll(search, replacement)` | string | **Wrapped** — see [Wrapped at Runtime](#wrapped-at-runtime-memory-exhaustion-prevention). Chained calls produce exponential growth (each level multiplies all matches). |
 | `length` | number | Property, not method |
 
 ### Wrapped at Runtime (memory exhaustion prevention)
@@ -201,6 +201,8 @@ Rewritten at code generation time to call `$s.method(obj, args)`. Wrappers enfor
 | `repeat(n)` | Validates: string target, non-negative integer count, output length <= 100K chars |
 | `padStart(len, fill?)` | Validates: string target, non-negative length <= 100K chars |
 | `padEnd(len, fill?)` | Same as padStart |
+| `replaceAll(search, replacement)` | Runs native replaceAll, then checks output length <= 100K chars. Prevents chained exponential growth (`replaceAll("a","aaaa")` chains produce 4^n amplification) |
+| `join(separator?)` | Validates: array target, output length <= 100K chars. Prevents `split("").join("xxx")` chained amplification |
 
 ### Regex-Validated at Compile Time (ReDoS prevention)
 
@@ -253,8 +255,8 @@ Accessible on `chars` and return values of `match()` and `split()`.
 | `includes(value)` | boolean | O(n) |
 | `indexOf(value)` | number | O(n) |
 | `lastIndexOf(value)` | number | O(n) |
-| `join(separator?)` | string | Output = sum of element lengths + separators |
-| `toString()` | string | Same as `join(",")` |
+| `join(separator?)` | string | **Wrapped** — output checked against 100K limit. See [Wrapped at Runtime](#wrapped-at-runtime-memory-exhaustion-prevention). |
+| `toString()` | string | Same as `join(",")` — not wrapped, but `chars` is small |
 | `at(index)` | element | |
 | `slice(start?, end?)` | array | Output <= input |
 | `concat(...items)` | array | Linear growth |
@@ -392,6 +394,8 @@ The `messages()` case is the theoretical worst: ~330 references * 1M = 330M char
 
 **Why `concat` is NOT exponential**: `content.concat(content).concat(content)` produces `3 * content.length`, not `2^3 * content.length`. Each `.concat(content)` adds one copy of the original `content`, not one copy of the accumulated result. Without variables, there's no way to "double" a value.
 
+**Exception: methods that transform accumulated results.** `replaceAll` and `split/join` chains operate on the accumulated intermediate string, not the original. `content.replaceAll("a","aaaa").replaceAll("a","aaaa")` chains produce 4^n growth because each level multiplies the output of the previous level. These are wrapped with runtime output size limits (100K chars).
+
 ---
 
 ## Accepted Risks Summary
@@ -418,7 +422,7 @@ Each is documented in `src/logic/expr.security.test.ts` in the "accepted risks" 
 | `ctx.` prefix on all identifiers | Bare global access from generated code |
 | Blocked properties (`Map`) | `constructor`, `__proto__`, `prototype`, `__define/lookupGetter/Setter__` |
 | Blocked methods | `matchAll` |
-| Wrapped methods (`$s`) | `repeat`, `padStart`, `padEnd` — bounded to 100K chars |
+| Wrapped methods (`$s`) | `repeat`, `padStart`, `padEnd`, `replaceAll`, `join` — bounded to 100K chars |
 | Regex validation (`safe-regex.ts`) | Catastrophic backtracking patterns |
 | String literal requirement | Dynamic regex patterns |
 | Prototype-less objects (`Object.create(null)`) | Prototype chain traversal on self, time, channel, server |

@@ -757,6 +757,53 @@ describe("denial of service vectors", () => {
     expect(() => evalExpr("content.padEnd(100000000)", ctx)).toThrow("limit");
   });
 
+  test("replaceAll() with reasonable replacement works", () => {
+    const ctx = makeContext({ content: "aaa" });
+    expect(evalExpr('content.replaceAll("a", "b") == "bbb"', ctx)).toBe(true);
+  });
+
+  test("replaceAll() chained exponential growth throws at runtime", () => {
+    // Each level replaces every "a" with "aaaa" → 4x growth per level
+    // 100 * 4 = 400, * 4 = 1600, * 4 = 6400, * 4 = 25600, * 4 = 102400 > 100K
+    const ctx = makeContext({ content: "a".repeat(100) });
+    expect(() =>
+      evalExpr(
+        'content.replaceAll("a", "aaaa").replaceAll("a", "aaaa").replaceAll("a", "aaaa").replaceAll("a", "aaaa").replaceAll("a", "aaaa")',
+        ctx
+      )
+    ).toThrow("limit");
+  });
+
+  test("replaceAll() validates string target", () => {
+    const ctx = makeContext();
+    expect(() => evalExpr('response_ms.replaceAll("a", "b")', ctx)).toThrow(
+      "can only be called on a string"
+    );
+  });
+
+  test("join() with reasonable separator works", () => {
+    const ctx = makeContext({ chars: ["Alice", "Bob", "Carol"] });
+    expect(evalExpr('chars.join(", ") == "Alice, Bob, Carol"', ctx)).toBe(true);
+  });
+
+  test("join() via split/join chained amplification throws at runtime", () => {
+    // split("") → array of single chars, join("xxx") → ~4x growth per level
+    const ctx = makeContext({ content: "a".repeat(100) });
+    expect(() =>
+      evalExpr(
+        'content.split("").join("aaa").split("").join("aaa").split("").join("aaa").split("").join("aaa").split("").join("aaa").split("").join("aaa")',
+        ctx
+      )
+    ).toThrow("limit");
+  });
+
+  test("join() validates array target", () => {
+    const ctx = makeContext({ content: "test" });
+    expect(() => evalExpr('content.join(",")', ctx)).toThrow(
+      "can only be called on an array"
+    );
+  });
+
   // ---------------------------------------------------------------------------
   // ReDoS (Regular Expression Denial of Service)
   //
@@ -1181,7 +1228,7 @@ describe("accepted risks", () => {
     // Expressions run synchronously via new Function() with no timeout.
     // Static analysis prevents the main DoS vectors:
     // - ReDoS: regex validation rejects catastrophic patterns
-    // - Memory: repeat/padStart/padEnd have runtime bounds
+    // - Memory: repeat/padStart/padEnd/replaceAll/join have runtime bounds
     // - matchAll: blocked entirely
     // Remaining risk: quadratic regex on large input (bounded by Discord)
     // A worker thread timeout would provide defense-in-depth but adds complexity.

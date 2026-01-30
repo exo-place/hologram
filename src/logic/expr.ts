@@ -504,7 +504,7 @@ const BLOCKED_METHODS: Record<string, string> = {
 };
 
 // Methods rewritten to use safe wrappers at runtime (memory exhaustion prevention)
-const WRAPPED_METHODS = new Set(["repeat", "padStart", "padEnd"]);
+const WRAPPED_METHODS = new Set(["repeat", "padStart", "padEnd", "replaceAll", "join"]);
 
 // Blocked property names (prevent prototype chain escapes)
 // Uses Map because a plain object's __proto__ key collides with the actual prototype
@@ -573,6 +573,32 @@ const SAFE_METHODS = {
       );
     }
     return fill !== undefined ? str.padEnd(n, String(fill)) : str.padEnd(n);
+  },
+
+  replaceAll(str: unknown, search: unknown, replacement: unknown): string {
+    if (typeof str !== "string") {
+      throw new ExprError("replaceAll() can only be called on a string");
+    }
+    const result = str.replaceAll(String(search), String(replacement));
+    if (result.length > MAX_STRING_OUTPUT) {
+      throw new ExprError(
+        `replaceAll() produced ${result.length.toLocaleString()} characters (limit: ${MAX_STRING_OUTPUT.toLocaleString()})`
+      );
+    }
+    return result;
+  },
+
+  join(arr: unknown, sep?: unknown): string {
+    if (!Array.isArray(arr)) {
+      throw new ExprError("join() can only be called on an array");
+    }
+    const result = sep !== undefined ? arr.join(String(sep)) : arr.join();
+    if (result.length > MAX_STRING_OUTPUT) {
+      throw new ExprError(
+        `join() produced ${result.length.toLocaleString()} characters (limit: ${MAX_STRING_OUTPUT.toLocaleString()})`
+      );
+    }
+    return result;
   },
 };
 
