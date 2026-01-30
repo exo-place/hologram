@@ -46,6 +46,26 @@ See `docs/postmortem/2026-01-26-ux-critique.md` for full analysis.
 
 ---
 
+## Backlog
+
+### Bot Message Visibility
+
+Other Discord bots' messages are partially invisible in message history:
+
+- **Embed-only messages are dropped:** `client.ts:223` bails on `!message.content && !message.stickerItems?.length`. Bots like Nekotina that respond entirely via embeds (title/description/fields) produce no `content`, so they're silently dropped. The conversation history has gaps where bot interactions happened but aren't recorded.
+- **Text-content bot messages are included but unlabeled:** Bots that do send regular `content` are stored and appear in LLM context identically to human users (`BotName: message`). The LLM has no way to distinguish them from humans.
+- **No `isBot` check exists anywhere:** Only the bot's own user ID is filtered (`client.ts:222`). Discord's `message.author.bot` flag is never inspected.
+- **`$user` filter misclassifies bot messages:** In `messages(n, fmt, "$user")`, bot messages count as "user" messages since they have no `webhook_messages` entry. Only Hologram's own webhook messages are classified as `$char`.
+
+Possible improvements:
+- Serialize embed-only messages minimally (e.g. `BotName [bot]: embed title - embed description`) so they appear in history
+- Add `[bot]` suffix to author names for `message.author.bot === true` so the LLM can distinguish them
+- Add `$bot` filter to `messages()` function for entity-level control
+- Consider a `$ignore_bots` directive to let entities opt out of seeing bot messages entirely
+- Default behavior TBD: most bot embeds (leaderboards, stats, game results) are noise for RP context, but some are conversational
+
+---
+
 ## Low Priority
 
 - [ ] Regex support in `$if` expressions - would need tokenizer extension for `/pattern/` literals; low priority because regex is opaque and hard to read
