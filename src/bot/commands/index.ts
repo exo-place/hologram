@@ -162,6 +162,28 @@ export async function respondWithModal(
   });
 }
 
+/**
+ * Send a Components V2 modal with Label-wrapped interactive components.
+ * Labels (type 18) replace ActionRows in V2 modals.
+ */
+export async function respondWithV2Modal(
+  bot: Bot,
+  interaction: Interaction,
+  customId: string,
+  title: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  labels: any[]
+) {
+  await bot.helpers.sendInteractionResponse(interaction.id, interaction.token, {
+    type: InteractionResponseTypes.Modal,
+    data: {
+      customId,
+      title,
+      components: labels,
+    },
+  });
+}
+
 export async function defer(bot: Bot, interaction: Interaction, ephemeral = false) {
   await bot.helpers.sendInteractionResponse(interaction.id, interaction.token, {
     type: InteractionResponseTypes.DeferredChannelMessageWithSource,

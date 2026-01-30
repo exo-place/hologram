@@ -2,11 +2,9 @@ import { ApplicationCommandOptionTypes, TextStyles, MessageComponentTypes } from
 import {
   registerCommand,
   registerModalHandler,
-  registerComponentHandler,
   respond,
   respondWithModal,
-  respondWithComponents,
-  updateMessageWithComponents,
+  respondWithV2Modal,
   type CommandContext,
 } from "./index";
 import {
@@ -141,7 +139,7 @@ function canUserView(entity: EntityWithFacts, userId: string, username: string, 
 }
 
 // =============================================================================
-// Permissions UI Helpers (Mentionable Select Menus)
+// Permissions UI Helpers (V2 Modal with Mentionable Selects)
 // =============================================================================
 
 const PERM_FIELDS = ["view", "edit", "use", "blacklist"] as const;
@@ -154,42 +152,12 @@ const PERM_LABELS: Record<PermField, string> = {
   blacklist: "Blacklist",
 };
 
-const PERM_PLACEHOLDERS: Record<PermField, string> = {
-  view: "Select users/roles who can view (empty = @everyone)",
-  edit: "Select users/roles who can edit (empty = @everyone)",
-  use: "Select users/roles who can use (empty = @everyone)",
-  blacklist: "Select users/roles to block (empty = none)",
-};
-
 const PERM_CONFIG_KEYS: Record<PermField, string> = {
   view: "config_view",
   edit: "config_edit",
   use: "config_use",
   blacklist: "config_blacklist",
 };
-
-/**
- * Format a permission DB value for display.
- * Returns a human-readable string.
- */
-function formatPermValue(value: string[] | "everyone" | null, field: PermField): string {
-  if (field === "blacklist") {
-    if (!value || value === "everyone" || (Array.isArray(value) && value.length === 0)) return "None";
-    if (Array.isArray(value)) return value.map(formatEntry).join(", ");
-    return "None";
-  }
-  if (value === "everyone" || value === null) return "@everyone";
-  if (Array.isArray(value) && value.length === 0) return "@everyone";
-  if (Array.isArray(value)) return value.map(formatEntry).join(", ");
-  return "@everyone";
-}
-
-/** Format a single permission entry as a mention */
-function formatEntry(entry: string): string {
-  if (entry.startsWith("role:")) return `<@&${entry.slice(5)}>`;
-  if (/^\d{17,19}$/.test(entry)) return `<@${entry}>`;
-  return entry;
-}
 
 /**
  * Build default_values array for a mentionable select from DB value.
@@ -210,27 +178,18 @@ function buildDefaultValues(value: string[] | "everyone" | null): Array<{ id: st
 }
 
 /**
- * Build the permissions message content and components from DB state.
+ * Build Label components (type 18) wrapping MentionableSelects for a V2 modal.
  */
-function buildPermissionsMessage(entityId: number, entityName: string): { content: string; components: unknown[] } {
+function buildPermissionsLabels(entityId: number): unknown[] {
   const defaults = getPermissionDefaults(entityId);
 
-  // Build summary text
-  const lines = [`**Permissions: ${entityName}**`];
-  for (const field of PERM_FIELDS) {
-    const value = field === "blacklist" ? defaults.blacklist : defaults[`${field}List`];
-    lines.push(`**${PERM_LABELS[field]}:** ${formatPermValue(value as string[] | "everyone" | null, field)}`);
-  }
-
-  // Build 4 action rows, one mentionable select each
-  const components = PERM_FIELDS.map(field => {
+  return PERM_FIELDS.map(field => {
     const value = field === "blacklist" ? defaults.blacklist : defaults[`${field}List`];
     const defaultValues = buildDefaultValues(value as string[] | "everyone" | null);
 
     const select: Record<string, unknown> = {
       type: MessageComponentTypes.MentionableSelect,
-      customId: `perm:${entityId}:${field}`,
-      placeholder: PERM_PLACEHOLDERS[field],
+      customId: `perm_${field}`,
       minValues: 0,
       maxValues: 25,
     };
@@ -239,12 +198,11 @@ function buildPermissionsMessage(entityId: number, entityName: string): { conten
     }
 
     return {
-      type: MessageComponentTypes.ActionRow,
-      components: [select],
+      type: 18, // Label — not yet in Discordeno's MessageComponentTypes enum
+      label: PERM_LABELS[field],
+      component: select,
     };
   });
-
-  return { content: lines.join("\n"), components };
 }
 
 // =============================================================================
@@ -566,9 +524,9 @@ registerCommand({
     }
 
     if (editType === "permissions") {
-      // Permissions editing — mentionable select menus (save-per-field)
-      const { content, components } = buildPermissionsMessage(entity.id, entity.name);
-      await respondWithComponents(ctx.bot, ctx.interaction, content, components);
+      // Permissions editing — V2 modal with mentionable select menus
+      const labels = buildPermissionsLabels(entity.id);
+      await respondWithV2Modal(ctx.bot, ctx.interaction, `edit-permissions:${entity.id}`, `Permissions: ${entity.name}`, labels);
       return;
     }
 
@@ -891,65 +849,74 @@ registerModalHandler("edit-config", async (bot, interaction, values) => {
 });
 
 // =============================================================================
-// Permissions Component Handler (Mentionable Select Menus)
+// Permissions Modal Handler (V2 Modal with Mentionable Selects)
 // =============================================================================
 
-registerComponentHandler("perm", async (bot, interaction) => {
+registerModalHandler("edit-permissions", async (bot, interaction, _values) => {
   const customId = interaction.data?.customId ?? "";
-  const parts = customId.split(":");
-  const entityId = parseInt(parts[1]);
-  const field = parts[2] as PermField;
-
-  if (!PERM_FIELDS.includes(field)) return;
+  const entityId = parseInt(customId.split(":")[1]);
 
   const entity = getEntityWithFacts(entityId);
   if (!entity) {
-    await updateMessageWithComponents(bot, interaction, "Entity not found.", []);
+    await respond(bot, interaction, "Entity not found", true);
     return;
   }
 
   // Check edit permission
   const userId = interaction.user?.id?.toString() ?? "";
   const username = interaction.user?.username ?? "";
-  const userRoles: string[] = (interaction.member?.roles ?? []).map((r: bigint) => r.toString());
-  if (!canUserEdit(entity, userId, username, userRoles)) {
-    await updateMessageWithComponents(bot, interaction, "You don't have permission to edit this entity.", []);
+  if (!canUserEdit(entity, userId, username)) {
+    await respond(bot, interaction, "You don't have permission to edit this entity", true);
     return;
   }
 
-  // Extract selected values from the interaction
-  const selectedValues: string[] = interaction.data?.values ?? [];
+  // Parse V2 components: Labels (type 18) wrap selects with .component (singular)
+  // Also handle ActionRow fallback (.components plural) for forward compatibility
   const resolved = interaction.data?.resolved;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const components: any[] = interaction.data?.components ?? [];
 
-  // Build entries with role: prefix for roles
-  const entries: string[] = [];
-  for (const id of selectedValues) {
-    // Check if this ID is a role by looking in resolved.roles
-    const isRole = resolved?.roles?.has(BigInt(id)) ?? false;
-    if (isRole) {
-      entries.push(`role:${id}`);
-    } else {
-      entries.push(id);
+  const selectValues: Record<string, string[]> = {};
+  for (const comp of components) {
+    // Label (type 18): has `component` (singular) with the nested select
+    const inner = comp.component;
+    if (inner?.customId) {
+      selectValues[inner.customId] = inner.values ?? [];
+    }
+    // ActionRow fallback: has `components` (plural)
+    for (const child of comp.components ?? []) {
+      if (child.customId && child.values) {
+        selectValues[child.customId] = child.values;
+      }
     }
   }
 
-  // Save to DB
-  const configKey = PERM_CONFIG_KEYS[field];
-  if (field === "blacklist") {
-    // Blacklist: empty = null (no blacklist)
-    setEntityConfig(entityId, {
-      [configKey]: entries.length > 0 ? JSON.stringify(entries) : null,
+  // Build entries with role: prefix using resolved data
+  const buildEntries = (values: string[]): string[] => {
+    return values.map(id => {
+      const isRole = resolved?.roles?.has?.(BigInt(id)) ?? false;
+      return isRole ? `role:${id}` : id;
     });
-  } else {
-    // View/edit/use: empty = "everyone"
-    setEntityConfig(entityId, {
-      [configKey]: entries.length > 0 ? JSON.stringify(entries) : JSON.stringify("everyone"),
-    });
+  };
+
+  // Save all fields
+  for (const field of PERM_FIELDS) {
+    const values = selectValues[`perm_${field}`] ?? [];
+    const entries = buildEntries(values);
+    const configKey = PERM_CONFIG_KEYS[field];
+
+    if (field === "blacklist") {
+      setEntityConfig(entityId, {
+        [configKey]: entries.length > 0 ? JSON.stringify(entries) : null,
+      });
+    } else {
+      setEntityConfig(entityId, {
+        [configKey]: entries.length > 0 ? JSON.stringify(entries) : JSON.stringify("everyone"),
+      });
+    }
   }
 
-  // Rebuild message from DB state and update
-  const { content, components } = buildPermissionsMessage(entityId, entity.name);
-  await updateMessageWithComponents(bot, interaction, content, components);
+  await respond(bot, interaction, `Updated permissions for "${entity.name}"`, true);
 });
 
 registerModalHandler("edit-both", async (bot, interaction, values) => {
