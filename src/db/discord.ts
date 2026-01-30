@@ -298,15 +298,6 @@ export interface MessageData {
   attachments?: Array<{ filename: string; url: string; content_type?: string }>;
 }
 
-/** Normalize sticker data for backward compat with legacy string[] format in DB rows */
-export function normalizeStickers(raw: unknown[]): StickerData[] {
-  return raw.map(s =>
-    typeof s === "string"
-      ? { id: "", name: s, format_type: 0 }   // legacy: name-only
-      : s as StickerData                        // new format
-  );
-}
-
 export function parseMessageData(raw: string | null): MessageData | null {
   if (!raw) return null;
   try { return JSON.parse(raw) as MessageData; }

@@ -82,6 +82,9 @@ export interface ExprContext {
     id: string;
     name: string;
     description: string;
+    is_nsfw: boolean;
+    /** Channel type: "text" | "vc" | "thread" | "forum" | "announcement" | "dm" | "category" | "directory" | "media" */
+    type: string;
     mention: string;
   };
   /** Server metadata */
@@ -89,6 +92,8 @@ export interface ExprContext {
     id: string;
     name: string;
     description: string;
+    /** Guild NSFW level: "default" | "explicit" | "safe" | "age_restricted" */
+    nsfw_level: string;
   };
   /** Additional context-specific variables */
   [key: string]: unknown;
@@ -490,8 +495,8 @@ const EXPR_CONTEXT_REFERENCE: ExprContext = {
   isotime: () => "",
   weekday: () => "",
   interaction_type: "",
-  channel: { id: "", name: "", description: "", mention: "" },
-  server: { id: "", name: "", description: "" },
+  channel: { id: "", name: "", description: "", is_nsfw: false, type: "text", mention: "" },
+  server: { id: "", name: "", description: "", nsfw_level: "default" },
 };
 const ALLOWED_GLOBALS = new Set(Object.keys(EXPR_CONTEXT_REFERENCE));
 
@@ -1830,9 +1835,9 @@ export interface BaseContextOptions {
   /** Explicit group string override (defaults to chars joined) */
   group?: string;
   /** Channel metadata */
-  channel?: { id: string; name: string; description: string; mention: string };
+  channel?: { id: string; name: string; description: string; is_nsfw: boolean; type: string; mention: string };
   /** Server metadata */
-  server?: { id: string; name: string; description: string };
+  server?: { id: string; name: string; description: string; nsfw_level: string };
 }
 
 /**
@@ -1932,8 +1937,8 @@ export function createBaseContext(options: BaseContextOptions): ExprContext {
       const d = offset ? applyOffset(now, offset) : now;
       return d.toLocaleDateString("en-US", { weekday: "long" });
     },
-    channel: Object.assign(Object.create(null), options.channel ?? { id: "", name: "", description: "", mention: "" }),
-    server: Object.assign(Object.create(null), options.server ?? { id: "", name: "", description: "" }),
+    channel: Object.assign(Object.create(null), options.channel ?? { id: "", name: "", description: "", is_nsfw: false, type: "text", mention: "" }),
+    server: Object.assign(Object.create(null), options.server ?? { id: "", name: "", description: "", nsfw_level: "default" }),
   };
 }
 

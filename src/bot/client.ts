@@ -70,6 +70,7 @@ export const bot = createBot({
       id: true,
       name: true,
       description: true,
+      nsfwLevel: true,
     },
     webhook: {
       id: true,
@@ -82,6 +83,8 @@ export const bot = createBot({
       parentId: true,
       name: true,
       topic: true,
+      nsfw: true,
+      toggles: true,
     },
     messageReference: {
       messageId: true,
@@ -108,13 +111,42 @@ const lastResponseTime = new Map<string, number>();
 const lastMessageTime = new Map<string, number>();
 
 // Channel/guild metadata cache with 5-min TTL
-interface ChannelMeta { id: string; name: string; description: string; mention: string; fetchedAt: number }
-interface GuildMeta { id: string; name: string; description: string; fetchedAt: number }
+interface ChannelMeta { id: string; name: string; description: string; is_nsfw: boolean; type: string; mention: string; fetchedAt: number }
+interface GuildMeta { id: string; name: string; description: string; nsfw_level: string; fetchedAt: number }
 const channelMetaCache = new Map<string, ChannelMeta>();
 const guildMetaCache = new Map<string, GuildMeta>();
 const META_TTL_MS = 5 * 60 * 1000;
 
-async function getChannelMetadata(channelId: string): Promise<{ id: string; name: string; description: string; mention: string }> {
+/** Map Discordeno ChannelTypes enum to human-readable string */
+function channelTypeString(type: number): string {
+  switch (type) {
+    case 0: return "text";
+    case 1: return "dm";
+    case 2: return "vc";
+    case 3: return "dm";
+    case 4: return "category";
+    case 5: return "announcement";
+    case 10: case 11: case 12: return "thread";
+    case 13: return "vc";
+    case 14: return "directory";
+    case 15: return "forum";
+    case 16: return "media";
+    default: return "text";
+  }
+}
+
+/** Map GuildNsfwLevel enum to string */
+function guildNsfwLevelString(level: number): string {
+  switch (level) {
+    case 0: return "default";
+    case 1: return "explicit";
+    case 2: return "safe";
+    case 3: return "age_restricted";
+    default: return "default";
+  }
+}
+
+async function getChannelMetadata(channelId: string): Promise<Omit<ChannelMeta, "fetchedAt">> {
   const cached = channelMetaCache.get(channelId);
   if (cached && Date.now() - cached.fetchedAt < META_TTL_MS) {
     return cached;
@@ -125,17 +157,19 @@ async function getChannelMetadata(channelId: string): Promise<{ id: string; name
       id: channelId,
       name: (ch as any).name ?? "",
       description: (ch as any).topic ?? "",
+      is_nsfw: !!(ch as any).nsfw,
+      type: channelTypeString((ch as any).type ?? 0),
       mention: `<#${channelId}>`,
       fetchedAt: Date.now(),
     };
     channelMetaCache.set(channelId, meta);
     return meta;
   } catch {
-    return { id: channelId, name: "", description: "", mention: `<#${channelId}>` };
+    return { id: channelId, name: "", description: "", is_nsfw: false, type: "text", mention: `<#${channelId}>` };
   }
 }
 
-async function getGuildMetadata(guildId: string): Promise<{ id: string; name: string; description: string }> {
+async function getGuildMetadata(guildId: string): Promise<Omit<GuildMeta, "fetchedAt">> {
   const cached = guildMetaCache.get(guildId);
   if (cached && Date.now() - cached.fetchedAt < META_TTL_MS) {
     return cached;
@@ -146,12 +180,13 @@ async function getGuildMetadata(guildId: string): Promise<{ id: string; name: st
       id: guildId,
       name: (g as any).name ?? "",
       description: (g as any).description ?? "",
+      nsfw_level: guildNsfwLevelString((g as any).nsfwLevel ?? 0),
       fetchedAt: Date.now(),
     };
     guildMetaCache.set(guildId, meta);
     return meta;
   } catch {
-    return { id: guildId, name: "", description: "" };
+    return { id: guildId, name: "", description: "", nsfw_level: "default" };
   }
 }
 
@@ -426,7 +461,7 @@ bot.events.messageCreate = async (message) => {
   const channelMeta = await getChannelMetadata(channelId);
   const guildMeta = guildId
     ? await getGuildMetadata(guildId)
-    : { id: "", name: "", description: "" };
+    : { id: "", name: "", description: "", nsfw_level: "default" };
 
   for (const entity of channelEntities) {
     // Cancel any pending retry for this entity
@@ -616,7 +651,7 @@ async function processEntityRetry(
   const channelMeta = await getChannelMetadata(channelId);
   const guildMeta = guildId
     ? await getGuildMetadata(guildId)
-    : { id: "", name: "", description: "" };
+    : { id: "", name: "", description: "", nsfw_level: "default" };
 
   const ctx = createBaseContext({
     facts,

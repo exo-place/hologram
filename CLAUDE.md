@@ -167,6 +167,10 @@ With `$freeform`, the LLM can write naturally with multiple characters interacti
 
 **Context variables:** `mentioned`, `replied`, `is_forward`, `is_self`, `content`, `author`, `response_ms`, `retry_ms`, `idle_ms`, `time.is_night`, `self.*`, `channel.*`, `server.*`, `group`, `name`, `chars`
 
+**Channel object:** `channel.id`, `channel.name`, `channel.description`, `channel.is_nsfw`, `channel.type` (`"text"` | `"vc"` | `"thread"` | `"forum"` | `"announcement"` | `"dm"` | `"category"` | `"directory"` | `"media"`), `channel.mention`
+
+**Server object:** `server.id`, `server.name`, `server.description`, `server.nsfw_level` (`"default"` | `"explicit"` | `"safe"` | `"age_restricted"`)
+
 ### Custom Templates
 
 Override the default system prompt formatting per entity using custom templates (Nunjucks syntax). Edit via `/edit entity type:Template`. Powered by Nunjucks with runtime security patches.
@@ -272,7 +276,7 @@ Other preprocessing:
 
 ### Stickers
 
-Stickers are stored as structured objects `{id, name, format_type}` in the message `data` JSON column (`format_type`: 1=PNG, 2=APNG, 3=Lottie, 4=GIF). Legacy DB rows with string-only sticker names are normalized on read via `normalizeStickers()`. Stickers are serialized as `*sent a sticker: name*` and appended to message content for LLM context. A sticker-only message becomes just the sticker text, e.g. `*sent a sticker: catwave*`.
+Stickers are stored as structured objects `{id, name, format_type}` in the message `data` JSON column (`format_type`: 1=PNG, 2=APNG, 3=Lottie, 4=GIF). Legacy string-only sticker names are migrated to structured format on DB init. Stickers are serialized as `*sent a sticker: name*` and appended to message content for LLM context. A sticker-only message becomes just the sticker text, e.g. `*sent a sticker: catwave*`.
 
 **Functions:** `random(n)`, `has_fact(pattern)`, `roll(dice)`, `mentioned_in_dialogue(name)`, `messages(n, format, filter)`, `duration(ms)`, `date_str(offset?)`, `time_str(offset?)`, `isodate(offset?)`, `isotime(offset?)`, `weekday(offset?)`
 

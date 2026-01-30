@@ -7,7 +7,7 @@ import {
   DEFAULT_CONTEXT_EXPR,
   type EvaluatedEntity,
 } from "./context";
-import { getMessages, getWebhookMessageEntity, parseMessageData, normalizeStickers, resolveDiscordEntity } from "../db/discord";
+import { getMessages, getWebhookMessageEntity, parseMessageData, resolveDiscordEntity } from "../db/discord";
 import { evalMacroValue, formatDuration, rollDice, compileContextExpr, type ExprContext } from "../logic/expr";
 import { DEFAULT_MODEL } from "./models";
 import { DEFAULT_TEMPLATE, renderStructuredTemplate, renderSystemPrompt } from "./template";
@@ -317,7 +317,7 @@ export function buildPromptAndMessages(
       is_bot: data?.is_bot ?? false,
       role,
       embeds: data?.embeds ?? [],
-      stickers: normalizeStickers(data?.stickers ?? []),
+      stickers: data?.stickers ?? [],
       attachments: data?.attachments ?? [],
     });
     totalChars += len;
