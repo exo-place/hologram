@@ -31,7 +31,8 @@ src/
 │   ├── tools.ts          # createTools() factory + $locked permission checks
 │   └── embeddings.ts     # Local embeddings (planned)
 ├── logic/
-│   └── expr.ts           # $if expression evaluator + $respond control
+│   ├── expr.ts           # $if expression evaluator + $respond control
+│   └── safe-regex.ts     # Regex pattern validator (ReDoS prevention)
 └── bot/
     ├── client.ts         # Discordeno setup + message handling
     └── commands/
@@ -207,6 +208,8 @@ The `messages(n, format, filter)` function returns the last N messages (default 
 The `roll(dice)` function supports roll20-style syntax: basic (`2d6+3`), keep highest/lowest (`4d6kh3`, `4d6kl1`), drop highest/lowest (`4d6dh1`, `4d6dl1`), exploding (`1d6!`), and success counting (`8d6>=5`).
 
 Date/time functions accept optional offset strings: `"1d"`, `"-1w"`, `"3y2mo"`, `"1h30m"`, `"3 years 2 months"`.
+
+**Safe regex validation:** String methods `.match()`, `.search()`, `.replace()`, `.split()` compile patterns to RegExp. All patterns are validated at compile time by `src/logic/safe-regex.ts` — capturing groups, nested quantifiers, backreferences, and lookahead/behind are rejected to prevent ReDoS. Patterns must be string literals (no dynamic patterns). See `docs/reference/safe-regex.md`.
 
 ### Bindings
 

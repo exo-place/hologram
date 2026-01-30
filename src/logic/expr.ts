@@ -9,6 +9,7 @@
  */
 
 import { MAX_CONTEXT_CHAR_LIMIT } from "../ai/context";
+import { validateRegexPattern } from "./safe-regex";
 
 // =============================================================================
 // Types
@@ -494,6 +495,9 @@ const EXPR_CONTEXT_REFERENCE: ExprContext = {
 };
 const ALLOWED_GLOBALS = new Set(Object.keys(EXPR_CONTEXT_REFERENCE));
 
+// Methods that compile their first string argument into a RegExp
+const REGEX_METHODS = new Set(["match", "search", "replace", "split"]);
+
 // Blocked property names (prevent prototype chain escapes)
 const BLOCKED_PROPERTIES = new Set([
   "constructor", "__proto__", "prototype",
@@ -525,10 +529,22 @@ function generateCode(node: ExprNode): string {
       }
       return `(${generateCode(node.object)}?.${node.property})`;
 
-    case "call":
+    case "call": {
+      // Validate regex patterns for methods that compile strings to RegExp
+      if (node.callee.type === "member" && REGEX_METHODS.has(node.callee.property)) {
+        const firstArg = node.args[0];
+        if (!firstArg || firstArg.type !== "literal" || typeof firstArg.value !== "string") {
+          throw new ExprError(
+            `${node.callee.property}() requires a string literal pattern ` +
+            `(dynamic patterns are not allowed for security)`
+          );
+        }
+        validateRegexPattern(firstArg.value as string);
+      }
       const callee = generateCode(node.callee);
       const args = node.args.map(generateCode).join(", ");
       return `${callee}(${args})`;
+    }
 
     case "unary":
       return `(${node.operator}${generateCode(node.operand)})`;
