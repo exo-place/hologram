@@ -1,19 +1,13 @@
 /**
- * Parity fuzz tests for DEFAULT_TEMPLATE vs buildSystemPrompt()/buildStructuredMessages().
+ * Tests for DEFAULT_TEMPLATE rendering and the _msg() structured output protocol.
  *
- * Validates that the Nunjucks-based default template produces semantically
- * equivalent output to the original imperative code paths.
+ * System prompt and message snapshot tests validate that DEFAULT_TEMPLATE produces
+ * the expected output for various entity configurations. Adversarial tests verify
+ * injection resistance. Protocol tests cover _msg() mechanics.
  */
 import { describe, expect, test } from "bun:test";
-import { renderStructuredTemplate } from "./template";
-import {
-  DEFAULT_TEMPLATE,
-  buildSystemPrompt,
-} from "./prompt";
-import {
-  type EvaluatedEntity,
-  type StructuredMessage,
-} from "./context";
+import { DEFAULT_TEMPLATE, renderStructuredTemplate } from "./template";
+import type { EvaluatedEntity } from "./context";
 import type { EntityWithFacts } from "../db/entities";
 
 // =============================================================================
@@ -94,54 +88,36 @@ function buildTemplateContext(
   };
 }
 
-/** Build old-style structured messages from history entries */
-function buildOldMessages(
-  history: Array<{ author: string; content: string; role: "user" | "assistant" }>,
-  isSingleEntity: boolean,
-): StructuredMessage[] {
-  const messages: StructuredMessage[] = history.map(h => ({
-    role: h.role,
-    content: (h.role === "assistant" && isSingleEntity) ? h.content : `${h.author}: ${h.content}`,
-  }));
-
-  if (messages.length > 0 && messages[0].role === "assistant") {
-    messages.unshift({ role: "user", content: "(continued)" });
-  }
-
-  return messages;
-}
-
 // =============================================================================
-// System Prompt Parity
+// System Prompt Snapshot Tests
 // =============================================================================
 
-describe("template parity: system prompt", () => {
+describe("DEFAULT_TEMPLATE: system prompt", () => {
   test("no entities, no others", () => {
-    const entities: EvaluatedEntity[] = [];
-    const others: EntityWithFacts[] = [];
-    const ctx = buildTemplateContext(entities, others);
+    const ctx = buildTemplateContext([], []);
     const output = renderStructuredTemplate(DEFAULT_TEMPLATE, ctx);
-    const old = buildSystemPrompt(entities, others);
-    expect(norm(output.systemPrompt)).toBe(norm(old));
+    expect(norm(output.systemPrompt)).toBe(
+      "You are a helpful assistant. Respond naturally to the user."
+    );
   });
 
   test("single entity, no others", () => {
     const entities = [mockEntity({ id: 1, name: "Aria", facts: ["is a character", "has silver hair"] })];
-    const others: EntityWithFacts[] = [];
-    const ctx = buildTemplateContext(entities, others);
+    const ctx = buildTemplateContext(entities, []);
     const output = renderStructuredTemplate(DEFAULT_TEMPLATE, ctx);
-    const old = buildSystemPrompt(entities, others);
-    expect(norm(output.systemPrompt)).toBe(norm(old));
+    expect(norm(output.systemPrompt)).toBe(
+      `<defs for="Aria" id="1">\nis a character\nhas silver hair\n</defs>`
+    );
   });
 
   test("single entity with memories", () => {
     const entities = [mockEntity({ id: 1, name: "Aria", facts: ["is a character"] })];
-    const others: EntityWithFacts[] = [];
     const memories = new Map([[1, [{ content: "met Bob yesterday" }, { content: "likes swords" }]]]);
-    const ctx = buildTemplateContext(entities, others, memories);
+    const ctx = buildTemplateContext(entities, [], memories);
     const output = renderStructuredTemplate(DEFAULT_TEMPLATE, ctx);
-    const old = buildSystemPrompt(entities, others, memories);
-    expect(norm(output.systemPrompt)).toBe(norm(old));
+    expect(norm(output.systemPrompt)).toBe(
+      `<defs for="Aria" id="1">\nis a character\n</defs>\n\n<memories for="Aria" id="1">\nmet Bob yesterday\nlikes swords\n</memories>`
+    );
   });
 
   test("two entities, structured", () => {
@@ -149,11 +125,11 @@ describe("template parity: system prompt", () => {
       mockEntity({ id: 1, name: "Aria", facts: ["is a warrior"] }),
       mockEntity({ id: 2, name: "Bob", facts: ["is a mage"] }),
     ];
-    const others: EntityWithFacts[] = [];
-    const ctx = buildTemplateContext(entities, others);
+    const ctx = buildTemplateContext(entities, []);
     const output = renderStructuredTemplate(DEFAULT_TEMPLATE, ctx);
-    const old = buildSystemPrompt(entities, others);
-    expect(norm(output.systemPrompt)).toBe(norm(old));
+    expect(norm(output.systemPrompt)).toBe(
+      `<defs for="Aria" id="1">\nis a warrior\n</defs>\n\n<defs for="Bob" id="2">\nis a mage\n</defs>\n\nYou are: Aria, Bob. Format your response with XML tags:\n<Aria>*waves* Hello there!</Aria>\n<Bob>Nice to meet you.</Bob>\n\nWrap everyone's dialogue in their name tag. They may interact naturally.\n\nNot everyone needs to respond to every message. Only respond as those who would naturally engage with what was said. If none would respond, reply with only <none/>.`
+    );
   });
 
   test("two entities, freeform", () => {
@@ -161,11 +137,11 @@ describe("template parity: system prompt", () => {
       mockEntity({ id: 1, name: "Aria", facts: ["is a warrior"], isFreeform: true }),
       mockEntity({ id: 2, name: "Bob", facts: ["is a mage"], isFreeform: true }),
     ];
-    const others: EntityWithFacts[] = [];
-    const ctx = buildTemplateContext(entities, others);
+    const ctx = buildTemplateContext(entities, []);
     const output = renderStructuredTemplate(DEFAULT_TEMPLATE, ctx);
-    const old = buildSystemPrompt(entities, others);
-    expect(norm(output.systemPrompt)).toBe(norm(old));
+    expect(norm(output.systemPrompt)).toBe(
+      `<defs for="Aria" id="1">\nis a warrior\n</defs>\n\n<defs for="Bob" id="2">\nis a mage\n</defs>\n\nYou are writing as: Aria, Bob. They may interact naturally in your response. Not everyone needs to respond to every message - only include those who would naturally engage. If none would respond, reply with only: none`
+    );
   });
 
   test("entities with others", () => {
@@ -173,8 +149,9 @@ describe("template parity: system prompt", () => {
     const others = [mockRawEntity(3, "Tavern", ["is a location", "has wooden tables"])];
     const ctx = buildTemplateContext(entities, others);
     const output = renderStructuredTemplate(DEFAULT_TEMPLATE, ctx);
-    const old = buildSystemPrompt(entities, others);
-    expect(norm(output.systemPrompt)).toBe(norm(old));
+    expect(norm(output.systemPrompt)).toBe(
+      `<defs for="Aria" id="1">\nis a character\n</defs>\n\n<defs for="Tavern" id="3">\nis a location\nhas wooden tables\n</defs>`
+    );
   });
 
   test("multi-entity with others and memories", () => {
@@ -189,25 +166,26 @@ describe("template parity: system prompt", () => {
     const memories = new Map([[1, [{ content: "fought a dragon" }]]]);
     const ctx = buildTemplateContext(entities, others, memories);
     const output = renderStructuredTemplate(DEFAULT_TEMPLATE, ctx);
-    const old = buildSystemPrompt(entities, others, memories);
-    expect(norm(output.systemPrompt)).toBe(norm(old));
+    expect(norm(output.systemPrompt)).toBe(
+      `<defs for="Aria" id="1">\nis a warrior\ncarries a sword\n</defs>\n\n<memories for="Aria" id="1">\nfought a dragon\n</memories>\n\n<defs for="Bob" id="2">\nis a mage\nwears a hat\n</defs>\n\n<defs for="Tavern" id="3">\nis a location\n</defs>\n\n<defs for="Market" id="4">\nis outdoors\n</defs>\n\nYou are: Aria, Bob. Format your response with XML tags:\n<Aria>*waves* Hello there!</Aria>\n<Bob>Nice to meet you.</Bob>\n\nWrap everyone's dialogue in their name tag. They may interact naturally.\n\nNot everyone needs to respond to every message. Only respond as those who would naturally engage with what was said. If none would respond, reply with only <none/>.`
+    );
   });
 
   test("no entities, only others", () => {
-    const entities: EvaluatedEntity[] = [];
     const others = [mockRawEntity(3, "Tavern", ["is a location"])];
-    const ctx = buildTemplateContext(entities, others);
+    const ctx = buildTemplateContext([], others);
     const output = renderStructuredTemplate(DEFAULT_TEMPLATE, ctx);
-    const old = buildSystemPrompt(entities, others);
-    expect(norm(output.systemPrompt)).toBe(norm(old));
+    expect(norm(output.systemPrompt)).toBe(
+      `<defs for="Tavern" id="3">\nis a location\n</defs>`
+    );
   });
 });
 
 // =============================================================================
-// Message Parity
+// Message Snapshot Tests
 // =============================================================================
 
-describe("template parity: messages", () => {
+describe("DEFAULT_TEMPLATE: messages", () => {
   test("single entity, user messages only", () => {
     const entities = [mockEntity({ id: 1, name: "Aria", facts: ["is a character"] })];
     const history = [
@@ -216,13 +194,12 @@ describe("template parity: messages", () => {
     ];
     const ctx = buildTemplateContext(entities, [], undefined, history);
     const output = renderStructuredTemplate(DEFAULT_TEMPLATE, ctx);
-    const oldMessages = buildOldMessages(history, true);
 
-    expect(output.messages.length).toBe(oldMessages.length);
-    for (let i = 0; i < oldMessages.length; i++) {
-      expect(output.messages[i].role).toBe(oldMessages[i].role);
-      expect(norm(output.messages[i].content)).toBe(norm(oldMessages[i].content));
-    }
+    expect(output.messages.length).toBe(2);
+    expect(output.messages[0].role).toBe("user");
+    expect(norm(output.messages[0].content)).toBe("Alice: Hello!");
+    expect(output.messages[1].role).toBe("user");
+    expect(norm(output.messages[1].content)).toBe("Alice: How are you?");
   });
 
   test("single entity, mixed user/assistant", () => {
@@ -234,16 +211,17 @@ describe("template parity: messages", () => {
     ];
     const ctx = buildTemplateContext(entities, [], undefined, history);
     const output = renderStructuredTemplate(DEFAULT_TEMPLATE, ctx);
-    const oldMessages = buildOldMessages(history, true);
 
-    expect(output.messages.length).toBe(oldMessages.length);
-    for (let i = 0; i < oldMessages.length; i++) {
-      expect(output.messages[i].role).toBe(oldMessages[i].role);
-      expect(norm(output.messages[i].content)).toBe(norm(oldMessages[i].content));
-    }
+    expect(output.messages.length).toBe(3);
+    expect(output.messages[0].role).toBe("user");
+    expect(norm(output.messages[0].content)).toBe("Alice: Hello!");
+    expect(output.messages[1].role).toBe("assistant");
+    expect(norm(output.messages[1].content)).toBe("*waves* Hi there!");
+    expect(output.messages[2].role).toBe("user");
+    expect(norm(output.messages[2].content)).toBe("Alice: Nice weather");
   });
 
-  test("single entity, assistant-first requires (continued)", () => {
+  test("single entity, assistant-first", () => {
     const entities = [mockEntity({ id: 1, name: "Aria", facts: ["is a character"] })];
     const history = [
       { author: "Aria", content: "I'm here!", author_id: "200", role: "assistant" as const },
@@ -252,9 +230,7 @@ describe("template parity: messages", () => {
     const ctx = buildTemplateContext(entities, [], undefined, history);
     const output = renderStructuredTemplate(DEFAULT_TEMPLATE, ctx);
 
-    // First message is assistant, so (continued) should be prepended
-    // The template itself doesn't add (continued) — that's handled by buildPromptAndMessages
-    // So here we just verify the raw template output has assistant first
+    // Template emits assistant first — buildPromptAndMessages handles (continued) prefix
     expect(output.messages[0].role).toBe("assistant");
     expect(norm(output.messages[0].content)).toBe("I'm here!");
   });
@@ -270,13 +246,12 @@ describe("template parity: messages", () => {
     ];
     const ctx = buildTemplateContext(entities, [], undefined, history);
     const output = renderStructuredTemplate(DEFAULT_TEMPLATE, ctx);
-    const oldMessages = buildOldMessages(history, false);
 
-    expect(output.messages.length).toBe(oldMessages.length);
-    for (let i = 0; i < oldMessages.length; i++) {
-      expect(output.messages[i].role).toBe(oldMessages[i].role);
-      expect(norm(output.messages[i].content)).toBe(norm(oldMessages[i].content));
-    }
+    expect(output.messages.length).toBe(2);
+    expect(output.messages[0].role).toBe("user");
+    expect(norm(output.messages[0].content)).toBe("Alice: Hello everyone!");
+    expect(output.messages[1].role).toBe("assistant");
+    expect(norm(output.messages[1].content)).toBe("Aria: *waves*");
   });
 
   test("empty history produces no messages", () => {
@@ -288,121 +263,10 @@ describe("template parity: messages", () => {
 });
 
 // =============================================================================
-// Seeded Fuzz Tests
-// =============================================================================
-
-/** Simple seeded PRNG (xorshift32) */
-class SeededRNG {
-  private state: number;
-  constructor(seed: number) {
-    this.state = seed | 1; // Avoid zero state
-  }
-  next(): number {
-    let s = this.state;
-    s ^= s << 13;
-    s ^= s >> 17;
-    s ^= s << 5;
-    this.state = s;
-    return (s >>> 0) / 4294967296; // [0, 1)
-  }
-  nextInt(max: number): number {
-    return Math.floor(this.next() * max);
-  }
-  pick<T>(arr: T[]): T {
-    return arr[this.nextInt(arr.length)];
-  }
-  randomString(len: number): string {
-    const chars = "abcdefghijklmnopqrstuvwxyzABCDEF 0123456789!@#.,";
-    return Array.from({ length: len }, () => chars[this.nextInt(chars.length)]).join("");
-  }
-}
-
-/** Generate a random test configuration */
-function generateConfig(rng: SeededRNG): {
-  entities: EvaluatedEntity[];
-  others: EntityWithFacts[];
-  memories: Map<number, Array<{ content: string }>>;
-  history: Array<{ author: string; content: string; author_id: string; role: "user" | "assistant" }>;
-} {
-  const names = ["Aria", "Bob", "Luna", "Kai", "Zara"];
-  const entityCount = rng.nextInt(6); // 0-5
-  const otherCount = rng.nextInt(4); // 0-3
-  const historyCount = rng.nextInt(20); // 0-19
-  const freeform = rng.next() > 0.7;
-
-  const entities: EvaluatedEntity[] = [];
-  for (let i = 0; i < entityCount && i < names.length; i++) {
-    const factCount = rng.nextInt(8);
-    const facts = Array.from({ length: factCount }, () => rng.randomString(rng.nextInt(50) + 5));
-    entities.push(mockEntity({
-      id: i + 1,
-      name: names[i],
-      facts,
-      isFreeform: freeform,
-    }));
-  }
-
-  const others: EntityWithFacts[] = [];
-  for (let i = 0; i < otherCount; i++) {
-    const factCount = rng.nextInt(6);
-    const facts = Array.from({ length: factCount }, () => rng.randomString(rng.nextInt(50) + 5));
-    others.push(mockRawEntity(100 + i, `Place${i}`, facts));
-  }
-
-  const memories = new Map<number, Array<{ content: string }>>();
-  for (const entity of entities) {
-    if (rng.next() > 0.6) {
-      const memCount = rng.nextInt(4) + 1;
-      memories.set(entity.id, Array.from({ length: memCount }, () => ({
-        content: rng.randomString(rng.nextInt(30) + 5),
-      })));
-    }
-  }
-
-  const history: Array<{ author: string; content: string; author_id: string; role: "user" | "assistant" }> = [];
-  for (let i = 0; i < historyCount; i++) {
-    const isEntity = entities.length > 0 && rng.next() > 0.5;
-    const author = isEntity ? rng.pick(entities.map(e => e.name)) : rng.pick(["Alice", "Charlie"]);
-    history.push({
-      author,
-      content: rng.randomString(rng.nextInt(100) + 5),
-      author_id: String(rng.nextInt(1000)),
-      role: isEntity ? "assistant" : "user",
-    });
-  }
-
-  return { entities, others, memories, history };
-}
-
-describe("template parity: seeded fuzz", () => {
-  for (let seed = 1; seed <= 200; seed++) {
-    test(`seed ${seed}`, () => {
-      const rng = new SeededRNG(seed);
-      const { entities, others, memories, history } = generateConfig(rng);
-      const ctx = buildTemplateContext(entities, others, memories, history);
-      const output = renderStructuredTemplate(DEFAULT_TEMPLATE, ctx);
-
-      // Compare system prompt
-      const old = buildSystemPrompt(entities, others, memories);
-      expect(norm(output.systemPrompt)).toBe(norm(old));
-
-      // Compare messages
-      const isSingleEntity = entities.length <= 1;
-      const oldMessages = buildOldMessages(history, isSingleEntity);
-      expect(output.messages.length).toBe(oldMessages.length);
-      for (let i = 0; i < oldMessages.length; i++) {
-        expect(output.messages[i].role).toBe(oldMessages[i].role);
-        expect(norm(output.messages[i].content)).toBe(norm(oldMessages[i].content));
-      }
-    });
-  }
-});
-
-// =============================================================================
 // Adversarial Injection Tests
 // =============================================================================
 
-describe("template parity: adversarial injection", () => {
+describe("DEFAULT_TEMPLATE: adversarial injection", () => {
   test("entity name containing <<<HMSG:", () => {
     const entities = [mockEntity({ id: 1, name: "<<<HMSG:fake", facts: ["is a test"] })];
     const ctx = buildTemplateContext(entities, []);

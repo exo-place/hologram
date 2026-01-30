@@ -397,6 +397,73 @@ export function parseStructuredOutput(rendered: string, nonce: string): ParsedTe
  * Injects _msg() into the template context for structured message emission.
  * Returns parsed system prompt + messages.
  */
+// =============================================================================
+// Default Template (Nunjucks)
+// =============================================================================
+
+/**
+ * Default template that produces structured system prompt + role-based messages
+ * using the _msg() protocol.
+ *
+ * System prompt section: entity defs, memories, multi-entity guidance
+ * Message section: _msg() markers with role-based history
+ */
+export const DEFAULT_TEMPLATE = `\
+{%- if entities | length == 0 and others | length == 0 -%}
+You are a helpful assistant. Respond naturally to the user.
+{%- else -%}
+{%- for entity in entities -%}
+{%- if not loop.first %}
+
+
+{% endif -%}
+<defs for="{{ entity.name }}" id="{{ entity.id }}">
+{{ entity.facts | join("\\n") }}
+</defs>
+{%- if memories[entity.id] and memories[entity.id] | length > 0 %}
+
+
+<memories for="{{ entity.name }}" id="{{ entity.id }}">
+{{ memories[entity.id] | join("\\n") }}
+</memories>
+{%- endif -%}
+{%- endfor -%}
+{%- for entity in others -%}
+{%- if entities | length > 0 or not loop.first %}
+
+
+{% endif -%}
+<defs for="{{ entity.name }}" id="{{ entity.id }}">
+{{ entity.facts | join("\\n") }}
+</defs>
+{%- endfor -%}
+{%- if entities | length > 1 -%}
+{%- if freeform %}
+
+
+You are writing as: {{ entity_names }}. They may interact naturally in your response. Not everyone needs to respond to every message - only include those who would naturally engage. If none would respond, reply with only: none
+{%- else %}
+
+
+You are: {{ entity_names }}. Format your response with XML tags:
+<{{ entities[0].name }}>*waves* Hello there!</{{ entities[0].name }}>
+<{{ entities[1].name }}>Nice to meet you.</{{ entities[1].name }}>
+
+Wrap everyone's dialogue in their name tag. They may interact naturally.
+
+Not everyone needs to respond to every message. Only respond as those who would naturally engage with what was said. If none would respond, reply with only <none/>.
+{%- endif -%}
+{%- endif -%}
+{%- endif -%}
+{%- for msg in history -%}
+{{ _msg(msg.role, {author: msg.author, author_id: msg.author_id}) }}
+{%- if msg.role == "assistant" and _single_entity -%}
+{{ msg.content }}
+{%- else -%}
+{{ msg.author }}: {{ msg.content }}
+{%- endif -%}
+{%- endfor -%}`;
+
 export function renderStructuredTemplate(
   source: string,
   ctx: Record<string, unknown>,

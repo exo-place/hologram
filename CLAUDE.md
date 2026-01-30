@@ -26,9 +26,9 @@ src/
 │   ├── context.ts        # EvaluatedEntity, MessageContext, formatting utils
 │   ├── handler.ts        # handleMessage() + re-exports
 │   ├── parsing.ts        # Response parsing (XML + Name prefix), name stripping
-│   ├── prompt.ts         # expandEntityRefs(), buildPromptAndMessages(), DEFAULT_TEMPLATE
+│   ├── prompt.ts         # expandEntityRefs(), buildPromptAndMessages()
 │   ├── streaming.ts      # handleMessageStreaming(), stream generators
-│   ├── template.ts       # Nunjucks template engine with runtime security patches
+│   ├── template.ts       # Nunjucks template engine, DEFAULT_TEMPLATE, runtime security patches
 │   ├── tools.ts          # createTools() factory + $locked permission checks
 │   └── embeddings.ts     # Local embeddings (planned)
 ├── logic/

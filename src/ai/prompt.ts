@@ -4,15 +4,13 @@ import {
 } from "../db/entities";
 import {
   formatEntityDisplay,
-  formatEvaluatedEntity,
-  formatRawEntity,
   DEFAULT_CONTEXT_LIMIT,
   type EvaluatedEntity,
 } from "./context";
 import { getMessages, getWebhookMessageEntity, parseMessageData, normalizeStickers } from "../db/discord";
 import { evalMacroValue, formatDuration, rollDice, type ExprContext } from "../logic/expr";
 import { DEFAULT_MODEL } from "./models";
-import { renderEntityTemplate, renderStructuredTemplate } from "./template";
+import { DEFAULT_TEMPLATE, renderStructuredTemplate } from "./template";
 import {
   applyStripPatterns,
   type StructuredMessage,
@@ -232,213 +230,8 @@ export function expandEntityRefs(
   return referencedEntities;
 }
 
-// =============================================================================
-// System Prompt Building
-// =============================================================================
-
-export function buildSystemPrompt(
-  respondingEntities: EvaluatedEntity[],
-  otherEntities: EntityWithFacts[],
-  entityMemories?: Map<number, Array<{ content: string }>>,
-  template?: string | null,
-  channelId?: string,
-): string {
-  // Use custom template if provided
-  if (template) {
-    return renderWithTemplate(template, respondingEntities, otherEntities, entityMemories, channelId);
-  }
-
-  if (respondingEntities.length === 0 && otherEntities.length === 0) {
-    return "You are a helpful assistant. Respond naturally to the user.";
-  }
-
-  const contextParts: string[] = [];
-  for (const e of respondingEntities) {
-    contextParts.push(formatEvaluatedEntity(e));
-    // Add memories if present
-    const memories = entityMemories?.get(e.id);
-    if (memories && memories.length > 0) {
-      const memoryLines = memories.map(m => m.content).join("\n");
-      contextParts.push(`<memories for="${e.name}" id="${e.id}">\n${memoryLines}\n</memories>`);
-    }
-  }
-  for (const e of otherEntities) {
-    contextParts.push(formatRawEntity(e));
-  }
-  const context = contextParts.join("\n\n");
-
-  let multiEntityGuidance = "";
-  if (respondingEntities.length > 1) {
-    const names = respondingEntities.map(c => c.name).join(", ");
-    const isFreeform = respondingEntities.some(e => e.isFreeform);
-
-    if (isFreeform) {
-      // Freeform mode: no structured format required
-      multiEntityGuidance = `\n\nYou are writing as: ${names}. They may interact naturally in your response. Not everyone needs to respond to every message - only include those who would naturally engage. If none would respond, reply with only: none`;
-    } else {
-      // Structured mode: use XML tags
-      multiEntityGuidance = `\n\nYou are: ${names}. Format your response with XML tags:
-<${respondingEntities[0]?.name ?? "Name"}>*waves* Hello there!</${respondingEntities[0]?.name ?? "Name"}>
-<${respondingEntities[1]?.name ?? "Other"}>Nice to meet you.</${respondingEntities[1]?.name ?? "Other"}>
-
-Wrap everyone's dialogue in their name tag. They may interact naturally.
-
-Not everyone needs to respond to every message. Only respond as those who would naturally engage with what was said. If none would respond, reply with only <none/>.`;
-    }
-  }
-
-  return `${context}${multiEntityGuidance}`;
-}
-
-// =============================================================================
-// Template Rendering
-// =============================================================================
-
 /** Number of messages to fetch from DB for template context */
 const MESSAGE_FETCH_LIMIT = 100;
-
-/**
- * Render a system prompt using a custom Nunjucks template.
- * The template context includes the first entity's exprContext variables
- * plus template-specific variables (entities, others, memories, messages, etc.).
- */
-function renderWithTemplate(
-  templateSource: string,
-  respondingEntities: EvaluatedEntity[],
-  otherEntities: EntityWithFacts[],
-  entityMemories?: Map<number, Array<{ content: string }>>,
-  channelId?: string,
-): string {
-  const firstEntity = respondingEntities[0];
-  const baseCtx = firstEntity?.exprContext;
-
-  // Build template context — flat Record for Nunjucks (no prototype chain)
-  const templateCtx: Record<string, unknown> = {};
-
-  // Copy base expr context properties (if available)
-  if (baseCtx) {
-    for (const key of Object.keys(baseCtx)) {
-      templateCtx[key] = baseCtx[key];
-    }
-    // Also copy prototype-chain properties from Object.create(null) objects
-    // ExprContext uses index signature, so own properties cover everything
-  }
-
-  templateCtx.entities = respondingEntities.map(e => ({
-    id: e.id,
-    name: e.name,
-    facts: e.facts,
-  }));
-
-  templateCtx.others = otherEntities.map(e => ({
-    id: e.id,
-    name: e.name,
-    facts: e.facts.map(f => f.content),
-  }));
-
-  // Build memories map: entity id -> array of content strings
-  const memoriesObj: Record<number, string[]> = Object.create(null);
-  if (entityMemories) {
-    for (const [entityId, mems] of entityMemories) {
-      memoriesObj[entityId] = mems.map(m => m.content);
-    }
-  }
-  templateCtx.memories = memoriesObj;
-
-  templateCtx.entity_names = respondingEntities.map(e => e.name).join(", ");
-  templateCtx.freeform = respondingEntities.some(e => e.isFreeform);
-
-  // Structured messages for template use (enriched with message data)
-  if (channelId) {
-    const history = getMessages(channelId, MESSAGE_FETCH_LIMIT);
-    templateCtx.history = history.reverse().map(m => {
-      const data = parseMessageData(m.data);
-      const isEntity = !!m.discord_message_id && !!getWebhookMessageEntity(m.discord_message_id);
-      return {
-        author: m.author_name,
-        content: m.content,
-        author_id: m.author_id,
-        created_at: m.created_at,
-        is_bot: data?.is_bot ?? false,
-        role: isEntity ? "assistant" as const : "user" as const,
-        embeds: data?.embeds ?? [],
-        stickers: normalizeStickers(data?.stickers ?? []),
-        attachments: data?.attachments ?? [],
-      };
-    });
-  } else {
-    templateCtx.history = [];
-  }
-
-  return renderEntityTemplate(templateSource, templateCtx);
-}
-
-// =============================================================================
-// Default Template (Nunjucks)
-// =============================================================================
-
-/**
- * Default template that replicates buildSystemPrompt() + buildStructuredMessages()
- * output using the structured _msg() protocol.
- *
- * System prompt section: entity defs, memories, multi-entity guidance
- * Message section: _msg() markers with role-based history
- */
-export const DEFAULT_TEMPLATE = `\
-{%- if entities | length == 0 and others | length == 0 -%}
-You are a helpful assistant. Respond naturally to the user.
-{%- else -%}
-{%- for entity in entities -%}
-{%- if not loop.first %}
-
-
-{% endif -%}
-<defs for="{{ entity.name }}" id="{{ entity.id }}">
-{{ entity.facts | join("\\n") }}
-</defs>
-{%- if memories[entity.id] and memories[entity.id] | length > 0 %}
-
-
-<memories for="{{ entity.name }}" id="{{ entity.id }}">
-{{ memories[entity.id] | join("\\n") }}
-</memories>
-{%- endif -%}
-{%- endfor -%}
-{%- for entity in others -%}
-{%- if entities | length > 0 or not loop.first %}
-
-
-{% endif -%}
-<defs for="{{ entity.name }}" id="{{ entity.id }}">
-{{ entity.facts | join("\\n") }}
-</defs>
-{%- endfor -%}
-{%- if entities | length > 1 -%}
-{%- if freeform %}
-
-
-You are writing as: {{ entity_names }}. They may interact naturally in your response. Not everyone needs to respond to every message - only include those who would naturally engage. If none would respond, reply with only: none
-{%- else %}
-
-
-You are: {{ entity_names }}. Format your response with XML tags:
-<{{ entities[0].name }}>*waves* Hello there!</{{ entities[0].name }}>
-<{{ entities[1].name }}>Nice to meet you.</{{ entities[1].name }}>
-
-Wrap everyone's dialogue in their name tag. They may interact naturally.
-
-Not everyone needs to respond to every message. Only respond as those who would naturally engage with what was said. If none would respond, reply with only <none/>.
-{%- endif -%}
-{%- endif -%}
-{%- endif -%}
-{%- for msg in history -%}
-{{ _msg(msg.role, {author: msg.author, author_id: msg.author_id}) }}
-{%- if msg.role == "assistant" and _single_entity -%}
-{{ msg.content }}
-{%- else -%}
-{{ msg.author }}: {{ msg.content }}
-{%- endif -%}
-{%- endfor -%}`;
 
 // =============================================================================
 // Unified Prompt + Messages Builder
@@ -447,7 +240,6 @@ Not everyone needs to respond to every message. Only respond as those who would 
 /**
  * Build system prompt and structured messages from entities and history.
  * Uses renderStructuredTemplate() with either a custom template or DEFAULT_TEMPLATE.
- * Replaces the separate buildSystemPrompt() + buildStructuredMessages() calls.
  *
  * @param respondingEntities - Evaluated entities that will respond
  * @param otherEntities - Other entities in context (referenced, user persona, etc.)
@@ -491,7 +283,7 @@ export function buildPromptAndMessages(
     const isEntity = !!m.discord_message_id && !!getWebhookMessageEntity(m.discord_message_id);
     const role = isEntity ? "assistant" as const : "user" as const;
 
-    // Calculate char length using same logic as buildStructuredMessages
+    // Calculate char length for context limit
     const formattedContent = (isEntity && isSingleEntity) ? m.content : `${m.author_name}: ${m.content}`;
     const len = formattedContent.length + 1; // +1 for newline
     if (totalChars + len > contextLimit && history.length > 0) break;
