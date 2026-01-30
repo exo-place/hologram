@@ -317,25 +317,25 @@ describe("injection prevention", () => {
 
   test("blocks constructor access", () => {
     const ctx = makeContext();
-    expect(() => evalExpr("self.constructor", ctx)).toThrow("Blocked property access: constructor");
-    expect(() => evalExpr("random.constructor", ctx)).toThrow("Blocked property access: constructor");
-    expect(() => evalExpr("time.constructor", ctx)).toThrow("Blocked property access: constructor");
+    expect(() => evalExpr("self.constructor", ctx)).toThrow("Blocked property: .constructor");
+    expect(() => evalExpr("random.constructor", ctx)).toThrow("Blocked property: .constructor");
+    expect(() => evalExpr("time.constructor", ctx)).toThrow("Blocked property: .constructor");
   });
 
   test("blocks __proto__ access", () => {
     const ctx = makeContext();
-    expect(() => evalExpr("self.__proto__", ctx)).toThrow("Blocked property access: __proto__");
+    expect(() => evalExpr("self.__proto__", ctx)).toThrow("Blocked property: .__proto__");
   });
 
   test("blocks prototype access", () => {
     const ctx = makeContext();
-    expect(() => evalExpr("random.prototype", ctx)).toThrow("Blocked property access: prototype");
+    expect(() => evalExpr("random.prototype", ctx)).toThrow("Blocked property: .prototype");
   });
 
   test("blocks constructor in method chain", () => {
     const ctx = makeContext({ content: "test" });
-    expect(() => evalExpr("content.toLowerCase().constructor", ctx)).toThrow("Blocked property access: constructor");
-    expect(() => evalExpr("content.constructor.constructor", ctx)).toThrow("Blocked property access: constructor");
+    expect(() => evalExpr("content.toLowerCase().constructor", ctx)).toThrow("Blocked property: .constructor");
+    expect(() => evalExpr("content.constructor.constructor", ctx)).toThrow("Blocked property: .constructor");
     expect(() => evalExpr("content.includes['con'+'foso'[2]+'tructor']('return gl' + 'obal.pro' + 'cess.ver' + 'sions')()", ctx)).toThrow();
   });
 
@@ -1112,8 +1112,8 @@ describe("error messages", () => {
 
   test("blocked property error", () => {
     const ctx = makeContext();
-    expect(() => evalExpr("self.constructor", ctx)).toThrow("Blocked property access: constructor");
-    expect(() => evalExpr("self.__proto__", ctx)).toThrow("Blocked property access: __proto__");
+    expect(() => evalExpr("self.constructor", ctx)).toThrow("Blocked property: .constructor");
+    expect(() => evalExpr("self.__proto__", ctx)).toThrow("Blocked property: .__proto__");
   });
 
   test("expected colon error in $if", () => {

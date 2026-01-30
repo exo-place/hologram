@@ -496,16 +496,85 @@ const EXPR_CONTEXT_REFERENCE: ExprContext = {
 const ALLOWED_GLOBALS = new Set(Object.keys(EXPR_CONTEXT_REFERENCE));
 
 // Methods that compile their first string argument into a RegExp
-const REGEX_METHODS = new Set(["match", "matchAll", "search", "replace", "split"]);
+const REGEX_METHODS = new Set(["match", "search", "replace", "split"]);
 
-// Methods that can cause memory exhaustion with large numeric arguments
-const BLOCKED_METHODS = new Set(["repeat", "padStart", "padEnd"]);
+// Methods blocked entirely (no useful expression-language interaction)
+const BLOCKED_METHODS: Record<string, string> = {
+  matchAll: "matchAll() is not available — use match() instead",
+};
+
+// Methods rewritten to use safe wrappers at runtime (memory exhaustion prevention)
+const WRAPPED_METHODS = new Set(["repeat", "padStart", "padEnd"]);
 
 // Blocked property names (prevent prototype chain escapes)
-const BLOCKED_PROPERTIES = new Set([
-  "constructor", "__proto__", "prototype",
-  "__defineGetter__", "__defineSetter__", "__lookupGetter__", "__lookupSetter__",
+// Uses Map because a plain object's __proto__ key collides with the actual prototype
+const BLOCKED_PROPERTIES = new Map([
+  ["constructor", "Blocked property: .constructor — accessing constructors could allow sandbox escape"],
+  ["__proto__", "Blocked property: .__proto__ — accessing prototypes could allow sandbox escape"],
+  ["prototype", "Blocked property: .prototype — accessing prototypes could allow sandbox escape"],
+  ["__defineGetter__", "Blocked property: .__defineGetter__ — modifying property descriptors is not allowed"],
+  ["__defineSetter__", "Blocked property: .__defineSetter__ — modifying property descriptors is not allowed"],
+  ["__lookupGetter__", "Blocked property: .__lookupGetter__ — inspecting property descriptors is not allowed"],
+  ["__lookupSetter__", "Blocked property: .__lookupSetter__ — inspecting property descriptors is not allowed"],
 ]);
+
+// =============================================================================
+// Safe Method Wrappers (injected at runtime as $s)
+// =============================================================================
+
+/** Max characters a string-producing method can output */
+const MAX_STRING_OUTPUT = 100_000;
+
+const SAFE_METHODS = {
+  repeat(str: unknown, count: unknown): string {
+    if (typeof str !== "string") {
+      throw new ExprError("repeat() can only be called on a string");
+    }
+    const n = Number(count);
+    if (!Number.isFinite(n) || n < 0 || n !== Math.floor(n)) {
+      throw new ExprError("repeat() count must be a non-negative integer");
+    }
+    const outputLen = str.length * n;
+    if (outputLen > MAX_STRING_OUTPUT) {
+      throw new ExprError(
+        `repeat(${n}) would produce ${outputLen.toLocaleString()} characters (limit: ${MAX_STRING_OUTPUT.toLocaleString()})`
+      );
+    }
+    return str.repeat(n);
+  },
+
+  padStart(str: unknown, len: unknown, fill?: unknown): string {
+    if (typeof str !== "string") {
+      throw new ExprError("padStart() can only be called on a string");
+    }
+    const n = Number(len);
+    if (!Number.isFinite(n) || n < 0) {
+      throw new ExprError("padStart() length must be a non-negative number");
+    }
+    if (n > MAX_STRING_OUTPUT) {
+      throw new ExprError(
+        `padStart(${n}) target length exceeds limit (${MAX_STRING_OUTPUT.toLocaleString()})`
+      );
+    }
+    return fill !== undefined ? str.padStart(n, String(fill)) : str.padStart(n);
+  },
+
+  padEnd(str: unknown, len: unknown, fill?: unknown): string {
+    if (typeof str !== "string") {
+      throw new ExprError("padEnd() can only be called on a string");
+    }
+    const n = Number(len);
+    if (!Number.isFinite(n) || n < 0) {
+      throw new ExprError("padEnd() length must be a non-negative number");
+    }
+    if (n > MAX_STRING_OUTPUT) {
+      throw new ExprError(
+        `padEnd(${n}) target length exceeds limit (${MAX_STRING_OUTPUT.toLocaleString()})`
+      );
+    }
+    return fill !== undefined ? str.padEnd(n, String(fill)) : str.padEnd(n);
+  },
+};
 
 /**
  * Generate JS code from AST. Since we control the AST structure,
@@ -525,28 +594,38 @@ function generateCode(node: ExprNode): string {
       }
       return `ctx.${node.name}`;
 
-    case "member":
+    case "member": {
       // Block dangerous property names that could escape the sandbox
-      if (BLOCKED_PROPERTIES.has(node.property)) {
-        throw new ExprError(`Blocked property access: ${node.property}`);
+      const blockedMsg = BLOCKED_PROPERTIES.get(node.property);
+      if (blockedMsg) {
+        throw new ExprError(blockedMsg);
       }
-      // Block methods that can cause memory exhaustion
-      if (BLOCKED_METHODS.has(node.property)) {
-        throw new ExprError(`Blocked method: ${node.property}() can cause memory exhaustion`);
+      // Block methods that are unusable or dangerous
+      if (node.property in BLOCKED_METHODS) {
+        throw new ExprError(BLOCKED_METHODS[node.property]);
       }
       return `(${generateCode(node.object)}?.${node.property})`;
+    }
 
     case "call": {
-      // Validate regex patterns for methods that compile strings to RegExp
-      if (node.callee.type === "member" && REGEX_METHODS.has(node.callee.property)) {
-        const firstArg = node.args[0];
-        if (!firstArg || firstArg.type !== "literal" || typeof firstArg.value !== "string") {
-          throw new ExprError(
-            `${node.callee.property}() requires a string literal pattern ` +
-            `(dynamic patterns are not allowed for security)`
-          );
+      if (node.callee.type === "member") {
+        // Validate regex patterns for methods that compile strings to RegExp
+        if (REGEX_METHODS.has(node.callee.property)) {
+          const firstArg = node.args[0];
+          if (!firstArg || firstArg.type !== "literal" || typeof firstArg.value !== "string") {
+            throw new ExprError(
+              `${node.callee.property}() requires a string literal pattern ` +
+              `(dynamic patterns are not allowed for security)`
+            );
+          }
+          validateRegexPattern(firstArg.value as string);
         }
-        validateRegexPattern(firstArg.value as string);
+        // Rewrite memory-dangerous methods to use safe wrappers
+        if (WRAPPED_METHODS.has(node.callee.property)) {
+          const obj = generateCode(node.callee.object);
+          const args = node.args.map(generateCode).join(", ");
+          return `$s.${node.callee.property}(${obj}${args ? ", " + args : ""})`;
+        }
       }
       const callee = generateCode(node.callee);
       const args = node.args.map(generateCode).join(", ");
@@ -580,7 +659,9 @@ export function compileExpr(expr: string): (ctx: ExprContext) => boolean {
   const code = generateCode(ast);
 
   // Safe: we generated this code from a validated AST
-  fn = new Function("ctx", `return Boolean(${code})`) as (ctx: ExprContext) => boolean;
+  // $s provides safe wrappers for memory-dangerous methods (repeat, padStart, padEnd)
+  const raw = new Function("ctx", "$s", `return Boolean(${code})`);
+  fn = (ctx: ExprContext) => raw(ctx, SAFE_METHODS);
 
   exprCache.set(expr, fn);
   return fn;
@@ -608,7 +689,8 @@ function compileMacroExpr(expr: string): (ctx: ExprContext) => unknown {
   const ast = parser.parse();
   const code = generateCode(ast);
 
-  fn = new Function("ctx", `return (${code})`) as (ctx: ExprContext) => unknown;
+  const raw = new Function("ctx", "$s", `return (${code})`);
+  fn = (ctx: ExprContext) => raw(ctx, SAFE_METHODS);
   macroExprCache.set(expr, fn);
   return fn;
 }

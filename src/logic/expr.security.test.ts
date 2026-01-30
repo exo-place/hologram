@@ -72,70 +72,70 @@ function makeContext(overrides: Partial<ExprContext> = {}): ExprContext {
 describe("prototype chain escapes", () => {
 
   test("blocks constructor on every context type", () => {
-    expect(() => compileExpr("self.constructor")).toThrow("Blocked property access: constructor");
-    expect(() => compileExpr("random.constructor")).toThrow("Blocked property access: constructor");
-    expect(() => compileExpr("time.constructor")).toThrow("Blocked property access: constructor");
-    expect(() => compileExpr("content.constructor")).toThrow("Blocked property access: constructor");
-    expect(() => compileExpr("chars.constructor")).toThrow("Blocked property access: constructor");
-    expect(() => compileExpr("channel.constructor")).toThrow("Blocked property access: constructor");
-    expect(() => compileExpr("server.constructor")).toThrow("Blocked property access: constructor");
-    expect(() => compileExpr("group.constructor")).toThrow("Blocked property access: constructor");
-    expect(() => compileExpr("name.constructor")).toThrow("Blocked property access: constructor");
+    expect(() => compileExpr("self.constructor")).toThrow("Blocked property: .constructor");
+    expect(() => compileExpr("random.constructor")).toThrow("Blocked property: .constructor");
+    expect(() => compileExpr("time.constructor")).toThrow("Blocked property: .constructor");
+    expect(() => compileExpr("content.constructor")).toThrow("Blocked property: .constructor");
+    expect(() => compileExpr("chars.constructor")).toThrow("Blocked property: .constructor");
+    expect(() => compileExpr("channel.constructor")).toThrow("Blocked property: .constructor");
+    expect(() => compileExpr("server.constructor")).toThrow("Blocked property: .constructor");
+    expect(() => compileExpr("group.constructor")).toThrow("Blocked property: .constructor");
+    expect(() => compileExpr("name.constructor")).toThrow("Blocked property: .constructor");
   });
 
   test("blocks __proto__ on every context type", () => {
-    expect(() => compileExpr("self.__proto__")).toThrow("Blocked property access: __proto__");
-    expect(() => compileExpr("content.__proto__")).toThrow("Blocked property access: __proto__");
-    expect(() => compileExpr("chars.__proto__")).toThrow("Blocked property access: __proto__");
-    expect(() => compileExpr("time.__proto__")).toThrow("Blocked property access: __proto__");
-    expect(() => compileExpr("channel.__proto__")).toThrow("Blocked property access: __proto__");
+    expect(() => compileExpr("self.__proto__")).toThrow("Blocked property: .__proto__");
+    expect(() => compileExpr("content.__proto__")).toThrow("Blocked property: .__proto__");
+    expect(() => compileExpr("chars.__proto__")).toThrow("Blocked property: .__proto__");
+    expect(() => compileExpr("time.__proto__")).toThrow("Blocked property: .__proto__");
+    expect(() => compileExpr("channel.__proto__")).toThrow("Blocked property: .__proto__");
   });
 
   test("blocks prototype access", () => {
-    expect(() => compileExpr("random.prototype")).toThrow("Blocked property access: prototype");
-    expect(() => compileExpr("has_fact.prototype")).toThrow("Blocked property access: prototype");
-    expect(() => compileExpr("roll.prototype")).toThrow("Blocked property access: prototype");
-    expect(() => compileExpr("messages.prototype")).toThrow("Blocked property access: prototype");
+    expect(() => compileExpr("random.prototype")).toThrow("Blocked property: .prototype");
+    expect(() => compileExpr("has_fact.prototype")).toThrow("Blocked property: .prototype");
+    expect(() => compileExpr("roll.prototype")).toThrow("Blocked property: .prototype");
+    expect(() => compileExpr("messages.prototype")).toThrow("Blocked property: .prototype");
   });
 
   test("blocks __defineGetter__", () => {
-    expect(() => compileExpr("self.__defineGetter__")).toThrow("Blocked property access: __defineGetter__");
-    expect(() => compileExpr("content.__defineGetter__")).toThrow("Blocked property access: __defineGetter__");
+    expect(() => compileExpr("self.__defineGetter__")).toThrow("Blocked property: .__defineGetter__");
+    expect(() => compileExpr("content.__defineGetter__")).toThrow("Blocked property: .__defineGetter__");
   });
 
   test("blocks __defineSetter__", () => {
-    expect(() => compileExpr("self.__defineSetter__")).toThrow("Blocked property access: __defineSetter__");
+    expect(() => compileExpr("self.__defineSetter__")).toThrow("Blocked property: .__defineSetter__");
   });
 
   test("blocks __lookupGetter__", () => {
-    expect(() => compileExpr("self.__lookupGetter__")).toThrow("Blocked property access: __lookupGetter__");
+    expect(() => compileExpr("self.__lookupGetter__")).toThrow("Blocked property: .__lookupGetter__");
   });
 
   test("blocks __lookupSetter__", () => {
-    expect(() => compileExpr("self.__lookupSetter__")).toThrow("Blocked property access: __lookupSetter__");
+    expect(() => compileExpr("self.__lookupSetter__")).toThrow("Blocked property: .__lookupSetter__");
   });
 
   test("blocks constructor through method chain", () => {
-    expect(() => compileExpr("content.trim().constructor")).toThrow("Blocked property access: constructor");
-    expect(() => compileExpr("content.toLowerCase().constructor")).toThrow("Blocked property access: constructor");
-    expect(() => compileExpr("content.slice(0).constructor")).toThrow("Blocked property access: constructor");
-    expect(() => compileExpr("content.replace('a', 'b').constructor")).toThrow("Blocked property access: constructor");
+    expect(() => compileExpr("content.trim().constructor")).toThrow("Blocked property: .constructor");
+    expect(() => compileExpr("content.toLowerCase().constructor")).toThrow("Blocked property: .constructor");
+    expect(() => compileExpr("content.slice(0).constructor")).toThrow("Blocked property: .constructor");
+    expect(() => compileExpr("content.replace('a', 'b').constructor")).toThrow("Blocked property: .constructor");
   });
 
   test("blocks double constructor chain (Function access)", () => {
-    expect(() => compileExpr("content.constructor.constructor")).toThrow("Blocked property access: constructor");
+    expect(() => compileExpr("content.constructor.constructor")).toThrow("Blocked property: .constructor");
   });
 
   test("blocks __proto__ through method chain", () => {
-    expect(() => compileExpr("content.trim().__proto__")).toThrow("Blocked property access: __proto__");
+    expect(() => compileExpr("content.trim().__proto__")).toThrow("Blocked property: .__proto__");
   });
 
   test("blocks constructor on function return values", () => {
-    expect(() => compileExpr("random().constructor")).toThrow("Blocked property access: constructor");
-    expect(() => compileExpr("has_fact('test').constructor")).toThrow("Blocked property access: constructor");
-    expect(() => compileExpr("messages().constructor")).toThrow("Blocked property access: constructor");
-    expect(() => compileExpr("roll('1d6').constructor")).toThrow("Blocked property access: constructor");
-    expect(() => compileExpr("duration(1000).constructor")).toThrow("Blocked property access: constructor");
+    expect(() => compileExpr("random().constructor")).toThrow("Blocked property: .constructor");
+    expect(() => compileExpr("has_fact('test').constructor")).toThrow("Blocked property: .constructor");
+    expect(() => compileExpr("messages().constructor")).toThrow("Blocked property: .constructor");
+    expect(() => compileExpr("roll('1d6').constructor")).toThrow("Blocked property: .constructor");
+    expect(() => compileExpr("duration(1000).constructor")).toThrow("Blocked property: .constructor");
   });
 });
 
@@ -544,34 +544,34 @@ describe("unsupported syntax", () => {
 describe("Function constructor via chaining", () => {
 
   test("string.constructor.constructor (Function access)", () => {
-    expect(() => compileExpr("content.constructor")).toThrow("Blocked property access: constructor");
+    expect(() => compileExpr("content.constructor")).toThrow("Blocked property: .constructor");
   });
 
   test("number return value constructor", () => {
-    expect(() => compileExpr("response_ms.constructor")).toThrow("Blocked property access: constructor");
+    expect(() => compileExpr("response_ms.constructor")).toThrow("Blocked property: .constructor");
   });
 
   test("array constructor", () => {
-    expect(() => compileExpr("chars.constructor")).toThrow("Blocked property access: constructor");
+    expect(() => compileExpr("chars.constructor")).toThrow("Blocked property: .constructor");
   });
 
   test("boolean constructor", () => {
-    expect(() => compileExpr("mentioned.constructor")).toThrow("Blocked property access: constructor");
+    expect(() => compileExpr("mentioned.constructor")).toThrow("Blocked property: .constructor");
   });
 
   test("function constructor", () => {
-    expect(() => compileExpr("random.constructor")).toThrow("Blocked property access: constructor");
-    expect(() => compileExpr("has_fact.constructor")).toThrow("Blocked property access: constructor");
-    expect(() => compileExpr("roll.constructor")).toThrow("Blocked property access: constructor");
-    expect(() => compileExpr("messages.constructor")).toThrow("Blocked property access: constructor");
-    expect(() => compileExpr("duration.constructor")).toThrow("Blocked property access: constructor");
-    expect(() => compileExpr("mentioned_in_dialogue.constructor")).toThrow("Blocked property access: constructor");
+    expect(() => compileExpr("random.constructor")).toThrow("Blocked property: .constructor");
+    expect(() => compileExpr("has_fact.constructor")).toThrow("Blocked property: .constructor");
+    expect(() => compileExpr("roll.constructor")).toThrow("Blocked property: .constructor");
+    expect(() => compileExpr("messages.constructor")).toThrow("Blocked property: .constructor");
+    expect(() => compileExpr("duration.constructor")).toThrow("Blocked property: .constructor");
+    expect(() => compileExpr("mentioned_in_dialogue.constructor")).toThrow("Blocked property: .constructor");
   });
 
   test("nested object constructor", () => {
-    expect(() => compileExpr("time.constructor")).toThrow("Blocked property access: constructor");
-    expect(() => compileExpr("channel.constructor")).toThrow("Blocked property access: constructor");
-    expect(() => compileExpr("server.constructor")).toThrow("Blocked property access: constructor");
+    expect(() => compileExpr("time.constructor")).toThrow("Blocked property: .constructor");
+    expect(() => compileExpr("channel.constructor")).toThrow("Blocked property: .constructor");
+    expect(() => compileExpr("server.constructor")).toThrow("Blocked property: .constructor");
   });
 });
 
@@ -590,23 +590,23 @@ describe("call/apply/bind usage", () => {
 
   test("cannot reach Function via call chain", () => {
     // has_fact.call.constructor would be Function - but constructor is blocked
-    expect(() => compileExpr("has_fact.call.constructor")).toThrow("Blocked property access: constructor");
+    expect(() => compileExpr("has_fact.call.constructor")).toThrow("Blocked property: .constructor");
   });
 
   test("cannot reach Function via bind chain", () => {
-    expect(() => compileExpr("has_fact.bind.constructor")).toThrow("Blocked property access: constructor");
+    expect(() => compileExpr("has_fact.bind.constructor")).toThrow("Blocked property: .constructor");
   });
 
   test("cannot reach Function via apply chain", () => {
-    expect(() => compileExpr("has_fact.apply.constructor")).toThrow("Blocked property access: constructor");
+    expect(() => compileExpr("has_fact.apply.constructor")).toThrow("Blocked property: .constructor");
   });
 
   test("toString.constructor is blocked", () => {
-    expect(() => compileExpr("content.toString.constructor")).toThrow("Blocked property access: constructor");
+    expect(() => compileExpr("content.toString.constructor")).toThrow("Blocked property: .constructor");
   });
 
   test("valueOf.constructor is blocked", () => {
-    expect(() => compileExpr("content.valueOf.constructor")).toThrow("Blocked property access: constructor");
+    expect(() => compileExpr("content.valueOf.constructor")).toThrow("Blocked property: .constructor");
   });
 });
 
@@ -623,28 +623,20 @@ describe("string method abuse", () => {
   });
 
   test("match returns array, constructor still blocked", () => {
-    expect(() => compileExpr('content.match("test").constructor')).toThrow("Blocked property access: constructor");
+    expect(() => compileExpr('content.match("test").constructor')).toThrow("Blocked property: .constructor");
   });
 
   test("split returns array, constructor still blocked", () => {
-    expect(() => compileExpr('content.split("").constructor')).toThrow("Blocked property access: constructor");
+    expect(() => compileExpr('content.split("").constructor')).toThrow("Blocked property: .constructor");
   });
 
   test("string fromCharCode not accessible (String not in whitelist)", () => {
     expect(() => compileExpr("String")).toThrow("Unknown identifier: String");
   });
 
-  test("matchAll is regex-validated like match", () => {
-    expect(() => compileExpr('content.matchAll("(?:a+)+")')).toThrow("nested quantifier");
-    expect(() => compileExpr('content.matchAll("(a+)+")')).toThrow("capturing groups");
-  });
-
-  test("matchAll requires string literal pattern", () => {
-    expect(() => compileExpr("content.matchAll(name)")).toThrow("string literal pattern");
-  });
-
-  test("matchAll with safe pattern compiles", () => {
-    expect(() => compileExpr('content.matchAll("\\\\d+")')).not.toThrow();
+  test("matchAll is blocked (returns unusable iterator, use match instead)", () => {
+    expect(() => compileExpr('content.matchAll("\\\\d+")')).toThrow("matchAll() is not available");
+    expect(() => compileExpr('content.matchAll("\\\\d+")')).toThrow("use match() instead");
   });
 });
 
@@ -674,7 +666,7 @@ describe("array method abuse", () => {
   });
 
   test("array constructor blocked", () => {
-    expect(() => compileExpr("chars.constructor")).toThrow("Blocked property access: constructor");
+    expect(() => compileExpr("chars.constructor")).toThrow("Blocked property: .constructor");
   });
 });
 
@@ -714,21 +706,55 @@ describe("denial of service vectors", () => {
     expect(() => compileExpr(`"${longStr}".length > 0`)).not.toThrow();
   });
 
-  test("repeat() blocked at compile time (memory exhaustion)", () => {
-    expect(() => compileExpr('content.repeat(10).length > 0')).toThrow("Blocked method: repeat()");
-    expect(() => compileExpr("content.repeat(999999)")).toThrow("Blocked method: repeat()");
+  test("repeat() with reasonable count works", () => {
+    const ctx = makeContext({ content: "ab" });
+    expect(evalExpr('content.repeat(3) == "ababab"', ctx)).toBe(true);
   });
 
-  test("padStart() blocked at compile time (memory exhaustion)", () => {
-    expect(() => compileExpr('content.padStart(100000000)')).toThrow("Blocked method: padStart()");
+  test("repeat() with excessive count throws at runtime", () => {
+    const ctx = makeContext({ content: "a".repeat(1000) });
+    // 1000 chars * 999 = 999,000 > 100,000 limit
+    expect(() => evalExpr("content.repeat(999)", ctx)).toThrow("repeat(999)");
+    expect(() => evalExpr("content.repeat(999)", ctx)).toThrow("limit");
   });
 
-  test("padEnd() blocked at compile time (memory exhaustion)", () => {
-    expect(() => compileExpr('content.padEnd(100000000)')).toThrow("Blocked method: padEnd()");
+  test("repeat() validates string target", () => {
+    const ctx = makeContext();
+    // response_ms is a number, not a string
+    expect(() => evalExpr("response_ms.repeat(5)", ctx)).toThrow("can only be called on a string");
   });
 
-  test("chained repeat() blocked", () => {
-    expect(() => compileExpr("content.repeat(100).repeat(100)")).toThrow("Blocked method: repeat()");
+  test("repeat() rejects non-integer count", () => {
+    const ctx = makeContext({ content: "a" });
+    expect(() => evalExpr("content.repeat(1.5)", ctx)).toThrow("non-negative integer");
+  });
+
+  test("chained repeat() bounded by limit", () => {
+    const ctx = makeContext({ content: "a".repeat(100) });
+    // 100 * 10 = 1000 (OK), then 1000 * 200 = 200,000 > limit
+    expect(() => evalExpr("content.repeat(10).repeat(200)", ctx)).toThrow("limit");
+    // But small chains work
+    expect(evalExpr("content.repeat(2).repeat(3).length == 600", ctx)).toBe(true);
+  });
+
+  test("padStart() with reasonable length works", () => {
+    const ctx = makeContext({ content: "42" });
+    expect(evalExpr('content.padStart(5, "0") == "00042"', ctx)).toBe(true);
+  });
+
+  test("padStart() with excessive length throws at runtime", () => {
+    const ctx = makeContext({ content: "a" });
+    expect(() => evalExpr("content.padStart(100000000)", ctx)).toThrow("limit");
+  });
+
+  test("padEnd() with reasonable length works", () => {
+    const ctx = makeContext({ content: "hi" });
+    expect(evalExpr('content.padEnd(5, ".") == "hi..."', ctx)).toBe(true);
+  });
+
+  test("padEnd() with excessive length throws at runtime", () => {
+    const ctx = makeContext({ content: "a" });
+    expect(() => evalExpr("content.padEnd(100000000)", ctx)).toThrow("limit");
   });
 
   // ---------------------------------------------------------------------------
@@ -951,17 +977,17 @@ describe("known sandbox escape patterns", () => {
 
   test("constructor.constructor('return this')()", () => {
     // Classic: get Function via constructor chain, execute arbitrary code
-    expect(() => compileExpr("content.constructor")).toThrow("Blocked property access: constructor");
+    expect(() => compileExpr("content.constructor")).toThrow("Blocked property: .constructor");
   });
 
   test("__proto__.constructor pattern", () => {
-    expect(() => compileExpr("content.__proto__")).toThrow("Blocked property access: __proto__");
+    expect(() => compileExpr("content.__proto__")).toThrow("Blocked property: .__proto__");
   });
 
   test("toString.call pattern for type confusion", () => {
     // toString is not blocked (it's a normal method), but constructor IS
     // So toString().constructor would be blocked
-    expect(() => compileExpr("content.toString().constructor")).toThrow("Blocked property access: constructor");
+    expect(() => compileExpr("content.toString().constructor")).toThrow("Blocked property: .constructor");
   });
 
   test("[].fill.constructor('return this')()", () => {
@@ -972,7 +998,7 @@ describe("known sandbox escape patterns", () => {
   test("''.sub.call.call pattern", () => {
     // Empty string literal doesn't have methods accessible this way
     // The key is that constructor is always blocked
-    expect(() => compileExpr('"".constructor')).toThrow("Blocked property access: constructor");
+    expect(() => compileExpr('"".constructor')).toThrow("Blocked property: .constructor");
   });
 
   test("Object.keys/entries/values not accessible", () => {
@@ -1090,31 +1116,90 @@ describe("evalMacroValue sandbox", () => {
 describe("combined attack vectors", () => {
 
   test("method chain + constructor attempt", () => {
-    expect(() => compileExpr("content.trim().toLowerCase().constructor")).toThrow("Blocked property access: constructor");
+    expect(() => compileExpr("content.trim().toLowerCase().constructor")).toThrow("Blocked property: .constructor");
   });
 
   test("ternary + constructor attempt", () => {
-    expect(() => compileExpr("true ? content.constructor : false")).toThrow("Blocked property access: constructor");
-    expect(() => compileExpr("false ? true : content.constructor")).toThrow("Blocked property access: constructor");
+    expect(() => compileExpr("true ? content.constructor : false")).toThrow("Blocked property: .constructor");
+    expect(() => compileExpr("false ? true : content.constructor")).toThrow("Blocked property: .constructor");
   });
 
   test("negation + constructor", () => {
-    expect(() => compileExpr("!content.constructor")).toThrow("Blocked property access: constructor");
+    expect(() => compileExpr("!content.constructor")).toThrow("Blocked property: .constructor");
   });
 
   test("arithmetic + constructor", () => {
-    expect(() => compileExpr("content.length + content.constructor")).toThrow("Blocked property access: constructor");
+    expect(() => compileExpr("content.length + content.constructor")).toThrow("Blocked property: .constructor");
   });
 
   test("comparison + constructor", () => {
-    expect(() => compileExpr("content.constructor == true")).toThrow("Blocked property access: constructor");
+    expect(() => compileExpr("content.constructor == true")).toThrow("Blocked property: .constructor");
   });
 
   test("function call + constructor on result", () => {
-    expect(() => compileExpr("has_fact('test').constructor")).toThrow("Blocked property access: constructor");
+    expect(() => compileExpr("has_fact('test').constructor")).toThrow("Blocked property: .constructor");
   });
 
   test("nested function call + prototype", () => {
-    expect(() => compileExpr("random.call.prototype")).toThrow("Blocked property access: prototype");
+    expect(() => compileExpr("random.call.prototype")).toThrow("Blocked property: .prototype");
+  });
+});
+
+// =============================================================================
+// Accepted Risks (documented + bounded)
+// =============================================================================
+
+describe("accepted risks", () => {
+  // These are known limitations that have been assessed and accepted.
+  // Each test documents WHY it's acceptable and WHAT bounds the risk.
+
+  test("quadratic regex (?:a|a)+ is accepted — bounded by Discord message length", () => {
+    // O(n^2) matching with overlapping alternation, but n is bounded:
+    // - Discord messages: max ~4000 chars → ~16M operations → ~100ms worst case
+    // - messages() function: bounded by context window (default 16k, hard cap 1M)
+    // Not exponential, so not catastrophic. Would need a full method whitelist or
+    // runtime timeout to eliminate entirely.
+    const ctx = makeContext({ content: "a".repeat(100) });
+    const start = performance.now();
+    evalExpr('content.match("(?:a|a)+$")', ctx);
+    const elapsed = performance.now() - start;
+    // Even with 100 chars, quadratic should be sub-millisecond
+    expect(elapsed).toBeLessThan(50);
+  });
+
+  test("array mutation via push/sort is contained to context", () => {
+    // Array methods like push(), sort(), splice() can mutate the context array.
+    // This is contained: mutations don't escape the expression sandbox, and
+    // the context is rebuilt for each message. No persistent side effects.
+    const chars = ["Charlie", "Alice"];
+    const ctx = makeContext({ chars });
+    evalExpr("chars.sort().length > 0", ctx);
+    expect(chars[0]).toBe("Alice"); // Mutated but contained
+  });
+
+  test("no runtime expression timeout — mitigated by static analysis", () => {
+    // Expressions run synchronously via new Function() with no timeout.
+    // Static analysis prevents the main DoS vectors:
+    // - ReDoS: regex validation rejects catastrophic patterns
+    // - Memory: repeat/padStart/padEnd have runtime bounds
+    // - matchAll: blocked entirely
+    // Remaining risk: quadratic regex on large input (bounded by Discord)
+    // A worker thread timeout would provide defense-in-depth but adds complexity.
+    // See TODO.md "Expression Evaluation Timeout" for options.
+    expect(true).toBe(true); // Documenting, not testing
+  });
+
+  test("string methods (slice, substring, trim, etc.) are unrestricted", () => {
+    // The full String.prototype surface is available. Most methods are safe:
+    // - slice, substring, trim, toLowerCase, toUpperCase: bounded by input
+    // - charAt, charCodeAt, at: O(1)
+    // - indexOf, lastIndexOf, includes, startsWith, endsWith: O(n) linear
+    // - concat: can grow strings, but bounded by input size
+    // A full method whitelist would be more restrictive but is not currently
+    // implemented — the targeted approach (wrap dangerous, validate regex)
+    // covers known vectors without breaking entity author workflows.
+    const ctx = makeContext({ content: "Hello World" });
+    expect(evalExpr('content.slice(0, 5) == "Hello"', ctx)).toBe(true);
+    expect(evalExpr('content.toLowerCase().includes("hello")', ctx)).toBe(true);
   });
 });
