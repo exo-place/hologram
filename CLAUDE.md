@@ -28,7 +28,7 @@ src/
 │   ├── parsing.ts        # Response parsing (XML + Name prefix), name stripping
 │   ├── prompt.ts         # expandEntityRefs(), buildSystemPrompt()
 │   ├── streaming.ts      # handleMessageStreaming(), stream generators
-│   ├── template.ts       # Custom template engine (Nunjucks-like syntax)
+│   ├── template.ts       # Nunjucks template engine with runtime security patches
 │   ├── tools.ts          # createTools() factory + $locked permission checks
 │   └── embeddings.ts     # Local embeddings (planned)
 ├── logic/
@@ -169,14 +169,21 @@ With `$freeform`, the LLM can write naturally with multiple characters interacti
 
 ### Custom Templates
 
-Override the default system prompt formatting per entity using custom templates (Nunjucks-compatible syntax). Edit via `/edit entity type:Template`.
+Override the default system prompt formatting per entity using custom templates (Nunjucks syntax). Edit via `/edit entity type:Template`. Powered by Nunjucks with runtime security patches.
 
 ```
-{{ expr }}                           — expression output (via expr.ts)
+{{ expr }}                           — expression output
 {% if expr %}...{% elif expr %}...{% else %}...{% endif %}
-{% for var in expr %}...{% endfor %}
+{% for var in expr %}...{% else %}...{% endfor %}
+{% block name %}...{% endblock %}    — named blocks (renders inline)
+{{ value | filter }}                 — pipe filters
+{%- tag -%}                          — whitespace control (strip leading/trailing)
 {# comment #}
 ```
+
+**Operators:** `and`, `or`, `not`, `in`, `is`, `~` (concat), `**` (power), `//` (floor div)
+
+**Filters:** `default(val)`, `length`, `join(sep)`, `first`, `last`, `upper`, `lower`, `trim`, `nl2br`, `int`, `float`, `abs`, `round(precision)`, `reverse`, `sort`, `batch(n)`
 
 **Template context variables** (in addition to standard expr context):
 - `entities` — array of responding entities `[{id, name, facts}]`
@@ -184,6 +191,9 @@ Override the default system prompt formatting per entity using custom templates 
 - `memories` — object mapping entity ID to array of memory strings
 - `entity_names` — comma-separated names of responding entities
 - `freeform` — boolean, true if any entity has `$freeform`
+- `history` — array of structured messages `[{author, content, author_id, created_at}]` (chronological order)
+
+**Full prompt control:** When a template is active, its output IS the system prompt. The user message sent to the LLM is only the latest message (not full history), since the template can include history via `{% for msg in history %}`.
 
 **Behavior:**
 - `null` template (default) = use standard `buildSystemPrompt()` formatting
@@ -191,6 +201,8 @@ Override the default system prompt formatting per entity using custom templates 
 - Entities with different templates get separate LLM calls
 - Entities with the same template (including null) share a call as before
 - Limits: 1000 iterations per for-loop, 1MB output
+
+**Deferred (TODO.md):** `{% extends %}`, `{% include %}`, `{% macro %}`, `{% set %}` — require template loading/resolution (future: entity-name-based loader).
 
 ### Context Window
 

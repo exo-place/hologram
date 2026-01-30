@@ -9,9 +9,10 @@ import {
   DEFAULT_CONTEXT_LIMIT,
   type EvaluatedEntity,
 } from "./context";
+import { getMessages } from "../db/discord";
 import { evalMacroValue, formatDuration, rollDice, type ExprContext } from "../logic/expr";
 import { DEFAULT_MODEL } from "./models";
-import { compileTemplate, renderTemplate } from "./template";
+import { renderEntityTemplate } from "./template";
 
 // =============================================================================
 // Entity Reference Expansion
@@ -235,11 +236,12 @@ export function buildSystemPrompt(
   respondingEntities: EvaluatedEntity[],
   otherEntities: EntityWithFacts[],
   entityMemories?: Map<number, Array<{ content: string }>>,
-  template?: string | null
+  template?: string | null,
+  channelId?: string,
 ): string {
   // Use custom template if provided
   if (template) {
-    return renderWithTemplate(template, respondingEntities, otherEntities, entityMemories);
+    return renderWithTemplate(template, respondingEntities, otherEntities, entityMemories, channelId);
   }
 
   if (respondingEntities.length === 0 && otherEntities.length === 0) {
@@ -288,27 +290,35 @@ Not everyone needs to respond to every message. Only respond as those who would 
 // Template Rendering
 // =============================================================================
 
-/** Template-specific globals that are added to the expression context */
-const TEMPLATE_GLOBALS = new Set([
-  "entities", "others", "memories", "entity_names", "freeform",
-]);
+/** Number of messages to fetch from DB for template context */
+const MESSAGE_FETCH_LIMIT = 100;
 
 /**
- * Render a system prompt using a custom template.
- * The template context extends the first entity's exprContext with
- * template-specific variables (entities, others, memories, etc.).
+ * Render a system prompt using a custom Nunjucks template.
+ * The template context includes the first entity's exprContext variables
+ * plus template-specific variables (entities, others, memories, messages, etc.).
  */
 function renderWithTemplate(
   templateSource: string,
   respondingEntities: EvaluatedEntity[],
   otherEntities: EntityWithFacts[],
-  entityMemories?: Map<number, Array<{ content: string }>>
+  entityMemories?: Map<number, Array<{ content: string }>>,
+  channelId?: string,
 ): string {
   const firstEntity = respondingEntities[0];
   const baseCtx = firstEntity?.exprContext;
 
-  // Build template context extending the entity's expr context
-  const templateCtx = baseCtx ? Object.create(baseCtx) as ExprContext : {} as ExprContext;
+  // Build template context — flat Record for Nunjucks (no prototype chain)
+  const templateCtx: Record<string, unknown> = {};
+
+  // Copy base expr context properties (if available)
+  if (baseCtx) {
+    for (const key of Object.keys(baseCtx)) {
+      templateCtx[key] = baseCtx[key];
+    }
+    // Also copy prototype-chain properties from Object.create(null) objects
+    // ExprContext uses index signature, so own properties cover everything
+  }
 
   templateCtx.entities = respondingEntities.map(e => ({
     id: e.id,
@@ -334,6 +344,18 @@ function renderWithTemplate(
   templateCtx.entity_names = respondingEntities.map(e => e.name).join(", ");
   templateCtx.freeform = respondingEntities.some(e => e.isFreeform);
 
-  const compiled = compileTemplate(templateSource, TEMPLATE_GLOBALS);
-  return renderTemplate(compiled, templateCtx);
+  // Structured messages for template use
+  if (channelId) {
+    const history = getMessages(channelId, MESSAGE_FETCH_LIMIT);
+    templateCtx.history = history.reverse().map(m => ({
+      author: m.author_name,
+      content: m.content,
+      author_id: m.author_id,
+      created_at: m.created_at,
+    }));
+  } else {
+    templateCtx.history = [];
+  }
+
+  return renderEntityTemplate(templateSource, templateCtx);
 }

@@ -138,8 +138,15 @@ export async function* handleMessageStreaming(
 
   // Build prompts
   const template = entities[0]?.template ?? null;
-  const systemPrompt = buildSystemPrompt(entities, other, ctx.entityMemories, template);
-  let userMessage = buildMessageHistory(history, contextLimit);
+  const systemPrompt = buildSystemPrompt(entities, other, ctx.entityMemories, template, channelId);
+  let userMessage: string;
+  if (template) {
+    // Template controls full prompt — user message is just the latest
+    const latest = history[0]; // newest first
+    userMessage = latest ? `${latest.author_name}: ${latest.content}` : "";
+  } else {
+    userMessage = buildMessageHistory(history, contextLimit);
+  }
 
   // Apply strip patterns to message history
   const entityStripPatterns = entities[0]?.stripPatterns;

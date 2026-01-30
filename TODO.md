@@ -8,7 +8,7 @@
 
 ### Test Coverage
 
-Current: 548 tests across `src/logic/expr.test.ts`, `src/logic/expr.security.test.ts`, and `src/logic/safe-regex.test.ts`. Covers:
+Current: 690 tests across `src/logic/expr.test.ts`, `src/logic/expr.security.test.ts`, `src/logic/safe-regex.test.ts`, and `src/ai/template.test.ts`. Covers:
 - Expression evaluator (tokenizer, parser, operators, precedence)
 - Security (identifier whitelist, injection prevention, prototype access)
 - Adversarial sandbox escapes (184 tests): prototype chains, global access, constructors, module system, bracket notation, code injection, statement injection, unsupported syntax, call/apply/bind, string/array method abuse, DoS vectors (ReDoS + memory exhaustion runtime-bounded: repeat, padStart, padEnd, replaceAll, join), unicode tricks, numeric edge cases, known CVE patterns, combined multi-vector attacks, prototype-less objects, evalMacroValue sandbox
@@ -23,6 +23,7 @@ Current: 548 tests across `src/logic/expr.test.ts`, `src/logic/expr.security.tes
 - messages() with filter ($user, $char)
 - Discord emote edge cases
 - Real-world entity evaluation
+- Template engine (Nunjucks) security (142 tests): prototype chain escapes, RCE via constructor chains, global object access blocked, built-in constructor access blocked, call/apply/bind blocked, matchAll blocked, string method memory limits, loop iteration cap (1000), output size cap (1MB), ReDoS regex validation, context prototype leakage contained, known CVE patterns, multi-vector combined attacks, filter functionality, whitespace control, structured context rendering
 
 ---
 
@@ -86,6 +87,30 @@ Custom templates control the entire system prompt. A malicious template on one e
 - Entities sharing a template are presumed to trust the same author
 
 Future consideration: channel-level or server-level templates as an alternative scope that reduces cross-entity influence.
+
+---
+
+### Deferred Template Features
+
+Template engine migrated to Nunjucks with runtime security patches. The following features require a template loader that resolves entity names to template sources:
+
+- [ ] `{% extends "base-prompt" %}` — template inheritance, resolves entity name to template source
+- [ ] `{% include "shared-facts" %}` — template inclusion
+- [ ] `{% macro %}` — reusable template macros
+- [ ] `{% set %}` — variable assignment within templates
+
+---
+
+### Structured Messages Refactor
+
+Current state: all message history is formatted as `"author: content\n..."` and sent as a single user message. Templates get structured `history` objects but the LLM API still uses flat text.
+
+- [ ] **Role-based messages**: Model responses should be `assistant` messages, not packed into a single `user` message. The AI SDK supports `messages: [{role: "user", ...}, {role: "assistant", ...}]` — use it.
+- [ ] **JSON blob storage**: Add a `data JSON` column to the `messages` table storing the full structured Discord message (embeds, stickers, attachments, author metadata, `is_bot` flag). SQLite `json_extract()` for queries, raw objects for template context.
+- [ ] **Template integration**: Templates get rich message objects (`msg.embeds`, `msg.stickers`, `msg.attachments`, `msg.is_bot`) instead of flat `{author, content}`.
+- [ ] **API-specific formatting via `{% extends %}`**: Template inheritance with entity-name-based loader (`{% extends "base-prompt" %}` resolves to that entity's template). Enables API-specific message/attachment blocks.
+- [ ] **`$user`/`$char`/`$bot` classification**: Currently `$user` filter misclassifies bot messages. With `is_bot` stored, fix classification.
+- [ ] **Embed serialization**: Embed-only messages (currently dropped at `client.ts:223`) should be serialized minimally into the `data` blob.
 
 ---
 
