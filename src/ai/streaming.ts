@@ -181,6 +181,8 @@ async function* streamSingleEntity(
   delimiter: string[] | undefined,
   entityName?: string
 ): AsyncGenerator<StreamEvent, void, unknown> {
+  debug("streamSingleEntity started", { streamMode, delimiter, entityName });
+
   // Wrap stream to strip "Name:" prefixes and insert boundary markers
   const processedStream = entityName
     ? stripNamePrefixFromStream(textStream, entityName, NAME_BOUNDARY)
@@ -478,7 +480,7 @@ async function* streamMultiEntityNamePrefix(
 ): AsyncGenerator<StreamEvent, void, unknown> {
   let buffer = "";
   let currentChar: { name: string; entityId: number; avatarUrl?: string; content: string; lineContent: string; lineStarted: boolean } | null = null;
-  let detectedFormat: "name_prefix" | "xml" | null = null;
+  let detectedFormat: "name_prefix" | "xml" | "first_entity_fallback" | null = null;
 
   const hasDelimiter = delimiter !== undefined;
 
@@ -569,6 +571,10 @@ async function* streamMultiEntityNamePrefix(
     }
   }
 
+  // Detection threshold: if buffer grows beyond this without format detection,
+  // fall back to emitting as first entity's response
+  const maxDetectionLen = (Math.max(...entities.map(e => e.name.length)) + 10) * 3;
+
   for await (const delta of textStream) {
     buffer += delta;
 
@@ -576,9 +582,11 @@ async function* streamMultiEntityNamePrefix(
     if (detectedFormat === null && buffer.trim().length > 0) {
       if (namePrefixPattern.test(buffer)) {
         detectedFormat = "name_prefix";
+        debug("Multi-entity format detected: name_prefix");
       } else if (xmlOpenPattern.test(buffer)) {
         // Fall back to XML streaming
         detectedFormat = "xml";
+        debug("Multi-entity format detected: xml");
         // Re-yield using XML-based streaming with remaining buffer + stream
         async function* prependBuffer(buf: string, stream: AsyncIterable<string>): AsyncIterable<string> {
           yield buf;
@@ -587,11 +595,40 @@ async function* streamMultiEntityNamePrefix(
         yield* streamMultiEntity(prependBuffer(buffer, textStream), entities, streamMode, delimiter);
         return;
       }
-      // If neither detected yet, keep buffering
-      if (detectedFormat === null) continue;
+      // If neither detected yet and buffer exceeds threshold, fall back to first entity
+      if (detectedFormat === null) {
+        if (buffer.length > maxDetectionLen) {
+          debug("Multi-entity format detection threshold exceeded, falling back to first entity", {
+            bufferLen: buffer.length,
+            threshold: maxDetectionLen,
+          });
+          detectedFormat = "first_entity_fallback";
+        } else {
+          continue;
+        }
+      }
     }
 
-    if (detectedFormat !== "name_prefix") continue;
+    if (detectedFormat !== "name_prefix" && detectedFormat !== "first_entity_fallback") continue;
+
+    // For first_entity_fallback: emit all content as first entity
+    if (detectedFormat === "first_entity_fallback") {
+      if (!currentChar) {
+        const entity = entities[0];
+        currentChar = {
+          name: entity.name,
+          entityId: entity.id,
+          avatarUrl: entity.avatarUrl ?? undefined,
+          content: "",
+          lineContent: "",
+          lineStarted: false,
+        };
+        yield { type: "char_start", name: entity.name, entityId: entity.id, avatarUrl: entity.avatarUrl ?? undefined };
+      }
+      yield* emitCharContent(currentChar, buffer, true);
+      buffer = "";
+      continue;
+    }
 
     // Process buffer for Name: prefixes
     while (buffer.length > 0) {
@@ -656,6 +693,25 @@ async function* streamMultiEntityNamePrefix(
         break;
       }
     }
+  }
+
+  // If format was never detected and buffer has content, emit as first entity
+  if (detectedFormat === null && buffer.trim()) {
+    debug("Multi-entity stream ended without format detection, emitting as first entity", {
+      bufferLen: buffer.length,
+    });
+    const entity = entities[0];
+    yield { type: "char_start", name: entity.name, entityId: entity.id, avatarUrl: entity.avatarUrl ?? undefined };
+    currentChar = {
+      name: entity.name,
+      entityId: entity.id,
+      avatarUrl: entity.avatarUrl ?? undefined,
+      content: "",
+      lineContent: "",
+      lineStarted: false,
+    };
+    yield* emitCharContent(currentChar, buffer, false);
+    buffer = "";
   }
 
   // Flush remaining buffer and close current character

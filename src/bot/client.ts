@@ -1081,19 +1081,26 @@ export async function sendResponse(
       // Stop typing - we'll be sending messages as we stream
       stopTyping();
 
-      await handleStreamingResponse(channelId, respondingEntities, streamMode, streamDelimiter, {
-        channelId,
-        guildId,
-        userId: "",
-        username,
-        content,
-        isMentioned,
-        entityMemories,
-      });
+      try {
+        await handleStreamingResponse(channelId, respondingEntities, streamMode, streamDelimiter, {
+          channelId,
+          guildId,
+          userId: "",
+          username,
+          content,
+          isMentioned,
+          entityMemories,
+        });
 
-      // Mark response time
-      lastResponseTime.set(channelId, Date.now());
-      return;
+        // Mark response time
+        lastResponseTime.set(channelId, Date.now());
+        return;
+      } catch (streamErr) {
+        warn("Streaming failed, falling back to non-streaming", {
+          error: streamErr instanceof Error ? streamErr.message : String(streamErr),
+        });
+        // Fall through to non-streaming path below
+      }
     }
 
     // Non-streaming path
