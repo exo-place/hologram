@@ -40,6 +40,8 @@ export interface EvaluatedEntity {
   modelSpec: string | null;
   /** Strip patterns from $strip directive. null = no directive (use default), [] = explicit no-strip */
   stripPatterns: string[] | null;
+  /** Custom system prompt template (null = use default formatting) */
+  template: string | null;
   /** Expression context used during fact evaluation (carried to macro expansion) */
   exprContext?: ExprContext;
 }

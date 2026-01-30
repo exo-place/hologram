@@ -471,6 +471,7 @@ bot.events.messageCreate = async (message) => {
           isFreeform: result.isFreeform,
           modelSpec: result.modelSpec,
           stripPatterns: result.stripPatterns,
+          template: entity.template,
           exprContext: ctx,
         });
       }
@@ -483,7 +484,19 @@ bot.events.messageCreate = async (message) => {
     if (!message.webhookId) {
       responseChainDepth.set(channelId, 0);
     }
-    await sendResponse(channelId, guildId, authorName, content, isMentioned ?? false, respondingEntities);
+
+    // Group entities by template so entities with different templates get separate LLM calls
+    const templateGroups = new Map<string | null, EvaluatedEntity[]>();
+    for (const entity of respondingEntities) {
+      const key = entity.template ?? null;
+      const group = templateGroups.get(key) ?? [];
+      group.push(entity);
+      templateGroups.set(key, group);
+    }
+
+    for (const [, groupEntities] of templateGroups) {
+      await sendResponse(channelId, guildId, authorName, content, isMentioned ?? false, groupEntities);
+    }
   }
 
   // Schedule per-entity retries (don't block other characters)
@@ -607,6 +620,7 @@ async function processEntityRetry(
     isFreeform: result.isFreeform,
     modelSpec: result.modelSpec,
     stripPatterns: result.stripPatterns,
+    template: entity.template,
     exprContext: ctx,
   }]);
 }

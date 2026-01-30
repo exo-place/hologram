@@ -605,8 +605,10 @@ const SAFE_METHODS = {
 /**
  * Generate JS code from AST. Since we control the AST structure,
  * the generated code is safe to execute.
+ *
+ * @param extraGlobals - Optional set of additional allowed identifiers (e.g. for-loop variables in templates)
  */
-function generateCode(node: ExprNode): string {
+function generateCode(node: ExprNode, extraGlobals?: Set<string>): string {
   switch (node.type) {
     case "literal":
       if (typeof node.value === "string") {
@@ -615,7 +617,7 @@ function generateCode(node: ExprNode): string {
       return String(node.value);
 
     case "identifier":
-      if (!ALLOWED_GLOBALS.has(node.name)) {
+      if (!ALLOWED_GLOBALS.has(node.name) && !extraGlobals?.has(node.name)) {
         throw new ExprError(`Unknown identifier: ${node.name}`);
       }
       return `ctx.${node.name}`;
@@ -630,7 +632,7 @@ function generateCode(node: ExprNode): string {
       if (node.property in BLOCKED_METHODS) {
         throw new ExprError(BLOCKED_METHODS[node.property]);
       }
-      return `(${generateCode(node.object)}?.${node.property})`;
+      return `(${generateCode(node.object, extraGlobals)}?.${node.property})`;
     }
 
     case "call": {
@@ -648,24 +650,24 @@ function generateCode(node: ExprNode): string {
         }
         // Rewrite memory-dangerous methods to use safe wrappers
         if (WRAPPED_METHODS.has(node.callee.property)) {
-          const obj = generateCode(node.callee.object);
-          const args = node.args.map(generateCode).join(", ");
+          const obj = generateCode(node.callee.object, extraGlobals);
+          const args = node.args.map(a => generateCode(a, extraGlobals)).join(", ");
           return `$s.${node.callee.property}(${obj}${args ? ", " + args : ""})`;
         }
       }
-      const callee = generateCode(node.callee);
-      const args = node.args.map(generateCode).join(", ");
+      const callee = generateCode(node.callee, extraGlobals);
+      const args = node.args.map(a => generateCode(a, extraGlobals)).join(", ");
       return `${callee}(${args})`;
     }
 
     case "unary":
-      return `(${node.operator}${generateCode(node.operand)})`;
+      return `(${node.operator}${generateCode(node.operand, extraGlobals)})`;
 
     case "binary":
-      return `(${generateCode(node.left)} ${node.operator} ${generateCode(node.right)})`;
+      return `(${generateCode(node.left, extraGlobals)} ${node.operator} ${generateCode(node.right, extraGlobals)})`;
 
     case "ternary":
-      return `(${generateCode(node.test)} ? ${generateCode(node.consequent)} : ${generateCode(node.alternate)})`;
+      return `(${generateCode(node.test, extraGlobals)} ? ${generateCode(node.consequent, extraGlobals)} : ${generateCode(node.alternate, extraGlobals)})`;
   }
 }
 
@@ -701,6 +703,36 @@ export function evalExpr(expr: string, context: ExprContext): boolean {
     if (err instanceof ExprError) throw err;
     throw new ExprError(`Failed to evaluate expression "${expr}": ${err}`);
   }
+}
+
+// Separate cache for template expressions (returns raw value, supports extraGlobals)
+const templateExprCache = new Map<string, (ctx: ExprContext) => unknown>();
+
+/**
+ * Compile an expression for use in templates.
+ * Returns the raw value (not cast to boolean).
+ * Accepts optional extra allowed identifiers (e.g. for-loop variables).
+ */
+export function compileTemplateExpr(
+  expr: string,
+  extraGlobals?: Set<string>
+): (ctx: ExprContext) => unknown {
+  const cacheKey = extraGlobals && extraGlobals.size > 0
+    ? `${expr}\0${[...extraGlobals].sort().join(",")}`
+    : expr;
+
+  let fn = templateExprCache.get(cacheKey);
+  if (fn) return fn;
+
+  const tokens = tokenize(expr);
+  const parser = new Parser(tokens);
+  const ast = parser.parse();
+  const code = generateCode(ast, extraGlobals);
+
+  const raw = new Function("ctx", "$s", `return (${code})`);
+  fn = (ctx: ExprContext) => raw(ctx, SAFE_METHODS);
+  templateExprCache.set(cacheKey, fn);
+  return fn;
 }
 
 // Separate cache for macro expressions (returns raw value, not boolean)

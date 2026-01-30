@@ -11,6 +11,7 @@ import {
 } from "./context";
 import { evalMacroValue, formatDuration, rollDice, type ExprContext } from "../logic/expr";
 import { DEFAULT_MODEL } from "./models";
+import { compileTemplate, renderTemplate } from "./template";
 
 // =============================================================================
 // Entity Reference Expansion
@@ -233,8 +234,14 @@ export function expandEntityRefs(
 export function buildSystemPrompt(
   respondingEntities: EvaluatedEntity[],
   otherEntities: EntityWithFacts[],
-  entityMemories?: Map<number, Array<{ content: string }>>
+  entityMemories?: Map<number, Array<{ content: string }>>,
+  template?: string | null
 ): string {
+  // Use custom template if provided
+  if (template) {
+    return renderWithTemplate(template, respondingEntities, otherEntities, entityMemories);
+  }
+
   if (respondingEntities.length === 0 && otherEntities.length === 0) {
     return "You are a helpful assistant. Respond naturally to the user.";
   }
@@ -275,4 +282,58 @@ Not everyone needs to respond to every message. Only respond as those who would 
   }
 
   return `${context}${multiEntityGuidance}`;
+}
+
+// =============================================================================
+// Template Rendering
+// =============================================================================
+
+/** Template-specific globals that are added to the expression context */
+const TEMPLATE_GLOBALS = new Set([
+  "entities", "others", "memories", "entity_names", "freeform",
+]);
+
+/**
+ * Render a system prompt using a custom template.
+ * The template context extends the first entity's exprContext with
+ * template-specific variables (entities, others, memories, etc.).
+ */
+function renderWithTemplate(
+  templateSource: string,
+  respondingEntities: EvaluatedEntity[],
+  otherEntities: EntityWithFacts[],
+  entityMemories?: Map<number, Array<{ content: string }>>
+): string {
+  const firstEntity = respondingEntities[0];
+  const baseCtx = firstEntity?.exprContext;
+
+  // Build template context extending the entity's expr context
+  const templateCtx = baseCtx ? Object.create(baseCtx) as ExprContext : {} as ExprContext;
+
+  templateCtx.entities = respondingEntities.map(e => ({
+    id: e.id,
+    name: e.name,
+    facts: e.facts,
+  }));
+
+  templateCtx.others = otherEntities.map(e => ({
+    id: e.id,
+    name: e.name,
+    facts: e.facts.map(f => f.content),
+  }));
+
+  // Build memories map: entity id -> array of content strings
+  const memoriesObj: Record<number, string[]> = Object.create(null);
+  if (entityMemories) {
+    for (const [entityId, mems] of entityMemories) {
+      memoriesObj[entityId] = mems.map(m => m.content);
+    }
+  }
+  templateCtx.memories = memoriesObj;
+
+  templateCtx.entity_names = respondingEntities.map(e => e.name).join(", ");
+  templateCtx.freeform = respondingEntities.some(e => e.isFreeform);
+
+  const compiled = compileTemplate(templateSource, TEMPLATE_GLOBALS);
+  return renderTemplate(compiled, templateCtx);
 }

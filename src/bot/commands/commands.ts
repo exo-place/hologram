@@ -12,6 +12,8 @@ import {
   getEntityByName,
   getEntityWithFacts,
   getEntityWithFactsByName,
+  getEntityTemplate,
+  setEntityTemplate,
   updateEntity,
   deleteEntity,
   transferOwnership,
@@ -296,6 +298,7 @@ registerCommand({
         { name: "Both", value: "both" },
         { name: "Facts only", value: "facts" },
         { name: "Memories only", value: "memories" },
+        { name: "Template", value: "template" },
       ],
     },
   ],
@@ -335,6 +338,42 @@ registerCommand({
       required?: boolean;
       placeholder?: string;
     }> = [];
+
+    if (editType === "template") {
+      // Template editing - single text area, no name field
+      const currentTemplate = getEntityTemplate(entity.id) ?? "";
+      const MAX_FIELD_LENGTH = 4000;
+      const MAX_FIELDS = 5;
+
+      if (currentTemplate.length > MAX_FIELD_LENGTH * MAX_FIELDS) {
+        await respond(ctx.bot, ctx.interaction,
+          `Template is too long to edit via modal (${currentTemplate.length}/${MAX_FIELD_LENGTH * MAX_FIELDS} chars).`,
+          true
+        );
+        return;
+      }
+
+      const chunks = currentTemplate ? chunkContent(currentTemplate, MAX_FIELD_LENGTH) : [];
+      const templateFields = chunks.length > 0
+        ? chunks.map((chunk, i) => ({
+            customId: `template${i}`,
+            label: chunks.length === 1 ? "Template" : `Template (part ${i + 1}/${chunks.length})`,
+            style: TextStyles.Paragraph,
+            value: chunk,
+            required: false,
+          }))
+        : [{
+            customId: "template0",
+            label: "Template",
+            style: TextStyles.Paragraph,
+            value: "",
+            required: false,
+            placeholder: "Custom system prompt template (Nunjucks-like syntax)",
+          }];
+
+      await respondWithModal(ctx.bot, ctx.interaction, `edit-template:${entity.id}`, `Edit Template: ${entity.name}`, templateFields);
+      return;
+    }
 
     if (editType === "both") {
       const factsContent = entity.facts.map(f => f.content).join("\n");
@@ -535,6 +574,44 @@ registerModalHandler("edit-memories", async (bot, interaction, values) => {
   await setMemories(entityId, memories);
 
   await respond(bot, interaction, `Updated "${entity.name}" with ${memories.length} memories`, true);
+});
+
+registerModalHandler("edit-template", async (bot, interaction, values) => {
+  const customId = interaction.data?.customId ?? "";
+  const entityId = parseInt(customId.split(":")[1]);
+
+  // Combine all template fields (template0, template1, etc.)
+  const templateParts: string[] = [];
+  for (let i = 0; i < 5; i++) {
+    const part = values[`template${i}`];
+    if (part !== undefined) templateParts.push(part);
+  }
+  const templateText = templateParts.join("\n").trim();
+
+  const entity = getEntityWithFacts(entityId);
+  if (!entity) {
+    await respond(bot, interaction, "Entity not found", true);
+    return;
+  }
+
+  // Check edit permission (defense in depth)
+  const userId = interaction.user?.id?.toString() ?? "";
+  const username = interaction.user?.username ?? "";
+  if (!canUserEdit(entity, userId, username)) {
+    await respond(bot, interaction, "You don't have permission to edit this entity", true);
+    return;
+  }
+
+  // Empty/blank = clear template (revert to default)
+  if (!templateText) {
+    setEntityTemplate(entityId, null);
+    await respond(bot, interaction, `Cleared template for "${entity.name}" (using default formatting)`, true);
+    return;
+  }
+
+  // Save template
+  setEntityTemplate(entityId, templateText);
+  await respond(bot, interaction, `Updated template for "${entity.name}" (${templateText.length} chars)`, true);
 });
 
 registerModalHandler("edit-both", async (bot, interaction, values) => {
@@ -1107,6 +1184,7 @@ function formatEvaluatedEntityFromRaw(entity: EntityWithFacts): string {
     isFreeform: evaluated.isFreeform,
     modelSpec: evaluated.modelSpec,
     stripPatterns: evaluated.stripPatterns,
+    template: entity.template,
   });
 }
 
@@ -1215,6 +1293,7 @@ registerCommand({
       isFreeform: result.isFreeform,
       modelSpec: result.modelSpec,
       stripPatterns: result.stripPatterns,
+      template: entity.template,
       exprContext: ctx2,
     }]);
   },

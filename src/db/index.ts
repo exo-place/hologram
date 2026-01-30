@@ -181,6 +181,7 @@ function initSchema(db: Database) {
   migrateCreatedByToOwnedBy(db);
   migrateDiscordEntitiesConstraint(db);
   migrateMessagesDiscordId(db);
+  migrateEntityTemplate(db);
 }
 
 /**
@@ -207,6 +208,16 @@ function migrateMessagesDiscordId(db: Database) {
 
   db.exec(`ALTER TABLE messages ADD COLUMN discord_message_id TEXT`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_messages_discord_id ON messages(discord_message_id)`);
+}
+
+/**
+ * Add template column to entities table for custom system prompt templates.
+ */
+function migrateEntityTemplate(db: Database) {
+  const columns = db.prepare(`PRAGMA table_info(entities)`).all() as Array<{ name: string }>;
+  if (columns.some(c => c.name === "template")) return;
+
+  db.exec(`ALTER TABLE entities ADD COLUMN template TEXT`);
 }
 
 /**

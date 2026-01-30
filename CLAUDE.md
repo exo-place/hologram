@@ -28,6 +28,7 @@ src/
 │   ├── parsing.ts        # Response parsing (XML + Name prefix), name stripping
 │   ├── prompt.ts         # expandEntityRefs(), buildSystemPrompt()
 │   ├── streaming.ts      # handleMessageStreaming(), stream generators
+│   ├── template.ts       # Custom template engine (Nunjucks-like syntax)
 │   ├── tools.ts          # createTools() factory + $locked permission checks
 │   └── embeddings.ts     # Local embeddings (planned)
 ├── logic/
@@ -68,7 +69,7 @@ Facts:
 ### Database (8 tables)
 
 ```sql
-entities         -- id, name, owned_by, created_at
+entities         -- id, name, owned_by, created_at, template
 facts            -- id, entity_id, content, created_at, updated_at
 discord_entities -- discord_id, discord_type, entity_id, scope_guild_id, scope_channel_id
 fact_embeddings  -- (planned) vector search
@@ -165,6 +166,31 @@ $if mentioned: $freeform           # Conditional freeform
 With `$freeform`, the LLM can write naturally with multiple characters interacting in the same response. The response is sent as a single message (using the first entity's webhook identity) rather than being split per character.
 
 **Context variables:** `mentioned`, `replied`, `is_forward`, `is_self`, `content`, `author`, `response_ms`, `retry_ms`, `idle_ms`, `time.is_night`, `self.*`, `channel.*`, `server.*`, `group`, `name`, `chars`
+
+### Custom Templates
+
+Override the default system prompt formatting per entity using custom templates (Nunjucks-compatible syntax). Edit via `/edit entity type:Template`.
+
+```
+{{ expr }}                           — expression output (via expr.ts)
+{% if expr %}...{% elif expr %}...{% else %}...{% endif %}
+{% for var in expr %}...{% endfor %}
+{# comment #}
+```
+
+**Template context variables** (in addition to standard expr context):
+- `entities` — array of responding entities `[{id, name, facts}]`
+- `others` — array of other entities `[{id, name, facts}]` (facts as `string[]`)
+- `memories` — object mapping entity ID to array of memory strings
+- `entity_names` — comma-separated names of responding entities
+- `freeform` — boolean, true if any entity has `$freeform`
+
+**Behavior:**
+- `null` template (default) = use standard `buildSystemPrompt()` formatting
+- Empty submission via `/edit type:template` clears template back to default
+- Entities with different templates get separate LLM calls
+- Entities with the same template (including null) share a call as before
+- Limits: 1000 iterations per for-loop, 1MB output
 
 ### Context Window
 

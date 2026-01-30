@@ -78,6 +78,17 @@ Possible improvements:
 
 ---
 
+### Template Poisoning Risk
+
+Custom templates control the entire system prompt. A malicious template on one entity could manipulate how other entities' facts are presented in the same LLM call (e.g., injecting instructions, hiding facts, reframing context). Mitigated by:
+- Template-based grouping (entities with different templates get separate calls)
+- Only entity owner/editors can set a template (same permission model as facts)
+- Entities sharing a template are presumed to trust the same author
+
+Future consideration: channel-level or server-level templates as an alternative scope that reduces cross-entity influence.
+
+---
+
 ## Low Priority
 
 - [ ] Regex literal support in `$if` expressions - `/pattern/` syntax as alternative to string-based `.match()`. Low priority since `.match("pattern")` now works with safe regex validation

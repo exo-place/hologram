@@ -10,6 +10,7 @@ export interface Entity {
   name: string;
   owned_by: string | null;
   created_at: string;
+  template: string | null;
 }
 
 export function createEntity(name: string, ownedBy?: string): Entity {
@@ -75,6 +76,21 @@ export function searchEntitiesOwnedBy(query: string, userId: string, limit = 20)
     ORDER BY name
     LIMIT ?
   `).all(`%${query}%`, userId, limit) as Entity[];
+}
+
+// =============================================================================
+// Template Operations
+// =============================================================================
+
+export function getEntityTemplate(id: number): string | null {
+  const db = getDb();
+  const row = db.prepare(`SELECT template FROM entities WHERE id = ?`).get(id) as { template: string | null } | null;
+  return row?.template ?? null;
+}
+
+export function setEntityTemplate(id: number, template: string | null): void {
+  const db = getDb();
+  db.prepare(`UPDATE entities SET template = ? WHERE id = ?`).run(template, id);
 }
 
 // =============================================================================

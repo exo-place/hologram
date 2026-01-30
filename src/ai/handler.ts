@@ -78,7 +78,8 @@ export async function handleMessage(ctx: MessageContext): Promise<ResponseResult
   const contextLimit = evaluated.find(e => e.contextLimit !== null)?.contextLimit ?? DEFAULT_CONTEXT_LIMIT;
 
   // Build prompts
-  const systemPrompt = buildSystemPrompt(evaluated, other, ctx.entityMemories);
+  const template = evaluated[0]?.template ?? null;
+  const systemPrompt = buildSystemPrompt(evaluated, other, ctx.entityMemories, template);
   let userMessage = buildMessageHistory(history, contextLimit);
 
   // Apply strip patterns to message history
