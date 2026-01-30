@@ -53,7 +53,7 @@ $if content.includes(hello): $respond
 | `has_fact(pattern)` | function | Check if entity has matching fact |
 | `roll(dice)` | function | Dice roll (roll20 syntax: `"2d6+3"`, `"4d6kh3"`, `"1d6!"`, `"8d6>=5"`) |
 | `mentioned_in_dialogue(name)` | function | Check if name appears in quoted dialogue |
-| `messages(n, format, filter)` | function | Last n messages. Format: `%a`=author, `%m`=message. Filter: `"user"`, `"char"`, or name |
+| `messages(n, format, filter)` | function | Last n messages. Format: `%a`=author, `%m`=message. Filter: `"$user"`, `"$char"`, or author name |
 | `duration(ms)` | function | Human-readable duration (e.g. `duration(idle_ms)` → "5 minutes") |
 | `date_str(offset?)` | function | Date string (e.g. "Thu Jan 30 2026"). Optional offset: `"1d"`, `"-1w"` |
 | `time_str(offset?)` | function | Time string (e.g. "6:00 PM"). Optional offset |

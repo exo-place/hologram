@@ -169,12 +169,12 @@ export function expandEntityRefs(
       }
 
       if (lower === "lastusermessage") {
-        if (exprContext) return exprContext.messages(1, "%a: %m", "user");
+        if (exprContext) return exprContext.messages(1, "%a: %m", "$user");
         return match;
       }
 
       if (lower === "lastcharmessage") {
-        if (exprContext) return exprContext.messages(1, "%a: %m", "char");
+        if (exprContext) return exprContext.messages(1, "%a: %m", "$char");
         return match;
       }
 

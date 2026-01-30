@@ -341,8 +341,12 @@ export function getMessages(channelId: string, limit = 50): Message[] {
 
 /**
  * Get filtered messages from a channel.
- * @param filter - "char" for webhook/entity messages, "user" for non-webhook messages,
+ * @param filter - "$char" for webhook/entity messages, "$user" for non-webhook messages,
  *   or any other string for case-insensitive author name match.
+ *
+ * Webhook detection is reliable here: all entity messages in the messages table
+ * arrived via webhook (and have webhook_messages entries). Bot fallback messages
+ * (sent when webhooks fail) are sent as the bot user and never enter the messages table.
  */
 export function getFilteredMessages(
   channelId: string,
@@ -355,7 +359,7 @@ export function getFilteredMessages(
   const timeClause = forgetTime ? ` AND m.created_at > ?` : "";
   const timeParams = forgetTime ? [forgetTime] : [];
 
-  if (filter === "char") {
+  if (filter === "$char") {
     // Only messages that have a corresponding webhook_messages entry
     return db.prepare(`
       SELECT m.* FROM messages m
@@ -366,7 +370,7 @@ export function getFilteredMessages(
     `).all(channelId, ...timeParams, limit) as Message[];
   }
 
-  if (filter === "user") {
+  if (filter === "$user") {
     // Only messages that do NOT have a webhook_messages entry
     return db.prepare(`
       SELECT m.* FROM messages m

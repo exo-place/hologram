@@ -91,7 +91,7 @@ const HELP_ENTITY_FACTS: Record<string, string[]> = {
     "• `has_fact(\"pattern\")` - regex match",
     "• `roll(\"2d6+3\")` - dice roll (roll20 syntax: kh, kl, dh, dl, !, >=)",
     "• `mentioned_in_dialogue(name)` - name in dialogue (not XML tags)",
-    "• `messages(n, fmt, filter)` - last n messages (filter: \"user\", \"char\", or name)",
+    "• `messages(n, fmt, filter)` - last n messages (filter: \"$user\", \"$char\", or name)",
     "• `duration(ms)` - human-readable duration",
     "• `date_str(offset?)` - date string (e.g. \"Thu Jan 30 2026\")",
     "• `time_str(offset?)` - time string (e.g. \"6:00 PM\")",

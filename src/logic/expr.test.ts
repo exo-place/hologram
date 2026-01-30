@@ -1822,11 +1822,11 @@ describe("messages() with filter", () => {
         return "test";
       },
     });
-    ctx.messages(1, "%m", "user");
-    expect(lastFilter).toBe("user");
+    ctx.messages(1, "%m", "$user");
+    expect(lastFilter).toBe("$user");
 
-    ctx.messages(1, "%m", "char");
-    expect(lastFilter).toBe("char");
+    ctx.messages(1, "%m", "$char");
+    expect(lastFilter).toBe("$char");
   });
 
   test("messages without filter works normally", () => {
