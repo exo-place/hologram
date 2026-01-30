@@ -45,7 +45,7 @@ See `docs/postmortem/2026-01-26-ux-critique.md` for full analysis.
 
 - [ ] Strip prompt scaffolding - remove `<defs>` XML tags and unnecessary structure from system prompt
 - [ ] Silent failure elimination - when no entities are bound, explain why nothing happened instead of silently returning
-- [x] Dynamic token allocation - `$context` now supports expression predicates (`chars`, `count`, `age_h`, etc.) with default `(chars < 4000 || count < 20) && age_h < 12 || count < 5`
+- [x] Dynamic token allocation - `$context` now supports expression predicates (`chars`, `count`, `age_h`, etc.) with default `chars < 4000 || count < 20`
 
 ### Multi-Character
 
@@ -57,6 +57,7 @@ See `docs/postmortem/2026-01-26-ux-critique.md` for full analysis.
 - [ ] Shareable entity template presets
 - [ ] Clone/fork functionality with permissions
 - [ ] Channel permission inheritance - should channel-bound entities inherit permissions from the channel entity?
+- [ ] Mentionable select for permissions UI - use Discord's [mentionable select](https://discord.com/developers/docs/components/reference#mentionable-select) for `$edit`, `$view`, `$use`, `$blacklist`. 0 selections = @everyone, placeholder text explains "if blank, everyone can view/edit/use"
 
 ---
 

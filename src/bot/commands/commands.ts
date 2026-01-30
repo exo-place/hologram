@@ -412,7 +412,7 @@ registerCommand({
           style: TextStyles.Short,
           value: config?.config_context ?? "",
           required: false,
-          placeholder: "(chars < 4000 || count < 20) && age_h < 12",
+          placeholder: "chars < 4000 || count < 20",
         },
         {
           customId: "stream",

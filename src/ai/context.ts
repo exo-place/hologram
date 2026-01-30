@@ -59,7 +59,7 @@ export function applyStripPatterns(text: string, patterns: string[]): string {
 }
 
 /** Default context expression when no $context directive is present */
-export const DEFAULT_CONTEXT_EXPR = "(chars < 4000 || count < 20) && age_h < 12 || count < 5";
+export const DEFAULT_CONTEXT_EXPR = "chars < 4000 || count < 20";
 
 /** Hard cap on context size (~250k tokens) */
 export const MAX_CONTEXT_CHAR_LIMIT = 1_000_000;

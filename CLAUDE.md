@@ -240,7 +240,7 @@ $if mentioned: $context chars < 32000                  # Conditional context siz
 - `age` — current message age in milliseconds
 - `age_h` / `age_m` / `age_s` — age in hours / minutes / seconds
 
-**Default** (no `$context` directive): `(chars < 4000 || count < 20) && age_h < 12 || count < 5`
+**Default** (no `$context` directive): `chars < 4000 || count < 20`
 
 Numeric syntax (`16k`, `8000`) is backwards-compatible and converts to `chars < N`. Hard cap is 1M for numeric values.
 
