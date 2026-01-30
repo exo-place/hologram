@@ -104,7 +104,7 @@ export async function* handleMessageStreaming(
   const { channelId, guildId, entities, streamMode, delimiter } = ctx;
 
   // Prepare prompt context (expand refs, resolve user entity, build messages)
-  const { messages: llmMessages, contextExpr } = preparePromptContext(
+  const { systemPrompt, messages: llmMessages, contextExpr } = preparePromptContext(
     entities, channelId, guildId, ctx.userId, ctx.entityMemories,
   );
 
@@ -124,6 +124,7 @@ export async function* handleMessageStreaming(
 
     const result = streamText({
       model,
+      system: systemPrompt,
       messages: llmMessages,
       tools,
       stopWhen: stepCountIs(5),

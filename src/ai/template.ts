@@ -400,57 +400,76 @@ function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/**
- * Render a template and parse structured output.
- * Injects _msg() into the template context for structured message emission.
- * Returns a flat list of messages (system, user, assistant).
- */
 // =============================================================================
-// Default Template (Nunjucks)
+// Default Templates (Nunjucks)
 // =============================================================================
 
 /**
- * Default template that produces structured system prompt + role-based messages
- * using the _msg() protocol.
+ * Template for the dedicated system parameter (AI SDK `system` field).
+ * Rendered separately from the conversation messages template.
  *
- * System prompt section: entity defs, memories, multi-entity guidance
- * Message section: _msg() markers with role-based history
+ * This is distinct from system-role messages in the conversation — those carry
+ * entity definitions, memories, and instructions. This top-level system field
+ * provides framing context that the LLM sees before any messages.
  */
-export const DEFAULT_TEMPLATE = `\
+export const SYSTEM_PROMPT_TEMPLATE = `\
 {%- if entities | length == 0 and others | length == 0 -%}
 You are a helpful assistant. Respond naturally to the user.
 {%- else -%}
-{%- for entity in entities -%}
-{%- if not loop.first %}
+This is the dedicated system prompt for this conversation. Entity definitions, memories, and response instructions are provided as system-role messages. Respond in character.
+{%- endif -%}`;
+
+/**
+ * Default template for structured messages using the _msg() protocol.
+ *
+ * Produces system-role messages (entity defs, memories, multi-entity guidance)
+ * followed by user/assistant chat messages from history.
+ *
+ * The Nunjucks env has trimBlocks + lstripBlocks enabled, so block tags on
+ * their own lines can be freely indented without affecting output.
+ */
+export const DEFAULT_TEMPLATE = `\
+{#- Entity definitions -#}
+{%- if entities | length == 0 and others | length == 0 -%}
+You are a helpful assistant. Respond naturally to the user.
+{%- else -%}
+
+  {#- Responding entities -#}
+  {%- for entity in entities -%}
+    {%- if not loop.first %}
 
 
-{% endif -%}
+    {% endif -%}
 <defs for="{{ entity.name }}" id="{{ entity.id }}">
 {{ entity.facts | join("\\n") }}
 </defs>
-{%- if memories[entity.id] and memories[entity.id] | length > 0 %}
+    {%- if memories[entity.id] and memories[entity.id] | length > 0 %}
 
 
 <memories for="{{ entity.name }}" id="{{ entity.id }}">
 {{ memories[entity.id] | join("\\n") }}
 </memories>
-{%- endif -%}
-{%- endfor -%}
-{%- for entity in others -%}
-{%- if entities | length > 0 or not loop.first %}
+    {%- endif -%}
+  {%- endfor -%}
+
+  {#- Referenced and user entities -#}
+  {%- for entity in others -%}
+    {%- if entities | length > 0 or not loop.first %}
 
 
-{% endif -%}
+    {% endif -%}
 <defs for="{{ entity.name }}" id="{{ entity.id }}">
 {{ entity.facts | join("\\n") }}
 </defs>
-{%- endfor -%}
-{%- if entities | length > 1 -%}
-{%- if freeform %}
+  {%- endfor -%}
+
+  {#- Multi-entity response format -#}
+  {%- if entities | length > 1 -%}
+    {%- if freeform %}
 
 
 You are writing as: {{ entity_names }}. They may interact naturally in your response. Not everyone needs to respond to every message - only include those who would naturally engage. If none would respond, reply with only: none
-{%- else %}
+    {%- else %}
 
 
 You are: {{ entity_names }}. Format your response with XML tags:
@@ -460,14 +479,22 @@ You are: {{ entity_names }}. Format your response with XML tags:
 Wrap everyone's dialogue in their name tag. They may interact naturally.
 
 Not everyone needs to respond to every message. Only respond as those who would naturally engage with what was said. If none would respond, reply with only <none/>.
+    {%- endif -%}
+  {%- endif -%}
+
 {%- endif -%}
-{%- endif -%}
-{%- endif -%}
+
+{#- Message history -#}
 {%- for msg in history -%}
 {{ _msg(msg.role, {author: msg.author, author_id: msg.author_id}) }}
 {{ msg.author }}: {{ msg.content }}
 {%- endfor -%}`;
 
+/**
+ * Render a template and parse structured output.
+ * Injects _msg() into the template context for structured message emission.
+ * Returns a flat list of messages (system, user, assistant).
+ */
 export function renderStructuredTemplate(
   source: string,
   ctx: Record<string, unknown>,
@@ -476,4 +503,16 @@ export function renderStructuredTemplate(
   ctx._msg = makeMsgFunction(nonce);
   const rendered = renderEntityTemplate(source, ctx);
   return parseStructuredOutput(rendered, nonce);
+}
+
+/**
+ * Render the dedicated system prompt template.
+ * Returns the string for the AI SDK `system` parameter, separate from messages.
+ */
+export function renderSystemPrompt(
+  ctx: Record<string, unknown>,
+  template?: string,
+): string {
+  const source = template ?? SYSTEM_PROMPT_TEMPLATE;
+  return renderEntityTemplate(source, ctx).trim();
 }

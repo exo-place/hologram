@@ -34,7 +34,7 @@ export async function handleMessage(ctx: MessageContext): Promise<ResponseResult
   const evaluated: EvaluatedEntity[] = respondingEntities ?? [];
 
   // Prepare prompt context (expand refs, resolve user entity, build prompt)
-  const { messages: llmMessages, other, contextExpr } = preparePromptContext(
+  const { systemPrompt, messages: llmMessages, other, contextExpr } = preparePromptContext(
     evaluated, channelId, guildId, userId, ctx.entityMemories,
   );
 
@@ -68,6 +68,7 @@ export async function handleMessage(ctx: MessageContext): Promise<ResponseResult
 
     const result = await generateText({
       model,
+      system: systemPrompt,
       messages: llmMessages,
       tools,
       stopWhen: stepCountIs(5), // Allow up to 5 tool call rounds

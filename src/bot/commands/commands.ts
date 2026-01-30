@@ -1401,17 +1401,25 @@ async function handleInfoPrompt(ctx: CommandContext, options: Record<string, unk
   const evaluated = buildEvaluatedEntity(targetEntity);
 
   // Use the actual template pipeline to build messages
-  const { messages } = preparePromptContext(
+  const { systemPrompt, messages } = preparePromptContext(
     [evaluated], ctx.channelId, ctx.guildId, ctx.userId,
   );
 
-  // Extract system messages for display
-  const systemContent = messages
+  // Display dedicated system prompt + system-role messages
+  const systemMessages = messages
     .filter(m => m.role === "system")
     .map(m => m.content)
     .join("\n\n");
 
-  await respond(ctx.bot, ctx.interaction, elideText(systemContent || "(no system prompt)"), true);
+  const parts: string[] = [];
+  if (systemPrompt) {
+    parts.push(`[system parameter]\n${systemPrompt}`);
+  }
+  if (systemMessages) {
+    parts.push(`[system-role messages]\n${systemMessages}`);
+  }
+
+  await respond(ctx.bot, ctx.interaction, elideText(parts.join("\n\n---\n\n") || "(no system prompt)"), true);
 }
 
 /** Build an EvaluatedEntity from a raw entity using a mock expression context */

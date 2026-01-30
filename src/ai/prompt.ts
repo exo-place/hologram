@@ -10,7 +10,7 @@ import {
 import { getMessages, getWebhookMessageEntity, parseMessageData, normalizeStickers, resolveDiscordEntity } from "../db/discord";
 import { evalMacroValue, formatDuration, rollDice, compileContextExpr, type ExprContext } from "../logic/expr";
 import { DEFAULT_MODEL } from "./models";
-import { DEFAULT_TEMPLATE, renderStructuredTemplate } from "./template";
+import { DEFAULT_TEMPLATE, renderStructuredTemplate, renderSystemPrompt } from "./template";
 import {
   applyStripPatterns,
   type StructuredMessage,
@@ -257,7 +257,7 @@ export function buildPromptAndMessages(
   channelId: string,
   contextExpr: string,
   stripPatterns: string[],
-): { messages: StructuredMessage[] } {
+): { systemPrompt: string; messages: StructuredMessage[] } {
   // Fetch history from DB (DESC order, newest first)
   const rawHistory = getMessages(channelId, MESSAGE_FETCH_LIMIT);
 
@@ -361,7 +361,10 @@ export function buildPromptAndMessages(
   templateCtx.history = history;
   templateCtx._single_entity = isSingleEntity;
 
-  // Render with structured template
+  // Render dedicated system prompt (AI SDK `system` parameter)
+  const systemPrompt = renderSystemPrompt(templateCtx);
+
+  // Render structured messages template
   const templateSource = template ?? DEFAULT_TEMPLATE;
   const output = renderStructuredTemplate(templateSource, templateCtx);
 
@@ -385,7 +388,7 @@ export function buildPromptAndMessages(
     messages.splice(firstNonSystem, 0, { role: "user", content: "(continued)" });
   }
 
-  return { messages };
+  return { systemPrompt, messages };
 }
 
 // =============================================================================
@@ -393,6 +396,8 @@ export function buildPromptAndMessages(
 // =============================================================================
 
 export interface PreparedPromptContext {
+  /** Dedicated system prompt for AI SDK `system` parameter */
+  systemPrompt: string;
   messages: StructuredMessage[];
   other: EntityWithFacts[];
   contextExpr: string;
@@ -451,9 +456,9 @@ export function preparePromptContext(
 
   // Build messages via template engine
   const template = entities[0]?.template ?? null;
-  const { messages } = buildPromptAndMessages(
+  const { systemPrompt, messages } = buildPromptAndMessages(
     entities, other, entityMemories, template, channelId, contextExpr, effectiveStripPatterns,
   );
 
-  return { messages, other, contextExpr, effectiveStripPatterns };
+  return { systemPrompt, messages, other, contextExpr, effectiveStripPatterns };
 }
