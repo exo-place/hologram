@@ -11,7 +11,7 @@ type Bot = any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Interaction = any;
 import { info, warn, error } from "../../logger";
-import { searchEntities, searchEntitiesOwnedBy, getEntitiesWithFacts } from "../../db/entities";
+import { searchEntities, searchEntitiesOwnedBy, getEntitiesWithFacts, getPermissionDefaults } from "../../db/entities";
 import { parsePermissionDirectives, matchesUserEntry, isUserBlacklisted, isUserAllowed } from "../../logic/expr";
 import { getBoundEntityIds, type DiscordType } from "../../db/discord";
 
@@ -314,7 +314,7 @@ async function handleAutocomplete(bot: Bot, interaction: Interaction) {
         const entityWithFacts = entitiesWithFacts.get(entity.id);
         if (!entityWithFacts) return false;
         const facts = entityWithFacts.facts.map(f => f.content);
-        const permissions = parsePermissionDirectives(facts);
+        const permissions = parsePermissionDirectives(facts, getPermissionDefaults(entity.id));
         if (isUserBlacklisted(permissions, userId, username, entity.owned_by, userRoles)) return false;
         if (permissions.editList === "everyone") return true;
         if (permissions.editList?.some(u => matchesUserEntry(u, userId, username, userRoles))) return true;
@@ -352,7 +352,7 @@ async function handleAutocomplete(bot: Bot, interaction: Interaction) {
         // Check edit permission
         if (entityWithFacts.owned_by !== userId) {
           const facts = entityWithFacts.facts.map(f => f.content);
-          const permissions = parsePermissionDirectives(facts);
+          const permissions = parsePermissionDirectives(facts, getPermissionDefaults(entityId));
           if (isUserBlacklisted(permissions, userId, username, entityWithFacts.owned_by, userRoles)) continue;
           if (permissions.editList !== "everyone" &&
               !permissions.editList?.some(u => matchesUserEntry(u, userId, username, userRoles))) {
@@ -374,7 +374,7 @@ async function handleAutocomplete(bot: Bot, interaction: Interaction) {
       const entityWithFacts = entitiesWithFacts.get(entity.id);
       if (!entityWithFacts) return false;
       const facts = entityWithFacts.facts.map(f => f.content);
-      const permissions = parsePermissionDirectives(facts);
+      const permissions = parsePermissionDirectives(facts, getPermissionDefaults(entity.id));
       if (isUserBlacklisted(permissions, userId, username, entity.owned_by, userRoles)) return false;
       if (permissions.editList === "everyone") return true;
       if (permissions.editList?.some(u => matchesUserEntry(u, userId, username, userRoles))) return true;
@@ -390,7 +390,7 @@ async function handleAutocomplete(bot: Bot, interaction: Interaction) {
       const entityWithFacts = entitiesWithFacts.get(entity.id);
       if (!entityWithFacts) return false;
       const facts = entityWithFacts.facts.map(f => f.content);
-      const permissions = parsePermissionDirectives(facts);
+      const permissions = parsePermissionDirectives(facts, getPermissionDefaults(entity.id));
       if (isUserBlacklisted(permissions, userId, username, entity.owned_by, userRoles)) return false;
       // No $view directive = owner-only by default
       if (permissions.viewList === null) return false;
@@ -408,7 +408,7 @@ async function handleAutocomplete(bot: Bot, interaction: Interaction) {
       const entityWithFacts = entitiesWithFacts.get(entity.id);
       if (!entityWithFacts) return false;
       const facts = entityWithFacts.facts.map(f => f.content);
-      const permissions = parsePermissionDirectives(facts);
+      const permissions = parsePermissionDirectives(facts, getPermissionDefaults(entity.id));
       if (isUserBlacklisted(permissions, userId, username, entity.owned_by, userRoles)) return false;
       if (!isUserAllowed(permissions, userId, username, entity.owned_by, userRoles)) return false;
       return true;

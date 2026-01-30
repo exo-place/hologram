@@ -1,5 +1,6 @@
 import { getDb } from "./index";
 import { getActiveEffectFacts } from "./effects";
+import type { EvaluatedFactsDefaults, MemoryScope } from "../logic/expr";
 
 // =============================================================================
 // Entity Operations
@@ -76,6 +77,85 @@ export function searchEntitiesOwnedBy(query: string, userId: string, limit = 20)
     ORDER BY name
     LIMIT ?
   `).all(`%${query}%`, userId, limit) as Entity[];
+}
+
+// =============================================================================
+// Entity Config (directive storage in columns)
+// =============================================================================
+
+export interface EntityConfig {
+  config_context: string | null;
+  config_model: string | null;
+  config_respond: string | null;
+  config_stream_mode: string | null;
+  config_stream_delimiters: string | null;
+  config_avatar: string | null;
+  config_memory: string | null;
+  config_freeform: number;
+  config_strip: string | null;
+  config_view: string | null;
+  config_edit: string | null;
+  config_use: string | null;
+  config_blacklist: string | null;
+}
+
+const CONFIG_COLUMNS = `
+  config_context, config_model, config_respond,
+  config_stream_mode, config_stream_delimiters,
+  config_avatar, config_memory, config_freeform,
+  config_strip, config_view, config_edit, config_use, config_blacklist
+`.trim();
+
+export function getEntityConfig(entityId: number): EntityConfig | null {
+  const db = getDb();
+  return db.prepare(`SELECT ${CONFIG_COLUMNS} FROM entities WHERE id = ?`).get(entityId) as EntityConfig | null;
+}
+
+export function setEntityConfig(entityId: number, config: Partial<EntityConfig>): void {
+  const db = getDb();
+  const sets: string[] = [];
+  const values: (string | number | null)[] = [];
+  for (const [key, value] of Object.entries(config)) {
+    sets.push(`${key} = ?`);
+    values.push((value as string | number | null) ?? null);
+  }
+  if (sets.length === 0) return;
+  values.push(entityId);
+  db.prepare(`UPDATE entities SET ${sets.join(", ")} WHERE id = ?`).run(...values);
+}
+
+/** Convert config columns to permission defaults for parsePermissionDirectives */
+export function getPermissionDefaults(entityId: number): {
+  editList: string[] | "everyone" | null;
+  viewList: string[] | "everyone" | null;
+  useList: string[] | "everyone" | null;
+  blacklist: string[];
+} {
+  const config = getEntityConfig(entityId);
+  if (!config) return { editList: null, viewList: null, useList: null, blacklist: [] };
+  return {
+    editList: config.config_edit ? JSON.parse(config.config_edit) : null,
+    viewList: config.config_view ? JSON.parse(config.config_view) : null,
+    useList: config.config_use ? JSON.parse(config.config_use) : null,
+    blacklist: config.config_blacklist ? JSON.parse(config.config_blacklist) : [],
+  };
+}
+
+/** Convert config columns to evaluateFacts defaults */
+export function getEntityEvalDefaults(entityId: number): EvaluatedFactsDefaults {
+  const config = getEntityConfig(entityId);
+  if (!config) return {};
+  return {
+    contextExpr: config.config_context,
+    modelSpec: config.config_model,
+    avatarUrl: config.config_avatar,
+    streamMode: config.config_stream_mode as "lines" | "full" | null,
+    streamDelimiter: config.config_stream_delimiters ? JSON.parse(config.config_stream_delimiters) : null,
+    memoryScope: (config.config_memory as MemoryScope) ?? "none",
+    isFreeform: !!config.config_freeform,
+    stripPatterns: config.config_strip ? JSON.parse(config.config_strip) : null,
+    shouldRespond: config.config_respond === "true" ? true : config.config_respond === "false" ? false : null,
+  };
 }
 
 // =============================================================================

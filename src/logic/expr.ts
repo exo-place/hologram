@@ -1648,24 +1648,38 @@ export interface EvaluatedFacts {
  * - $locked → lock entity from LLM modification
  * - $locked <fact> → lock specific fact from LLM modification
  */
+/** Defaults from entity config columns (optional, seeded before fact evaluation) */
+export interface EvaluatedFactsDefaults {
+  contextExpr?: string | null;
+  modelSpec?: string | null;
+  avatarUrl?: string | null;
+  streamMode?: "lines" | "full" | null;
+  streamDelimiter?: string[] | null;
+  memoryScope?: MemoryScope;
+  isFreeform?: boolean;
+  stripPatterns?: string[] | null;
+  shouldRespond?: boolean | null;
+}
+
 export function evaluateFacts(
   facts: string[],
-  context: ExprContext
+  context: ExprContext,
+  defaults?: EvaluatedFactsDefaults,
 ): EvaluatedFacts {
   const results: string[] = [];
-  let shouldRespond: boolean | null = null;
+  let shouldRespond: boolean | null = defaults?.shouldRespond ?? null;
   let respondSource: string | null = null;
   let retryMs: number | null = null;
-  let avatarUrl: string | null = null;
+  let avatarUrl: string | null = defaults?.avatarUrl ?? null;
   let isLocked = false;
   const lockedFacts = new Set<string>();
-  let streamMode: "lines" | "full" | null = null;
-  let streamDelimiter: string[] | null = null;
-  let memoryScope: MemoryScope = "none";
-  let contextExpr: string | null = null;
-  let isFreeform = false;
-  let modelSpec: string | null = null;
-  let stripPatterns: string[] | null = null;
+  let streamMode: "lines" | "full" | null = defaults?.streamMode ?? null;
+  let streamDelimiter: string[] | null = defaults?.streamDelimiter ?? null;
+  let memoryScope: MemoryScope = defaults?.memoryScope ?? "none";
+  let contextExpr: string | null = defaults?.contextExpr ?? null;
+  let isFreeform = defaults?.isFreeform ?? false;
+  let modelSpec: string | null = defaults?.modelSpec ?? null;
+  let stripPatterns: string[] | null = defaults?.stripPatterns ?? null;
 
   // Strip comments first
   const uncommented = stripComments(facts);
@@ -2152,18 +2166,27 @@ export interface EntityPermissions {
   blacklist: string[];
 }
 
+/** Defaults from entity config columns for permission directives */
+export interface PermissionDefaults {
+  editList?: string[] | "everyone" | null;
+  viewList?: string[] | "everyone" | null;
+  useList?: string[] | "everyone" | null;
+  blacklist?: string[];
+}
+
 /**
  * Parse permission directives from raw facts.
  * This extracts $locked, $edit, and $view directives without evaluating $if conditions.
  * Used for permission checking on commands.
+ * Optional defaults from entity config columns are used as initial values.
  */
-export function parsePermissionDirectives(facts: string[]): EntityPermissions {
+export function parsePermissionDirectives(facts: string[], defaults?: PermissionDefaults): EntityPermissions {
   let isLocked = false;
   const lockedFacts = new Set<string>();
-  let editList: string[] | "everyone" | null = null;
-  let viewList: string[] | "everyone" | null = null;
-  let useList: string[] | "everyone" | null = null;
-  const blacklist: string[] = [];
+  let editList: string[] | "everyone" | null = defaults?.editList ?? null;
+  let viewList: string[] | "everyone" | null = defaults?.viewList ?? null;
+  let useList: string[] | "everyone" | null = defaults?.useList ?? null;
+  const blacklist: string[] = [...(defaults?.blacklist ?? [])];
 
   for (const fact of facts) {
     const trimmed = fact.trim();

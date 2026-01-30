@@ -183,6 +183,7 @@ function initSchema(db: Database) {
   migrateMessagesDiscordId(db);
   migrateEntityTemplate(db);
   migrateMessagesData(db);
+  migrateEntityConfigColumns(db);
 }
 
 /**
@@ -262,4 +263,145 @@ function migrateDiscordEntitiesConstraint(db: Database) {
     ALTER TABLE discord_entities_new RENAME TO discord_entities;
     CREATE INDEX idx_discord_entities_lookup ON discord_entities(discord_id, discord_type);
   `);
+}
+
+/**
+ * Add config columns to entities table for directive storage.
+ * Migrates unconditional directive facts into config columns and removes them from facts.
+ */
+function migrateEntityConfigColumns(db: Database) {
+  const columns = db.prepare(`PRAGMA table_info(entities)`).all() as Array<{ name: string }>;
+  const hasConfigColumns = columns.some(c => c.name === "config_context");
+  if (hasConfigColumns) return; // Already migrated
+
+  // Add config columns
+  db.exec(`ALTER TABLE entities ADD COLUMN config_context TEXT`);
+  db.exec(`ALTER TABLE entities ADD COLUMN config_model TEXT`);
+  db.exec(`ALTER TABLE entities ADD COLUMN config_respond TEXT`);
+  db.exec(`ALTER TABLE entities ADD COLUMN config_stream_mode TEXT`);
+  db.exec(`ALTER TABLE entities ADD COLUMN config_stream_delimiters TEXT`);
+  db.exec(`ALTER TABLE entities ADD COLUMN config_avatar TEXT`);
+  db.exec(`ALTER TABLE entities ADD COLUMN config_memory TEXT`);
+  db.exec(`ALTER TABLE entities ADD COLUMN config_freeform INTEGER DEFAULT 0`);
+  db.exec(`ALTER TABLE entities ADD COLUMN config_strip TEXT`);
+  db.exec(`ALTER TABLE entities ADD COLUMN config_view TEXT`);
+  db.exec(`ALTER TABLE entities ADD COLUMN config_edit TEXT`);
+  db.exec(`ALTER TABLE entities ADD COLUMN config_use TEXT`);
+  db.exec(`ALTER TABLE entities ADD COLUMN config_blacklist TEXT`);
+
+  // Migrate existing facts into config columns
+  const { parseFact, parsePermissionDirectives } = require("../logic/expr");
+
+  const entities = db.prepare(`SELECT id FROM entities`).all() as Array<{ id: number }>;
+  const updateStmt = db.prepare(`
+    UPDATE entities SET
+      config_context = ?, config_model = ?, config_respond = ?,
+      config_stream_mode = ?, config_stream_delimiters = ?,
+      config_avatar = ?, config_memory = ?, config_freeform = ?,
+      config_strip = ?, config_view = ?, config_edit = ?,
+      config_use = ?, config_blacklist = ?
+    WHERE id = ?
+  `);
+  const deleteFactStmt = db.prepare(`DELETE FROM facts WHERE id = ?`);
+
+  for (const { id } of entities) {
+    const facts = db.prepare(`SELECT id, content FROM facts WHERE entity_id = ? ORDER BY created_at`).all(id) as Array<{ id: number; content: string }>;
+
+    // Extract config from unconditional directives
+    let configContext: string | null = null;
+    let configModel: string | null = null;
+    let configRespond: string | null = null;
+    let configStreamMode: string | null = null;
+    let configStreamDelimiters: string | null = null;
+    let configAvatar: string | null = null;
+    let configMemory: string | null = null;
+    let configFreeform = 0;
+    let configStrip: string | null = null;
+    const factIdsToDelete: number[] = [];
+
+    for (const fact of facts) {
+      const parsed = parseFact(fact.content);
+      // Only migrate unconditional directives
+      if (parsed.conditional) continue;
+
+      if (parsed.isContext && parsed.contextExpr) {
+        configContext = parsed.contextExpr;
+        factIdsToDelete.push(fact.id);
+      } else if (parsed.isModel && parsed.modelSpec) {
+        configModel = parsed.modelSpec;
+        factIdsToDelete.push(fact.id);
+      } else if (parsed.isRespond) {
+        configRespond = parsed.respondValue === false ? "false" : "true";
+        factIdsToDelete.push(fact.id);
+      } else if (parsed.isStream) {
+        configStreamMode = parsed.streamMode ?? null;
+        configStreamDelimiters = parsed.streamDelimiter ? JSON.stringify(parsed.streamDelimiter) : null;
+        factIdsToDelete.push(fact.id);
+      } else if (parsed.isAvatar && parsed.avatarUrl) {
+        configAvatar = parsed.avatarUrl;
+        factIdsToDelete.push(fact.id);
+      } else if (parsed.isMemory && parsed.memoryScope) {
+        configMemory = parsed.memoryScope;
+        factIdsToDelete.push(fact.id);
+      } else if (parsed.isFreeform) {
+        configFreeform = 1;
+        factIdsToDelete.push(fact.id);
+      } else if (parsed.isStrip) {
+        configStrip = parsed.stripPatterns ? JSON.stringify(parsed.stripPatterns) : "[]";
+        factIdsToDelete.push(fact.id);
+      }
+    }
+
+    // Parse permission directives
+    const rawFacts = facts.map(f => f.content);
+    const permissions = parsePermissionDirectives(rawFacts);
+    let configView: string | null = null;
+    let configEdit: string | null = null;
+    let configUse: string | null = null;
+    let configBlacklist: string | null = null;
+
+    if (permissions.viewList !== null) {
+      configView = JSON.stringify(permissions.viewList);
+    }
+    if (permissions.editList !== null) {
+      configEdit = JSON.stringify(permissions.editList);
+    }
+    if (permissions.useList !== null) {
+      configUse = JSON.stringify(permissions.useList);
+    }
+    if (permissions.blacklist.length > 0) {
+      configBlacklist = JSON.stringify(permissions.blacklist);
+    }
+
+    // Mark permission facts for deletion (unconditional only)
+    for (const fact of facts) {
+      const trimmed = fact.content.trim();
+      if (trimmed.startsWith("$#")) continue; // comment
+      if (trimmed.startsWith("$if ")) continue; // conditional
+      if (trimmed.startsWith("$edit ") || trimmed.startsWith("$view ") ||
+          trimmed.startsWith("$use ") || trimmed.startsWith("$blacklist ")) {
+        factIdsToDelete.push(fact.id);
+      }
+    }
+
+    // Write config columns
+    const hasConfig = configContext || configModel || configRespond || configStreamMode ||
+      configAvatar || configMemory || configFreeform || configStrip ||
+      configView || configEdit || configUse || configBlacklist;
+
+    if (hasConfig) {
+      updateStmt.run(
+        configContext, configModel, configRespond,
+        configStreamMode, configStreamDelimiters,
+        configAvatar, configMemory, configFreeform,
+        configStrip, configView, configEdit,
+        configUse, configBlacklist, id,
+      );
+    }
+
+    // Delete migrated facts
+    for (const factId of factIdsToDelete) {
+      deleteFactStmt.run(factId);
+    }
+  }
 }

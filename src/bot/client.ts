@@ -8,8 +8,9 @@ import type { EvaluatedEntity } from "../ai/context";
 import { isModelAllowed } from "../ai/models";
 import { retrieveRelevantMemories, type MemoryScope } from "../db/memories";
 import { resolveDiscordEntity, resolveDiscordEntities, isNewUser, markUserWelcomed, addMessage, updateMessageByDiscordId, deleteMessageByDiscordId, trackWebhookMessage, getWebhookMessageEntity, getMessages, getFilteredMessages, formatMessagesForContext, recordEvalError, isOurWebhookUserId, type MessageData } from "../db/discord";
-import { getEntity, getEntityWithFacts, getSystemEntity, getFactsForEntity, type EntityWithFacts } from "../db/entities";
-import { evaluateFacts, createBaseContext, parsePermissionDirectives, isUserBlacklisted, isUserAllowed } from "../logic/expr";
+import { getEntity, getEntityWithFacts, getEntityConfig, getSystemEntity, getFactsForEntity, type EntityWithFacts } from "../db/entities";
+import { evaluateFacts, createBaseContext, parsePermissionDirectives, isUserBlacklisted, isUserAllowed, type EvaluatedFactsDefaults, type PermissionDefaults } from "../logic/expr";
+import type { EntityConfig } from "../db/entities";
 import { executeWebhook, editWebhookMessage, setBot } from "./webhooks";
 import "./commands/commands"; // Register all commands
 import { ensureHelpEntities } from "./commands/help";
@@ -160,6 +161,33 @@ const MAX_RESPONSE_CHAIN = process.env.MAX_RESPONSE_CHAIN
 
 // Pending retry timers per channel:entity
 const retryTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+/** Convert entity config columns to evaluateFacts defaults */
+function configToDefaults(config: EntityConfig | null): EvaluatedFactsDefaults {
+  if (!config) return {};
+  return {
+    contextExpr: config.config_context,
+    modelSpec: config.config_model,
+    avatarUrl: config.config_avatar,
+    streamMode: config.config_stream_mode as "lines" | "full" | null,
+    streamDelimiter: config.config_stream_delimiters ? JSON.parse(config.config_stream_delimiters) : null,
+    memoryScope: (config.config_memory as "none" | "channel" | "guild" | "global") ?? "none",
+    isFreeform: !!config.config_freeform,
+    stripPatterns: config.config_strip ? JSON.parse(config.config_strip) : null,
+    shouldRespond: config.config_respond === "true" ? true : config.config_respond === "false" ? false : null,
+  };
+}
+
+/** Convert entity config columns to permission defaults */
+function configToPermissionDefaults(config: EntityConfig | null): PermissionDefaults {
+  if (!config) return {};
+  return {
+    editList: config.config_edit ? JSON.parse(config.config_edit) : null,
+    viewList: config.config_view ? JSON.parse(config.config_view) : null,
+    useList: config.config_use ? JSON.parse(config.config_use) : null,
+    blacklist: config.config_blacklist ? JSON.parse(config.config_blacklist) : [],
+  };
+}
 
 function retryKey(channelId: string, entityId: number): string {
   return `${channelId}:${entityId}`;
@@ -407,9 +435,12 @@ bot.events.messageCreate = async (message) => {
       retryTimers.delete(key);
     }
 
+    // Load entity config columns
+    const entityConfig = getEntityConfig(entity.id);
+
     // Check if message author is blacklisted from this entity
     const facts = entity.facts.map(f => f.content);
-    const permissions = parsePermissionDirectives(facts);
+    const permissions = parsePermissionDirectives(facts, configToPermissionDefaults(entityConfig));
     if (isUserBlacklisted(permissions, authorId, authorName, entity.owned_by, authorRoles)) {
       debug("User blacklisted from entity", { entity: entity.name, user: authorName });
       continue;
@@ -451,7 +482,7 @@ bot.events.messageCreate = async (message) => {
 
     let result;
     try {
-      result = evaluateFacts(facts, ctx);
+      result = evaluateFacts(facts, ctx, configToDefaults(entityConfig));
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       warn("Fact evaluation failed", {
@@ -460,7 +491,7 @@ bot.events.messageCreate = async (message) => {
       });
 
       // Notify all editors of the error (deduped by error message)
-      const editors = getEditorsToNotify(entity.owned_by, facts);
+      const editors = getEditorsToNotify(entity.id, entity.owned_by, facts);
       if (editors.length > 0) {
         const isNew = recordEvalError(entity.id, editors[0], errorMsg);
         if (isNew) {
@@ -609,9 +640,10 @@ async function processEntityRetry(
     server: guildMeta,
   });
 
+  const retryConfig = getEntityConfig(entityId);
   let result;
   try {
-    result = evaluateFacts(facts, ctx);
+    result = evaluateFacts(facts, ctx, configToDefaults(retryConfig));
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     warn("Fact evaluation failed during retry", {
@@ -620,7 +652,7 @@ async function processEntityRetry(
     });
 
     // Notify all editors of the error (deduped by error message)
-    const editors = getEditorsToNotify(entity.owned_by, facts);
+    const editors = getEditorsToNotify(entity.id, entity.owned_by, facts);
     if (editors.length > 0) {
       const isNew = recordEvalError(entity.id, editors[0], errorMsg);
       if (isNew) {
@@ -1056,7 +1088,7 @@ export async function sendResponse(
       if (entity) {
         const entityData = getEntityWithFacts(entity.id);
         if (entityData) {
-          const editors = getEditorsToNotify(entityData.owned_by, entityData.facts.map(f => f.content));
+          const editors = getEditorsToNotify(entity.id, entityData.owned_by, entityData.facts.map(f => f.content));
           const errorMsg = `Model "${entityModelSpec}" is not in the allowed models list`;
           const isNew = recordEvalError(entity.id, editors[0] ?? "", errorMsg);
           if (isNew) {
@@ -1171,7 +1203,7 @@ export async function sendResponse(
       if (entity) {
         const entityData = getEntityWithFacts(entity.id);
         if (entityData) {
-          const editors = getEditorsToNotify(entityData.owned_by, entityData.facts.map(f => f.content));
+          const editors = getEditorsToNotify(entity.id, entityData.owned_by, entityData.facts.map(f => f.content));
           const errorMsg = `LLM error with model "${err.modelSpec}": ${err.message}`;
           const isNew = recordEvalError(entity.id, editors[0] ?? "", errorMsg);
           if (isNew) {
@@ -1272,14 +1304,14 @@ async function sendWelcomeDm(userId: bigint): Promise<void> {
  * Get all user IDs that should be notified of errors for an entity.
  * Includes owner + anyone in the $edit list (but not "everyone").
  */
-function getEditorsToNotify(ownerId: string | null, facts: string[]): string[] {
+function getEditorsToNotify(entityId: number, ownerId: string | null, facts: string[]): string[] {
   const editors = new Set<string>();
 
   if (ownerId) {
     editors.add(ownerId);
   }
 
-  const permissions = parsePermissionDirectives(facts);
+  const permissions = parsePermissionDirectives(facts, configToPermissionDefaults(getEntityConfig(entityId)));
   if (Array.isArray(permissions.editList)) {
     for (const userId of permissions.editList) {
       editors.add(userId);

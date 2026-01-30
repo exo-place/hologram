@@ -20,6 +20,8 @@ import {
   addFact,
   setFacts,
   type EntityWithFacts,
+  getPermissionDefaults,
+  getEntityEvalDefaults,
 } from "../../db/entities";
 import {
   getMemoriesForEntity,
@@ -92,9 +94,9 @@ function canUserEdit(entity: EntityWithFacts, userId: string, username: string, 
   // Owner always can
   if (entity.owned_by === userId) return true;
 
-  // Parse permission directives from raw facts
+  // Parse permission directives from config columns + raw facts
   const facts = entity.facts.map(f => f.content);
-  const permissions = parsePermissionDirectives(facts);
+  const permissions = parsePermissionDirectives(facts, getPermissionDefaults(entity.id));
 
   // Check blacklist first (deny overrides allow)
   if (isUserBlacklisted(permissions, userId, username, entity.owned_by, userRoles)) return false;
@@ -116,9 +118,9 @@ function canUserView(entity: EntityWithFacts, userId: string, username: string, 
   // Owner always can
   if (entity.owned_by === userId) return true;
 
-  // Parse permission directives from raw facts
+  // Parse permission directives from config columns + raw facts
   const facts = entity.facts.map(f => f.content);
-  const permissions = parsePermissionDirectives(facts);
+  const permissions = parsePermissionDirectives(facts, getPermissionDefaults(entity.id));
 
   // Check blacklist first (deny overrides allow)
   if (isUserBlacklisted(permissions, userId, username, entity.owned_by, userRoles)) return false;
@@ -1240,7 +1242,7 @@ registerCommand({
 
     // Check permissions
     const facts = entity.facts.map(f => f.content);
-    const permissions = parsePermissionDirectives(facts);
+    const permissions = parsePermissionDirectives(facts, getPermissionDefaults(entity.id));
 
     if (isUserBlacklisted(permissions, ctx.userId, ctx.username, entity.owned_by, ctx.userRoles)) {
       await respond(ctx.bot, ctx.interaction, "You don't have permission to trigger this entity", true);
@@ -1275,7 +1277,7 @@ registerCommand({
 
     let result;
     try {
-      result = evaluateFacts(facts, ctx2);
+      result = evaluateFacts(facts, ctx2, getEntityEvalDefaults(entity.id));
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       await respond(ctx.bot, ctx.interaction, `Fact evaluation error: ${errorMsg}`, true);
