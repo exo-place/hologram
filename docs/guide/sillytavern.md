@@ -1,5 +1,7 @@
 # SillyTavern Migration Guide
 
+<div v-pre>
+
 This guide helps SillyTavern (ST) users migrate their character cards and workflows to Hologram's entity-facts model.
 
 ## Conceptual Differences
@@ -194,3 +196,5 @@ $if content.includes("forest"): the northern woods are ancient and dangerous
 | Adjust context size | Set `$context 32k` as a fact |
 | Lock character from edits | Add `$locked` as a fact |
 | Set response trigger | Add `$respond` or `$if mentioned: $respond` as facts |
+
+</div>

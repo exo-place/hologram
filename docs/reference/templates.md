@@ -1,5 +1,7 @@
 # Custom Templates
 
+<div v-pre>
+
 Custom templates let you control the system prompt formatting for an entity. By default, entities use the built-in `buildSystemPrompt()` formatting. A custom template replaces this entirely.
 
 Powered by [Nunjucks](https://mozilla.github.io/nunjucks/) with runtime security patches.
@@ -216,3 +218,5 @@ Templates are per-entity and control the entire system prompt. A template on one
 - Template-based grouping separates entities with different templates
 - Only the entity owner/editors can set a template (same permission model as facts)
 - Entities sharing a template are presumed to be managed by the same owner
+
+</div>
