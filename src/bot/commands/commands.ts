@@ -148,8 +148,15 @@ type PermField = (typeof PERM_FIELDS)[number];
 const PERM_LABELS: Record<PermField, string> = {
   view: "View",
   edit: "Edit",
-  use: "Use",
+  use: "Trigger",
   blacklist: "Blacklist",
+};
+
+const PERM_DESCRIPTIONS: Record<PermField, string> = {
+  view: "Blank means anyone can view",
+  edit: "Blank means anyone can edit",
+  use: "Blank means anyone can trigger",
+  blacklist: "Blocked from viewing, editing, and triggering",
 };
 
 const PERM_CONFIG_KEYS: Record<PermField, string> = {
@@ -179,13 +186,21 @@ function buildDefaultValues(value: string[] | "everyone" | null): Array<{ id: st
 
 /**
  * Build Label components (type 18) wrapping MentionableSelects for a V2 modal.
+ * For view/edit, null DB values default to showing the owner pre-selected.
  */
-function buildPermissionsLabels(entityId: number): unknown[] {
+function buildPermissionsLabels(entityId: number, ownerId: string): unknown[] {
   const defaults = getPermissionDefaults(entityId);
 
   return PERM_FIELDS.map(field => {
     const value = field === "blacklist" ? defaults.blacklist : defaults[`${field}List`];
-    const defaultValues = buildDefaultValues(value as string[] | "everyone" | null);
+
+    // For view/edit, null means owner-only — pre-populate with owner
+    let defaultValues: Array<{ id: string; type: "user" | "role" }>;
+    if (value === null && (field === "view" || field === "edit")) {
+      defaultValues = [{ id: ownerId, type: "user" }];
+    } else {
+      defaultValues = buildDefaultValues(value as string[] | "everyone" | null);
+    }
 
     const select: Record<string, unknown> = {
       type: MessageComponentTypes.MentionableSelect,
@@ -201,6 +216,7 @@ function buildPermissionsLabels(entityId: number): unknown[] {
     return {
       type: MessageComponentTypes.Label,
       label: PERM_LABELS[field],
+      description: PERM_DESCRIPTIONS[field],
       component: select,
     };
   });
@@ -526,7 +542,7 @@ registerCommand({
 
     if (editType === "permissions") {
       // Permissions editing — V2 modal with mentionable select menus
-      const labels = buildPermissionsLabels(entity.id);
+      const labels = buildPermissionsLabels(entity.id, entity.owned_by ?? "");
       await respondWithV2Modal(ctx.bot, ctx.interaction, `edit-permissions:${entity.id}`, `Permissions: ${entity.name}`, labels);
       return;
     }
@@ -906,15 +922,9 @@ registerModalHandler("edit-permissions", async (bot, interaction, _values) => {
     const entries = buildEntries(values);
     const configKey = PERM_CONFIG_KEYS[field];
 
-    if (field === "blacklist") {
-      setEntityConfig(entityId, {
-        [configKey]: entries.length > 0 ? JSON.stringify(entries) : null,
-      });
-    } else {
-      setEntityConfig(entityId, {
-        [configKey]: entries.length > 0 ? JSON.stringify(entries) : JSON.stringify("everyone"),
-      });
-    }
+    setEntityConfig(entityId, {
+      [configKey]: entries.length > 0 ? JSON.stringify(entries) : null,
+    });
   }
 
   await respond(bot, interaction, `Updated permissions for "${entity.name}"`, true);
