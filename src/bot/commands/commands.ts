@@ -198,7 +198,7 @@ function buildPermissionsLabels(entityId: number): unknown[] {
     }
 
     return {
-      type: 18, // Label — not yet in Discordeno's MessageComponentTypes enum
+      type: MessageComponentTypes.Label,
       label: PERM_LABELS[field],
       component: select,
     };

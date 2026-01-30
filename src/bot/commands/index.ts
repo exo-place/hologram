@@ -3,6 +3,7 @@ import {
   ApplicationCommandTypes,
   InteractionResponseTypes,
   MessageComponentTypes,
+  MessageFlags,
 } from "@discordeno/bot";
 
 // Use loose types to avoid desiredProperties conflicts
@@ -180,7 +181,7 @@ export async function respondWithV2Modal(
       customId,
       title,
       components: labels,
-      flags: 1 << 15, // IS_COMPONENTS_V2
+      flags: MessageFlags.IsComponentsV2,
     },
   });
 }

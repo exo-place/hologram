@@ -62,7 +62,9 @@ export const bot = createBot({
       type: true,
       customId: true,
       value: true,
+      values: true,
       components: true,
+      component: true,
     },
     guild: {
       id: true,
