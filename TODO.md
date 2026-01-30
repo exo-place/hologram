@@ -17,31 +17,18 @@
 
 ### Test Coverage
 
-Current: 292 tests across 15 files. Pure-logic modules tested:
-- `src/ai/budget.ts` - token estimation, budget allocation
-- `src/ai/context.ts` - message formatting, timestamp injection
-- `src/ai/debug.ts` - context debugging, trace formatting, export
-- `src/ai/extract.ts` - extraction prompt parsing, heuristic extraction
-- `src/bot/webhooks.ts` - multi-char response parsing
-- `src/chronicle/index.ts` - chronicle formatting, perspective filtering, explicit markers
-- `src/config/defaults.ts` - config merging, presets
-- `src/dice/index.ts` - dice parser (expressions, keep/drop, explode)
-- `src/events/conditions.ts` - event condition evaluation (time, season, location, weather)
-- `src/personas/index.ts` - persona context formatting
-- `src/proxies/index.ts` - proxy matching (prefix/suffix/brackets)
-- `src/relationships/index.ts` - affinity labels
-- `src/state/index.ts` - outfit context formatting
-- `src/wizards/index.ts` - wizard step flow, config-aware flow building
-- `src/world/rng.ts` - seeded RNG determinism, distribution, dice notation
-- `src/world/time.ts` - time math, calendar, periods, formatting
-
-Remaining modules (DB-dependent, need mocking to test):
-- [ ] `src/events/random.ts` - weighted selection, cooldown tracking
-- [ ] `src/events/behavior.ts` - state machine transitions
-- [ ] `src/combat/index.ts` - initiative ordering, turn management
-- [ ] `src/world/locations.ts` - location graph traversal, hierarchy
-- [ ] `src/world/inventory.ts` - capacity checks, equipment slot validation
-- [ ] `src/memory/graph.ts` - knowledge graph queries
+Current: 188 tests in `src/logic/expr.test.ts`. Covers:
+- Expression evaluator (tokenizer, parser, operators, precedence)
+- Security (identifier whitelist, injection prevention, prototype access)
+- Self context parsing
+- Fact parsing and evaluation ($if, $respond, $retry, $locked, $avatar, $stream, $model, $context, $strip)
+- Permission directives ($edit, $view, $blacklist, $locked)
+- Roll20 dice (kh, kl, dh, dl, exploding, success counting)
+- Utility functions (formatDuration, parseOffset)
+- New ExprContext functions (duration, date_str, time_str, isodate, isotime, weekday, group)
+- messages() with filter ($user, $char)
+- Discord emote edge cases
+- Real-world entity evaluation
 
 ---
 
@@ -183,22 +170,17 @@ Allow users and guilds to provide their own API keys for LLM and image providers
 
 **Environment:** Set `BYOK_MASTER_KEY` (32-byte hex) to enable.
 
-### Entity Permissions
+### Entity Permissions ✓
 
-**Design decisions made:**
-- Default: creator-only access (no `$edit`/`$view` = only creator can edit/view)
-- Creator always has edit access regardless of `$edit` list
-- `$locked` (LLM modification) and `$edit` (user modification) are orthogonal
+- [x] `$locked` - prevent LLM tool calls from modifying entity
+- [x] `$locked` prefix on fact - prevent LLM from modifying that specific fact
+- [x] `$edit @everyone` / `$edit user1, user2` - Discord users who can edit
+- [x] `$view @everyone` / `$view user1, user2` - Discord users who can view
+- [x] `$blacklist` - block users from interactions
+- [x] `/transfer <entity> <user>` - transfer entity ownership
 
 **Open questions:**
 - [ ] Should channel-bound entities inherit permissions from the channel entity?
-
-**Implementation:**
-- [ ] `$locked` - prevent LLM tool calls from modifying entity
-- [ ] `$locked` prefix on fact - prevent LLM from modifying that specific fact
-- [ ] `$edit @everyone` / `$edit user1, user2` - Discord users who can edit
-- [ ] `$view @everyone` / `$view user1, user2` - Discord users who can view
-- [ ] `/transfer <entity> <user>` - transfer entity ownership
 
 ### Architecture Rethink (High Priority)
 
