@@ -619,6 +619,8 @@ async function sendStreamMessage(
       const sent = await bot.helpers.sendMessage(BigInt(channelId), {
         content: `**${entity.name}:** ${content}`,
       });
+      // Bot messages skip messageCreate, store in history manually
+      addMessage(channelId, sent.author.id.toString(), entity.name, content, sent.id.toString());
       return sent.id.toString();
     } catch (err) {
       error("Failed to send stream message", err);
@@ -628,6 +630,9 @@ async function sendStreamMessage(
     // No entity - regular message
     try {
       const sent = await bot.helpers.sendMessage(BigInt(channelId), { content });
+      // Bot messages skip messageCreate, store in history manually
+      const authorName = sent.author.globalName ?? sent.author.username;
+      addMessage(channelId, sent.author.id.toString(), authorName, content, sent.id.toString());
       return sent.id.toString();
     } catch (err) {
       error("Failed to send stream message", err);
@@ -1097,23 +1102,32 @@ async function sendResponse(
   }
 }
 
-/** Send a regular message (no webhook) and track for reply detection */
+/** Send a regular message (no webhook) and track for reply detection.
+ * Stores in message history since bot messages bypass messageCreate. */
 async function sendRegularMessage(channelId: string, content: string): Promise<void> {
   try {
     const sent = await bot.helpers.sendMessage(BigInt(channelId), { content });
     trackBotMessage(sent.id);
+    // Bot messages skip messageCreate (filtered by botUserId check),
+    // so store in history manually for LLM context
+    const authorName = sent.author.globalName ?? sent.author.username;
+    addMessage(channelId, sent.author.id.toString(), authorName, content, sent.id.toString());
   } catch (err) {
     error("Failed to send message", err);
   }
 }
 
-/** Send fallback message with character name prefix */
+/** Send fallback message with character name prefix.
+ * Stores in message history since bot messages bypass messageCreate. */
 async function sendFallbackMessage(channelId: string, name: string, content: string): Promise<void> {
   try {
     const sent = await bot.helpers.sendMessage(BigInt(channelId), {
       content: `**${name}:** ${content}`,
     });
     trackBotMessage(sent.id);
+    // Bot messages skip messageCreate (filtered by botUserId check),
+    // so store in history manually for LLM context
+    addMessage(channelId, sent.author.id.toString(), name, content, sent.id.toString());
   } catch (err) {
     error("Failed to send fallback message", err);
   }
