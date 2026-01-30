@@ -117,7 +117,7 @@ The Shopkeeper responds differently because they know they're talking to a knigh
 ## Checking Your Persona
 
 ```
-/info
+/debug
 ```
 
 Shows your current persona in this channel.

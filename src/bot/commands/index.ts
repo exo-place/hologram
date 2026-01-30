@@ -380,8 +380,8 @@ async function handleAutocomplete(bot: Bot, interaction: Interaction) {
       if (permissions.editList?.some(u => matchesUserEntry(u, userId, username, userRoles))) return true;
       return false;
     }).slice(0, 25);
-  } else if (commandName === "view" || commandName === "info") {
-    // View and info require view permission - batch load facts
+  } else if (commandName === "view" || commandName === "debug") {
+    // View and debug require view permission - batch load facts
     const allResults = searchEntities(query, 100);
     const entitiesWithFacts = getEntitiesWithFacts(allResults.map(e => e.id));
 

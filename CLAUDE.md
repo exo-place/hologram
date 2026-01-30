@@ -250,9 +250,9 @@ $use alice, 123456789              # Restrict who can trigger
 | `/transfer <entity> <user>` | Transfer ownership |
 | `/bind <target> <entity>` | Bind channel/user |
 | `/unbind <target> <entity>` | Unbind channel/user |
-| `/info [status]` | Channel state (default) |
-| `/info prompt [entity]` | Show system prompt for entity |
-| `/info history [entity]` | Show message history for entity |
+| `/debug [status]` | Channel state (default) |
+| `/debug prompt [entity]` | Show system prompt for entity |
+| `/debug history [entity]` | Show message history for entity |
 | `/trigger <entity>` | Manually trigger entity response |
 | `/forget` | Exclude messages before now from context |
 

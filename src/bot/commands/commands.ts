@@ -900,11 +900,11 @@ registerCommand({
 });
 
 // =============================================================================
-// /info - View channel state and debug info
+// /debug - View channel state and debug info
 // =============================================================================
 
 registerCommand({
-  name: "info",
+  name: "debug",
   description: "View channel state and debug info",
   options: [
     {
@@ -1061,7 +1061,7 @@ async function resolveTargetEntity(
     if (entity) return entity;
   }
 
-  await respond(ctx.bot, ctx.interaction, `No entity bound to this channel. Specify an entity with \`/info ${commandHint} entity:<name>\``, true);
+  await respond(ctx.bot, ctx.interaction, `No entity bound to this channel. Specify an entity with \`/debug ${commandHint} entity:<name>\``, true);
   return null;
 }
 

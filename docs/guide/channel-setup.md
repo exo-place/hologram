@@ -208,7 +208,7 @@ $if random() < 0.05 && response_ms > 120000: $respond
 See the current channel configuration:
 
 ```
-/info
+/debug
 ```
 
 This shows:

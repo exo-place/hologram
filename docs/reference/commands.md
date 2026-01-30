@@ -148,12 +148,12 @@ Remove an entity binding from a channel or yourself.
 
 ## Status
 
-### `/info`
+### `/debug`
 
 View current channel state or debug information.
 
 ```
-/info [status|prompt|history]
+/debug [status|prompt|history]
 ```
 
 Shows:
