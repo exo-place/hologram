@@ -593,10 +593,29 @@ describe("template: denial of service", () => {
     expect(render('{{ s.repeat(3) }}', { s: "ab" })).toBe("ababab");
   });
 
-  test("repeat() with excessive count throws", () => {
+  test("repeat() with excessive count throws (post-check)", () => {
+    // count (200000) > MAX_STRING_OUTPUT (100000) → caught by pre-check
     expectThrow(
       "{{ s.repeat(200000) }}",
       { s: "x" },
+      "count",
+    );
+  });
+
+  test("repeat() with astronomic count rejects before allocation", () => {
+    // Without pre-validation this would attempt a ~1GB allocation
+    expectThrow(
+      "{{ s.repeat(1000000000) }}",
+      { s: "x" },
+      "count",
+    );
+  });
+
+  test("repeat() near limit still caught by post-check", () => {
+    // count (50000) < MAX_STRING_OUTPUT but 50000 * 3 = 150,000 > 100,000
+    expectThrow(
+      "{{ s.repeat(50000) }}",
+      { s: "abc" },
       "produced",
     );
   });
@@ -605,11 +624,12 @@ describe("template: denial of service", () => {
     expect(render('{{ s.padStart(5, "0") }}', { s: "42" })).toBe("00042");
   });
 
-  test("padStart() with excessive length throws", () => {
+  test("padStart() with excessive length rejects before allocation", () => {
+    // Without pre-validation this would attempt a ~100MB allocation
     expectThrow(
       "{{ s.padStart(100000000) }}",
       { s: "a" },
-      "produced",
+      "target length",
     );
   });
 
@@ -617,11 +637,11 @@ describe("template: denial of service", () => {
     expect(render('{{ s.padEnd(5, ".") }}', { s: "hi" })).toBe("hi...");
   });
 
-  test("padEnd() with excessive length throws", () => {
+  test("padEnd() with excessive length rejects before allocation", () => {
     expectThrow(
       "{{ s.padEnd(100000000) }}",
       { s: "a" },
-      "produced",
+      "target length",
     );
   });
 

@@ -118,16 +118,34 @@ nunjucks.runtime.callWrap = function (
     }
   }
 
-  // Wrap memory-dangerous methods
-  if (WRAPPED_METHODS.has(methodName) && typeof obj === "function") {
-    // obj here is the bound method — but we need to intercept the result
-    const result = origCallWrap.call(this, obj, name, context, args);
-    if (typeof result === "string" && result.length > MAX_STRING_OUTPUT) {
-      throw new ExprError(
-        `${methodName}() produced ${result.length.toLocaleString()} characters (limit: ${MAX_STRING_OUTPUT.toLocaleString()})`,
-      );
+  // Wrap memory-dangerous methods — pre-validate args where possible to
+  // avoid allocating huge strings that would OOM before the post-check runs
+  if (WRAPPED_METHODS.has(methodName)) {
+    if (methodName === "repeat") {
+      const count = args[0];
+      if (typeof count === "number" && count > MAX_STRING_OUTPUT) {
+        throw new ExprError(
+          `repeat() count ${count.toLocaleString()} exceeds limit (${MAX_STRING_OUTPUT.toLocaleString()})`,
+        );
+      }
+    } else if (methodName === "padStart" || methodName === "padEnd") {
+      const targetLength = args[0];
+      if (typeof targetLength === "number" && targetLength > MAX_STRING_OUTPUT) {
+        throw new ExprError(
+          `${methodName}() target length ${targetLength.toLocaleString()} exceeds limit (${MAX_STRING_OUTPUT.toLocaleString()})`,
+        );
+      }
     }
-    return result;
+
+    if (typeof obj === "function") {
+      const result = origCallWrap.call(this, obj, name, context, args);
+      if (typeof result === "string" && result.length > MAX_STRING_OUTPUT) {
+        throw new ExprError(
+          `${methodName}() produced ${result.length.toLocaleString()} characters (limit: ${MAX_STRING_OUTPUT.toLocaleString()})`,
+        );
+      }
+      return result;
+    }
   }
 
   return origCallWrap.call(this, obj, name, context, args);
