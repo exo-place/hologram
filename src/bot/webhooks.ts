@@ -182,7 +182,8 @@ function splitContent(content: string): string[] {
       splitAt = lastSpace + 1; // Include the space in current chunk
     }
 
-    chunks.push(remaining.slice(0, splitAt).trimEnd());
+    const chunk = remaining.slice(0, splitAt).trimEnd();
+    if (chunk) chunks.push(chunk);
     remaining = remaining.slice(splitAt).trimStart();
   }
 
@@ -202,6 +203,11 @@ export async function executeWebhook(
 ): Promise<string[] | null> {
   if (!bot) {
     error("Bot not initialized for webhooks");
+    return null;
+  }
+
+  if (!content.trim()) {
+    debug("Skipping webhook execution for blank content");
     return null;
   }
 

@@ -748,6 +748,7 @@ async function sendStreamMessage(
   content: string,
   entity?: EvaluatedEntity
 ): Promise<string | null> {
+  if (!content.trim()) return null;
   if (entity) {
     // Try webhook first
     const ids = await executeWebhook(channelId, content, entity.name, entity.avatarUrl ?? undefined);
@@ -1264,6 +1265,7 @@ export async function sendResponse(
 /** Send a regular message (no webhook) and track for reply detection.
  * Stores in message history since bot messages bypass messageCreate. */
 async function sendRegularMessage(channelId: string, content: string): Promise<void> {
+  if (!content.trim()) return;
   try {
     const sent = await bot.helpers.sendMessage(BigInt(channelId), { content });
     trackBotMessage(sent.id);
@@ -1279,6 +1281,7 @@ async function sendRegularMessage(channelId: string, content: string): Promise<v
 /** Send fallback message with character name prefix.
  * Stores in message history since bot messages bypass messageCreate. */
 async function sendFallbackMessage(channelId: string, name: string, content: string): Promise<void> {
+  if (!content.trim()) return;
   try {
     const sent = await bot.helpers.sendMessage(BigInt(channelId), {
       content: `**${name}:** ${content}`,

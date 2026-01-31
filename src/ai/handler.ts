@@ -94,10 +94,11 @@ export async function handleMessage(ctx: MessageContext): Promise<ResponseResult
       memoriesRemoved,
     });
 
-    // Check for <none/> or "none" sentinel (LLM decided none should respond)
+    // Check for <none/> or "none" sentinel (LLM decided none should respond),
+    // and also skip blank/whitespace-only responses
     const trimmedText = result.text.trim().toLowerCase();
-    if (trimmedText === "<none/>" || trimmedText === "none") {
-      debug("LLM returned none - no response");
+    if (!trimmedText || trimmedText === "<none/>" || trimmedText === "none") {
+      debug("LLM returned none/blank - no response");
       return null;
     }
 
