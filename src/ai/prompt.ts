@@ -277,6 +277,7 @@ export function buildPromptAndMessages(
   contextExpr: string,
   stripPatterns: string[],
   systemTemplate?: string | null,
+  userEntityId?: number | null,
 ): { systemPrompt: string; messages: StructuredMessage[] } {
   // Fetch history from DB (DESC order, newest first)
   const rawHistory = getMessages(channelId, MESSAGE_FETCH_LIMIT);
@@ -357,22 +358,27 @@ export function buildPromptAndMessages(
     }
   }
 
-  templateCtx.entities = respondingEntities.map(e => ({
-    id: e.id,
-    name: e.name,
-    facts: e.facts,
-  }));
+  /** Create an array with a toString override that joins with newlines */
+  function withJoinToString<T>(arr: T[]): T[] {
+    const result = [...arr];
+    (result as T[] & { toString: () => string }).toString = () => result.join("\n");
+    return result;
+  }
 
-  templateCtx.others = otherEntities.map(e => ({
-    id: e.id,
-    name: e.name,
-    facts: e.facts.map(f => f.content),
-  }));
+  templateCtx.entities = respondingEntities.map(e => {
+    const facts = withJoinToString(e.facts);
+    return { id: e.id, name: e.name, facts };
+  });
+
+  templateCtx.others = otherEntities.map(e => {
+    const facts = withJoinToString(e.facts.map(f => f.content));
+    return { id: e.id, name: e.name, facts };
+  });
 
   const memoriesObj: Record<number, string[]> = Object.create(null);
   if (entityMemories) {
     for (const [entityId, mems] of entityMemories) {
-      memoriesObj[entityId] = mems.map(m => m.content);
+      memoriesObj[entityId] = withJoinToString(mems.map(m => m.content));
     }
   }
   templateCtx.memories = memoriesObj;
@@ -380,6 +386,24 @@ export function buildPromptAndMessages(
   templateCtx.freeform = respondingEntities.some(e => e.isFreeform);
   templateCtx.history = history;
   templateCtx._single_entity = isSingleEntity;
+
+  // char = first responding entity, user = user entity from others
+  if (respondingEntities.length > 0) {
+    const first = respondingEntities[0];
+    const charFacts = withJoinToString(first.facts);
+    templateCtx.char = { id: first.id, name: first.name, facts: charFacts, toString: () => first.name };
+  }
+
+  // Find user entity in others (by userEntityId if available)
+  const userEntity = userEntityId
+    ? otherEntities.find(e => e.id === userEntityId)
+    : undefined;
+  if (userEntity) {
+    const userFacts = withJoinToString(userEntity.facts.map(f => f.content));
+    templateCtx.user = { id: userEntity.id, name: userEntity.name, facts: userFacts, toString: () => userEntity.name };
+  } else {
+    templateCtx.user = { id: 0, name: "user", facts: withJoinToString([]), toString: () => "user" };
+  }
 
   // Render dedicated system prompt (AI SDK `system` parameter)
   const systemPrompt = renderSystemPrompt(templateCtx, systemTemplate ?? undefined);
@@ -481,7 +505,7 @@ export function preparePromptContext(
   const template = entities[0]?.template ?? null;
   const systemTemplate = entities[0]?.systemTemplate ?? null;
   const { systemPrompt, messages } = buildPromptAndMessages(
-    entities, other, entityMemories, template, channelId, contextExpr, effectiveStripPatterns, systemTemplate,
+    entities, other, entityMemories, template, channelId, contextExpr, effectiveStripPatterns, systemTemplate, userEntityId,
   );
 
   return { systemPrompt, messages, other, contextExpr, effectiveStripPatterns };
