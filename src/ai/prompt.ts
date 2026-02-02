@@ -7,7 +7,7 @@ import {
   DEFAULT_CONTEXT_EXPR,
   type EvaluatedEntity,
 } from "./context";
-import { getMessages, getWebhookMessageEntity, parseMessageData, resolveDiscordEntity } from "../db/discord";
+import { getMessages, getWebhookMessageEntity, parseMessageData, resolveDiscordEntity, type EmbedData, type AttachmentData, type StickerData } from "../db/discord";
 import { evalMacroValue, formatDuration, rollDice, compileContextExpr, type ExprContext } from "../logic/expr";
 import { DEFAULT_MODEL } from "./models";
 import { DEFAULT_TEMPLATE, renderStructuredTemplate, renderSystemPrompt } from "./template";
@@ -296,9 +296,9 @@ export function buildPromptAndMessages(
     created_at: string;
     is_bot: boolean;
     role: "user" | "assistant";
-    embeds: Array<{ title?: string; description?: string; fields?: Array<{ name: string; value: string }> }>;
-    stickers: Array<{ id: string; name: string; format_type: number }>;
-    attachments: Array<{ filename: string; url: string; content_type?: string }>;
+    embeds: EmbedData[];
+    stickers: StickerData[];
+    attachments: AttachmentData[];
   }
   const history: HistoryEntry[] = [];
   let totalChars = 0;

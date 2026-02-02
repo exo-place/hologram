@@ -106,9 +106,42 @@ The `history` variable provides the raw message history as structured objects:
 | `created_at` | `string` | ISO timestamp of the message |
 | `is_bot` | `boolean` | Whether the author is a Discord bot |
 | `role` | `"user" \| "assistant"` | `"assistant"` for entity messages, `"user"` for human messages |
-| `embeds` | `Array<{title?, description?, fields?}>` | Discord embed data |
+| `embeds` | `EmbedData[]` | Discord embed data (see below) |
 | `stickers` | `Array<{id, name, format_type}>` | Sticker data (format_type: 1=PNG, 2=APNG, 3=Lottie, 4=GIF) |
-| `attachments` | `Array<{filename, url, content_type?}>` | File attachments |
+| `attachments` | `AttachmentData[]` | File attachments (see below) |
+
+#### Embed Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `title` | `string?` | Embed title |
+| `type` | `string?` | Embed type (`"rich"`, `"image"`, `"video"`, `"gifv"`, `"article"`, `"link"`) |
+| `description` | `string?` | Embed description |
+| `url` | `string?` | Embed URL |
+| `timestamp` | `number?` | Embed timestamp |
+| `color` | `number?` | Color code (integer) |
+| `footer` | `{text, icon_url?}?` | Footer information |
+| `image` | `{url, height?, width?}?` | Image information |
+| `thumbnail` | `{url, height?, width?}?` | Thumbnail information |
+| `video` | `{url?, height?, width?}?` | Video information |
+| `provider` | `{name?, url?}?` | Provider information |
+| `author` | `{name, url?, icon_url?}?` | Author information |
+| `fields` | `Array<{name, value, inline?}>?` | Embed fields |
+
+#### Attachment Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `filename` | `string` | Name of the attached file |
+| `url` | `string` | Source URL of the file |
+| `content_type` | `string?` | MIME type |
+| `title` | `string?` | File title |
+| `description` | `string?` | Alt text / description (max 1024 chars) |
+| `size` | `number?` | File size in bytes |
+| `height` | `number?` | Image/video height in pixels |
+| `width` | `number?` | Image/video width in pixels |
+| `ephemeral` | `boolean?` | Whether the attachment is ephemeral |
+| `duration_secs` | `number?` | Audio duration for voice messages |
 
 ### `send_as` Macro
 

@@ -291,11 +291,74 @@ export interface StickerData {
   format_type: number; // StickerFormatTypes enum value (1=PNG, 2=APNG, 3=Lottie, 4=GIF)
 }
 
+export interface EmbedFooterData {
+  text: string;
+  icon_url?: string;
+}
+
+export interface EmbedImageData {
+  url: string;
+  height?: number;
+  width?: number;
+}
+
+export interface EmbedVideoData {
+  url?: string;
+  height?: number;
+  width?: number;
+}
+
+export interface EmbedProviderData {
+  name?: string;
+  url?: string;
+}
+
+export interface EmbedAuthorData {
+  name: string;
+  url?: string;
+  icon_url?: string;
+}
+
+export interface EmbedFieldData {
+  name: string;
+  value: string;
+  inline?: boolean;
+}
+
+export interface EmbedData {
+  title?: string;
+  type?: string;
+  description?: string;
+  url?: string;
+  timestamp?: number;
+  color?: number;
+  footer?: EmbedFooterData;
+  image?: EmbedImageData;
+  thumbnail?: EmbedImageData;
+  video?: EmbedVideoData;
+  provider?: EmbedProviderData;
+  author?: EmbedAuthorData;
+  fields?: EmbedFieldData[];
+}
+
+export interface AttachmentData {
+  filename: string;
+  url: string;
+  content_type?: string;
+  title?: string;
+  description?: string;
+  size?: number;
+  height?: number;
+  width?: number;
+  ephemeral?: boolean;
+  duration_secs?: number;
+}
+
 export interface MessageData {
   is_bot?: boolean;
-  embeds?: Array<{ title?: string; description?: string; fields?: Array<{ name: string; value: string }> }>;
+  embeds?: EmbedData[];
   stickers?: StickerData[];
-  attachments?: Array<{ filename: string; url: string; content_type?: string }>;
+  attachments?: AttachmentData[];
 }
 
 export function parseMessageData(raw: string | null): MessageData | null {

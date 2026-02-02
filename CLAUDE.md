@@ -216,7 +216,7 @@ Override the default system prompt formatting per entity using custom templates 
 - `memories` — object mapping entity ID to array of memory strings (arrays have `toString() → join('\n')`)
 - `entity_names` — comma-separated names of responding entities
 - `freeform` — boolean, true if any entity has `$freeform`
-- `history` — array of structured messages `[{author, content, author_id, created_at, is_bot, role, embeds, stickers, attachments}]` (chronological order). `role` is `"assistant"` for entity messages, `"user"` for human messages. `stickers` are `[{id, name, format_type}]` objects.
+- `history` — array of structured messages `[{author, content, author_id, created_at, is_bot, role, embeds, stickers, attachments}]` (chronological order). `role` is `"assistant"` for entity messages, `"user"` for human messages. `stickers` are `[{id, name, format_type}]` objects. `embeds` are full Discord embed objects (`{title?, type?, description?, url?, timestamp?, color?, footer?, image?, thumbnail?, video?, provider?, author?, fields?}`). `attachments` are `{filename, url, content_type?, title?, description?, size?, height?, width?, ephemeral?, duration_secs?}`.
 - `char` — first responding entity: `{ id, name, facts, toString() → name }`
 - `user` — user entity from others: `{ id, name, facts, toString() → name }` (defaults to `{ name: "user" }`)
 - `_single_entity` — boolean, true when exactly one entity is responding (used by default template)
@@ -299,7 +299,7 @@ Stickers are stored as structured objects `{id, name, format_type}` in the messa
 
 ### Attachments
 
-Attachments are stored as structured objects `{filename, url, content_type?}` in the message `data` JSON column. Available in template history objects via `msg.attachments`.
+Attachments are stored as structured objects `{filename, url, content_type?, title?, description?, size?, height?, width?, ephemeral?, duration_secs?}` in the message `data` JSON column. Available in template history objects via `msg.attachments`.
 
 **Functions:** `random(n)`, `has_fact(pattern)`, `roll(dice)`, `mentioned_in_dialogue(name)`, `messages(n, format, filter)`, `duration(ms)`, `date_str(offset?)`, `time_str(offset?)`, `isodate(offset?)`, `isotime(offset?)`, `weekday(offset?)`
 

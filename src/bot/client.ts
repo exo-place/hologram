@@ -378,8 +378,18 @@ bot.events.messageCreate = async (message) => {
   if (hasEmbeds) {
     msgData.embeds = message.embeds!.map(e => ({
       ...(e.title && { title: e.title }),
+      ...(e.type && { type: e.type }),
       ...(e.description && { description: e.description }),
-      ...(e.fields?.length && { fields: e.fields.map(f => ({ name: f.name, value: f.value })) }),
+      ...(e.url && { url: e.url }),
+      ...(e.timestamp && { timestamp: e.timestamp }),
+      ...(e.color != null && { color: e.color }),
+      ...(e.footer && { footer: { text: e.footer.text, ...(e.footer.iconUrl && { icon_url: e.footer.iconUrl }) } }),
+      ...(e.image && { image: { url: e.image.url, ...(e.image.height != null && { height: e.image.height }), ...(e.image.width != null && { width: e.image.width }) } }),
+      ...(e.thumbnail && { thumbnail: { url: e.thumbnail.url, ...(e.thumbnail.height != null && { height: e.thumbnail.height }), ...(e.thumbnail.width != null && { width: e.thumbnail.width }) } }),
+      ...(e.video && { video: { ...(e.video.url && { url: e.video.url }), ...(e.video.height != null && { height: e.video.height }), ...(e.video.width != null && { width: e.video.width }) } }),
+      ...(e.provider && { provider: { ...(e.provider.name && { name: e.provider.name }), ...(e.provider.url && { url: e.provider.url }) } }),
+      ...(e.author && { author: { name: e.author.name, ...(e.author.url && { url: e.author.url }), ...(e.author.iconUrl && { icon_url: e.author.iconUrl }) } }),
+      ...(e.fields?.length && { fields: e.fields.map(f => ({ name: f.name, value: f.value, ...(f.inline != null && { inline: f.inline }) })) }),
     }));
   }
   if (message.stickerItems?.length) {
@@ -390,10 +400,17 @@ bot.events.messageCreate = async (message) => {
     }));
   }
   if (hasAttachments) {
-    msgData.attachments = message.attachments!.map(a => ({
-      filename: (a as any).filename ?? "unknown",
-      url: (a as any).url ?? "",
-      ...((a as any).contentType && { content_type: (a as any).contentType }),
+    msgData.attachments = (message.attachments as any[]).map(a => ({
+      filename: a.filename ?? "unknown",
+      url: a.url ?? "",
+      ...(a.contentType && { content_type: a.contentType }),
+      ...(a.title && { title: a.title }),
+      ...(a.description && { description: a.description }),
+      ...(a.size != null && { size: a.size }),
+      ...(a.height != null && { height: a.height }),
+      ...(a.width != null && { width: a.width }),
+      ...(a.ephemeral != null && { ephemeral: a.ephemeral }),
+      ...(a.duration_secs != null && { duration_secs: a.duration_secs }),
     }));
   }
   const hasData = Object.keys(msgData).length > 0;
