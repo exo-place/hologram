@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, reactive } from 'vue'
+import { ref, watch } from 'vue'
 import PlaygroundPresets from './PlaygroundPresets.vue'
 import PlaygroundEditor from './PlaygroundEditor.vue'
 import PlaygroundOutput from './PlaygroundOutput.vue'
@@ -16,6 +16,7 @@ const history = ref<PlaygroundHistoryMessage[]>(JSON.parse(JSON.stringify(templa
 const freeform = ref(templatePresets[0].freeform)
 const result = ref<TemplateEvalResult | null>(null)
 const memoriesText = ref('')
+const contextCollapsed = ref(false)
 
 function applyPreset(idx: number) {
   presetIndex.value = idx
@@ -88,59 +89,62 @@ function removeHistoryMessage(idx: number) {
       @update:model-value="applyPreset"
     />
 
-    <div class="playground-split">
-      <div class="playground-panel">
-        <h3>Template</h3>
-        <PlaygroundEditor
-          v-model="templateText"
-          language="hologram-template"
-          height="350px"
-        />
-      </div>
+    <PlaygroundEditor
+      v-model="templateText"
+      language="hologram-template"
+      height="350px"
+    />
 
-      <div class="playground-panel">
-        <h3>Entities</h3>
-        <div class="entity-editor">
-          <div
-            v-for="(entity, i) in entities"
-            :key="'e-' + i"
-            class="entity-editor-item"
-          >
-            <label>{{ entity.name }} (id: {{ entity.id }}) — responding</label>
-            <input
-              type="text"
-              :value="entity.name"
-              placeholder="Name"
-              @input="entity.name = ($event.target as HTMLInputElement).value"
-            />
-            <textarea
-              :value="entity.factsText"
-              placeholder="Facts (one per line)"
-              @input="entity.factsText = ($event.target as HTMLTextAreaElement).value"
-            />
-          </div>
-          <div
-            v-for="(entity, i) in others"
-            :key="'o-' + i"
-            class="entity-editor-item"
-          >
-            <label>{{ entity.name }} (id: {{ entity.id }}) — other</label>
-            <input
-              type="text"
-              :value="entity.name"
-              placeholder="Name"
-              @input="entity.name = ($event.target as HTMLInputElement).value"
-            />
-            <textarea
-              :value="entity.factsText"
-              placeholder="Facts (one per line)"
-              @input="entity.factsText = ($event.target as HTMLTextAreaElement).value"
-            />
+    <div class="context-editor">
+      <div class="context-editor-header" @click="contextCollapsed = !contextCollapsed">
+        <span>Context (Entities, History, Memories)</span>
+        <span class="context-editor-toggle">{{ contextCollapsed ? '+ expand' : '- collapse' }}</span>
+      </div>
+      <div v-show="!contextCollapsed" style="padding: 12px; display: flex; flex-direction: column; gap: 12px;">
+        <div>
+          <h3 style="margin: 0 0 8px;">Entities</h3>
+          <div class="entity-editor">
+            <div
+              v-for="(entity, i) in entities"
+              :key="'e-' + i"
+              class="entity-editor-item"
+            >
+              <label>{{ entity.name }} (id: {{ entity.id }}) — responding</label>
+              <input
+                type="text"
+                :value="entity.name"
+                placeholder="Name"
+                @input="entity.name = ($event.target as HTMLInputElement).value"
+              />
+              <textarea
+                :value="entity.factsText"
+                placeholder="Facts (one per line)"
+                @input="entity.factsText = ($event.target as HTMLTextAreaElement).value"
+              />
+            </div>
+            <div
+              v-for="(entity, i) in others"
+              :key="'o-' + i"
+              class="entity-editor-item"
+            >
+              <label>{{ entity.name }} (id: {{ entity.id }}) — other</label>
+              <input
+                type="text"
+                :value="entity.name"
+                placeholder="Name"
+                @input="entity.name = ($event.target as HTMLInputElement).value"
+              />
+              <textarea
+                :value="entity.factsText"
+                placeholder="Facts (one per line)"
+                @input="entity.factsText = ($event.target as HTMLTextAreaElement).value"
+              />
+            </div>
           </div>
         </div>
 
         <div v-if="memoriesText || Object.keys(memories).length > 0">
-          <h3>Memories</h3>
+          <h3 style="margin: 0 0 8px;">Memories</h3>
           <div class="entity-editor-item">
             <label>Format: # Name (id: N) followed by memory lines</label>
             <textarea
@@ -151,48 +155,50 @@ function removeHistoryMessage(idx: number) {
           </div>
         </div>
 
-        <h3>History</h3>
-        <div class="entity-editor">
-          <div
-            v-for="(msg, i) in history"
-            :key="'h-' + i"
-            class="entity-editor-item"
-            style="display: flex; gap: 6px; align-items: start; flex-wrap: wrap;"
-          >
-            <select
-              :value="msg.role"
-              style="padding: 4px; border: 1px solid var(--vp-c-divider); border-radius: 4px; background: var(--vp-c-bg); color: var(--vp-c-text-1); font-size: 12px;"
-              @change="msg.role = ($event.target as HTMLSelectElement).value as 'user' | 'assistant'"
+        <div>
+          <h3 style="margin: 0 0 8px;">History</h3>
+          <div class="entity-editor">
+            <div
+              v-for="(msg, i) in history"
+              :key="'h-' + i"
+              class="entity-editor-item"
+              style="display: flex; gap: 6px; align-items: start; flex-wrap: wrap;"
             >
-              <option value="user">user</option>
-              <option value="assistant">assistant</option>
-            </select>
-            <input
-              type="text"
-              :value="msg.author"
-              placeholder="Author"
-              style="width: 80px;"
-              @input="msg.author = ($event.target as HTMLInputElement).value"
-            />
-            <input
-              type="text"
-              :value="msg.content"
-              placeholder="Content"
-              style="flex: 1; min-width: 120px;"
-              @input="msg.content = ($event.target as HTMLInputElement).value"
-            />
-            <button
-              class="copy-btn"
-              style="color: var(--vp-c-danger-1);"
-              @click="removeHistoryMessage(i)"
-            >
-              x
-            </button>
+              <select
+                :value="msg.role"
+                style="padding: 4px; border: 1px solid var(--vp-c-divider); border-radius: 4px; background: var(--vp-c-bg); color: var(--vp-c-text-1); font-size: 12px;"
+                @change="msg.role = ($event.target as HTMLSelectElement).value as 'user' | 'assistant'"
+              >
+                <option value="user">user</option>
+                <option value="assistant">assistant</option>
+              </select>
+              <input
+                type="text"
+                :value="msg.author"
+                placeholder="Author"
+                style="width: 80px;"
+                @input="msg.author = ($event.target as HTMLInputElement).value"
+              />
+              <input
+                type="text"
+                :value="msg.content"
+                placeholder="Content"
+                style="flex: 1; min-width: 120px;"
+                @input="msg.content = ($event.target as HTMLInputElement).value"
+              />
+              <button
+                class="copy-btn"
+                style="color: var(--vp-c-danger-1);"
+                @click="removeHistoryMessage(i)"
+              >
+                x
+              </button>
+            </div>
+            <button class="copy-btn" @click="addHistoryMessage">+ Add message</button>
           </div>
-          <button class="copy-btn" @click="addHistoryMessage">+ Add message</button>
         </div>
 
-        <div class="context-field context-field-toggle" style="margin-top: 8px;">
+        <div class="context-field context-field-toggle">
           <input type="checkbox" v-model="freeform" />
           <label style="font-size: 13px; font-weight: 500; color: var(--vp-c-text-2);">freeform</label>
         </div>

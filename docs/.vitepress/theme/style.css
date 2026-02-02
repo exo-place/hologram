@@ -20,30 +20,6 @@
   z-index: 10;
 }
 
-.playground-split {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-
-@media (max-width: 768px) {
-  .playground-split {
-    grid-template-columns: 1fr;
-  }
-}
-
-.playground-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.playground-panel h3 {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--vp-c-text-1);
-}
 
 /* Output panel */
 .playground-output {
