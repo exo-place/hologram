@@ -1,7 +1,7 @@
 {
   "name": "hologram-syntax",
-  "displayName": "Hologram Facts",
-  "description": "Syntax highlighting for Hologram entity facts, directives, and macros",
+  "displayName": "Hologram",
+  "description": "Syntax highlighting for Hologram entity facts and Nunjucks templates",
   "version": "0.1.0",
   "engines": {
     "vscode": "^1.75.0"
@@ -20,6 +20,16 @@
         "extensions": [
           ".holo"
         ]
+      },
+      {
+        "id": "hologram-template",
+        "aliases": [
+          "Hologram Template",
+          "hologram-template"
+        ],
+        "extensions": [
+          ".njk"
+        ]
       }
     ],
     "grammars": [
@@ -27,6 +37,11 @@
         "language": "hologram",
         "scopeName": "source.hologram",
         "path": "./syntaxes/hologram.tmLanguage.json"
+      },
+      {
+        "language": "hologram-template",
+        "scopeName": "source.hologram-template",
+        "path": "./syntaxes/hologram-template.tmLanguage.json"
       }
     ]
   }

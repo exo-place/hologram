@@ -1,0 +1,167 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Hologram Template",
+  "scopeName": "source.hologram-template",
+  "patterns": [
+    { "include": "#comment-block" },
+    { "include": "#expression-block" },
+    { "include": "#tag-block" },
+    { "include": "#xml-tag" }
+  ],
+  "repository": {
+    "comment-block": {
+      "name": "comment.block.hologram-template",
+      "begin": "\\{#-?",
+      "end": "-?#\\}",
+      "beginCaptures": { "0": { "name": "punctuation.definition.comment.begin.hologram-template" } },
+      "endCaptures": { "0": { "name": "punctuation.definition.comment.end.hologram-template" } }
+    },
+    "expression-block": {
+      "name": "meta.expression.hologram-template",
+      "begin": "(\\{\\{-?)\\s*",
+      "end": "\\s*(-?\\}\\})",
+      "beginCaptures": { "1": { "name": "punctuation.section.expression.begin.hologram-template" } },
+      "endCaptures": { "1": { "name": "punctuation.section.expression.end.hologram-template" } },
+      "patterns": [
+        { "include": "#expression" }
+      ]
+    },
+    "tag-block": {
+      "name": "meta.tag.hologram-template",
+      "begin": "(\\{%-?)\\s*",
+      "end": "\\s*(-?%\\})",
+      "beginCaptures": { "1": { "name": "punctuation.section.tag.begin.hologram-template" } },
+      "endCaptures": { "1": { "name": "punctuation.section.tag.end.hologram-template" } },
+      "patterns": [
+        { "include": "#tag-keyword" },
+        { "include": "#expression" }
+      ]
+    },
+    "tag-keyword": {
+      "patterns": [
+        {
+          "match": "\\b(if|elif|else|endif|for|endfor|block|endblock|extends|call|endcall|macro|endmacro|set|raw|endraw)\\b",
+          "name": "keyword.control.hologram-template"
+        }
+      ]
+    },
+    "expression": {
+      "patterns": [
+        { "include": "#string-double" },
+        { "include": "#string-single" },
+        { "include": "#numeric" },
+        { "include": "#boolean" },
+        { "include": "#operator-word" },
+        { "include": "#operator-symbol" },
+        { "include": "#filter" },
+        { "include": "#function-call" },
+        { "include": "#loop-variable" },
+        { "include": "#context-object" },
+        { "include": "#context-variable" },
+        { "include": "#send-as" },
+        { "include": "#property-access" }
+      ]
+    },
+    "string-double": {
+      "name": "string.quoted.double.hologram-template",
+      "begin": "\"",
+      "end": "\"",
+      "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.hologram-template" } },
+      "endCaptures": { "0": { "name": "punctuation.definition.string.end.hologram-template" } },
+      "patterns": [
+        {
+          "match": "\\\\[nrt\\\\\"']",
+          "name": "constant.character.escape.hologram-template"
+        }
+      ]
+    },
+    "string-single": {
+      "name": "string.quoted.single.hologram-template",
+      "begin": "'",
+      "end": "'",
+      "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.hologram-template" } },
+      "endCaptures": { "0": { "name": "punctuation.definition.string.end.hologram-template" } },
+      "patterns": [
+        {
+          "match": "\\\\[nrt\\\\\"']",
+          "name": "constant.character.escape.hologram-template"
+        }
+      ]
+    },
+    "numeric": {
+      "match": "\\b\\d+(?:\\.\\d+)?\\b",
+      "name": "constant.numeric.hologram-template"
+    },
+    "boolean": {
+      "match": "\\b(true|false|none|null)\\b",
+      "name": "constant.language.hologram-template"
+    },
+    "operator-word": {
+      "match": "\\b(and|or|not|in|is)\\b",
+      "name": "keyword.operator.logical.hologram-template"
+    },
+    "operator-symbol": {
+      "match": "<=|>=|==|!=|\\|\\||&&|\\*\\*|//|[<>!~+\\-*/%]",
+      "name": "keyword.operator.hologram-template"
+    },
+    "filter": {
+      "match": "(\\|)\\s*(default|length|join|first|last|upper|lower|trim|nl2br|int|float|abs|round|reverse|sort|batch)\\b",
+      "captures": {
+        "1": { "name": "keyword.operator.pipe.hologram-template" },
+        "2": { "name": "support.function.filter.hologram-template" }
+      }
+    },
+    "function-call": {
+      "match": "\\b(random|has_fact|roll|messages|duration|mentioned_in_dialogue|date_str|time_str|isodate|isotime|weekday|send_as|caller)\\s*(?=\\()",
+      "name": "support.function.hologram-template"
+    },
+    "loop-variable": {
+      "match": "\\b(loop)\\.(index|index0|first|last|length|revindex|revindex0)\\b",
+      "captures": {
+        "1": { "name": "variable.language.loop.hologram-template" },
+        "2": { "name": "support.variable.loop-property.hologram-template" }
+      }
+    },
+    "context-object": {
+      "match": "\\b(self|channel|server|time)(?=\\.)",
+      "name": "variable.other.object.hologram-template"
+    },
+    "context-variable": {
+      "match": "\\b(entities|others|memories|entity_names|freeform|history|char|user|_single_entity|mentioned|replied|replied_to|is_forward|is_self|content|author|interaction_type|name|chars|group|response_ms|retry_ms|idle_ms)\\b",
+      "name": "variable.other.context.hologram-template"
+    },
+    "send-as": {
+      "match": "\\b(send_as)\\b(?!\\s*\\()",
+      "name": "support.function.macro.hologram-template"
+    },
+    "property-access": {
+      "match": "(\\.)([a-zA-Z_][a-zA-Z0-9_]*)",
+      "captures": {
+        "1": { "name": "punctuation.accessor.hologram-template" },
+        "2": { "name": "variable.other.property.hologram-template" }
+      }
+    },
+    "xml-tag": {
+      "patterns": [
+        {
+          "match": "(<)(/?)(defs|memories)((?:\\s+[a-zA-Z_][a-zA-Z0-9_-]*(?:=(?:\"[^\"]*\"|'[^']*'))?)*\\s*)(>)",
+          "captures": {
+            "1": { "name": "punctuation.definition.tag.begin.hologram-template" },
+            "2": { "name": "punctuation.definition.tag.close.hologram-template" },
+            "3": { "name": "entity.name.tag.hologram-template" },
+            "4": { "name": "meta.tag.attributes.hologram-template", "patterns": [{ "include": "#xml-attribute" }] },
+            "5": { "name": "punctuation.definition.tag.end.hologram-template" }
+          }
+        }
+      ]
+    },
+    "xml-attribute": {
+      "match": "\\b([a-zA-Z_][a-zA-Z0-9_-]*)(=)(\"[^\"]*\"|'[^']*')",
+      "captures": {
+        "1": { "name": "entity.other.attribute-name.hologram-template" },
+        "2": { "name": "punctuation.separator.key-value.hologram-template" },
+        "3": { "name": "string.quoted.hologram-template" }
+      }
+    }
+  }
+}
