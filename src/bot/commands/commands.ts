@@ -1403,8 +1403,8 @@ registerCommand({
       ],
     },
     {
-      name: "history",
-      description: "Show message history that would be sent to the LLM",
+      name: "context",
+      description: "Show message context that would be sent to the LLM",
       type: ApplicationCommandOptionTypes.SubCommand,
       options: [
         {
@@ -1423,8 +1423,8 @@ registerCommand({
 
     if (subcommand === "prompt") {
       await handleInfoPrompt(ctx, options);
-    } else if (subcommand === "history") {
-      await handleInfoHistory(ctx, options);
+    } else if (subcommand === "context") {
+      await handleInfoContext(ctx, options);
     } else {
       await handleInfoStatus(ctx);
     }
@@ -1593,9 +1593,9 @@ function buildEvaluatedEntity(entity: EntityWithFacts, options?: {
   };
 }
 
-async function handleInfoHistory(ctx: CommandContext, options: Record<string, unknown>) {
+async function handleInfoContext(ctx: CommandContext, options: Record<string, unknown>) {
   const entityInput = options.entity as string | undefined;
-  const targetEntity = await resolveTargetEntity(ctx, entityInput, "history");
+  const targetEntity = await resolveTargetEntity(ctx, entityInput, "context");
   if (!targetEntity) return;
 
   // Fetch channel/server metadata for template context

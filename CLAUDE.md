@@ -352,7 +352,7 @@ Permissions are managed via `/edit entity type:permissions`, which presents Disc
 | `/unbind <target> <entity>` | Unbind channel/user |
 | `/debug [status]` | Channel state (default) |
 | `/debug prompt [entity]` | Show system prompt for entity |
-| `/debug history [entity]` | Show message history for entity |
+| `/debug context [entity]` | Show message context for entity |
 | `/trigger <entity>` | Manually trigger entity response |
 | `/forget` | Exclude messages before now from context |
 

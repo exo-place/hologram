@@ -153,7 +153,7 @@ Remove an entity binding from a channel or yourself.
 View current channel state or debug information.
 
 ```
-/debug [status|prompt|history]
+/debug [status|prompt|context]
 ```
 
 Shows:

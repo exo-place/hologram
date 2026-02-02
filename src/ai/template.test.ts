@@ -134,6 +134,29 @@ describe("template: filters", () => {
     expect(render("{{ x | join(', ') }}")).toBe("");
   });
 
+  test("join filter with attr parameter", () => {
+    const arr = [{ name: "Aria" }, { name: "Kai" }, { name: "Zara" }];
+    expect(render("{{ arr | join(', ', 'name') }}", { arr })).toBe("Aria, Kai, Zara");
+  });
+
+  test("join filter with attr parameter on missing attribute", () => {
+    const arr = [{ x: 1 }, { x: 2 }];
+    // Missing attribute produces undefined values which join as empty strings
+    expect(render("{{ arr | join(', ', 'name') }}", { arr })).toBe(", ");
+  });
+
+  test("join filter with attr parameter and null elements", () => {
+    const arr = [null, { name: "B" }, undefined];
+    // Null/undefined elements are passed through (attr lookup on null → null)
+    expect(() => render("{{ arr | join(', ', 'name') }}", { arr })).not.toThrow();
+  });
+
+  test("join filter with attr parameter and default separator", () => {
+    const arr = [{ id: 1 }, { id: 2 }, { id: 3 }];
+    // attr is third positional arg, so separator must be provided
+    expect(render("{{ arr | join(',', 'id') }}", { arr })).toBe("1,2,3");
+  });
+
   test("first and last filters", () => {
     expect(render("{{ arr | first }}", { arr: [1, 2, 3] })).toBe("1");
     expect(render("{{ arr | last }}", { arr: [1, 2, 3] })).toBe("3");

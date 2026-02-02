@@ -559,6 +559,120 @@ describe("renderSystemPrompt", () => {
 });
 
 // =============================================================================
+// Structured Message Data Access Tests
+// =============================================================================
+
+describe("template access to embeds/stickers/attachments", () => {
+  test("custom template can access embed fields", () => {
+    const ctx = buildTemplateContext(
+      [mockEntity({ id: 1, name: "Aria", facts: ["is a character"] })],
+      [],
+      undefined,
+      [],
+    );
+    // Inject structured embed data into history
+    ctx.history = [{
+      author: "User", content: "check this", author_id: "1", created_at: "2024-01-01",
+      is_bot: false, role: "user" as const,
+      embeds: [{ title: "Link Preview", description: "A website", url: "https://example.com", type: "link" }],
+      stickers: [], attachments: [],
+    }];
+    const template = `{% for msg in history %}{% for e in msg.embeds %}[{{ e.title }}]({{ e.url }}): {{ e.description }}{% endfor %}{% endfor %}`;
+    const output = renderStructuredTemplate(template, ctx);
+    expect(output.messages[0].content).toContain("[Link Preview](https://example.com): A website");
+  });
+
+  test("custom template can access attachment fields", () => {
+    const ctx = buildTemplateContext(
+      [mockEntity({ id: 1, name: "Aria", facts: ["is a character"] })],
+      [],
+      undefined,
+      [],
+    );
+    ctx.history = [{
+      author: "User", content: "here's a file", author_id: "1", created_at: "2024-01-01",
+      is_bot: false, role: "user" as const,
+      embeds: [],
+      stickers: [],
+      attachments: [{ filename: "photo.png", url: "https://cdn.example.com/photo.png", content_type: "image/png", size: 12345, width: 800, height: 600 }],
+    }];
+    const template = `{% for msg in history %}{% for a in msg.attachments %}{{ a.filename }} ({{ a.width }}x{{ a.height }}, {{ a.size }} bytes){% endfor %}{% endfor %}`;
+    const output = renderStructuredTemplate(template, ctx);
+    expect(output.messages[0].content).toContain("photo.png (800x600, 12345 bytes)");
+  });
+
+  test("custom template can access sticker fields", () => {
+    const ctx = buildTemplateContext(
+      [mockEntity({ id: 1, name: "Aria", facts: ["is a character"] })],
+      [],
+      undefined,
+      [],
+    );
+    ctx.history = [{
+      author: "User", content: "", author_id: "1", created_at: "2024-01-01",
+      is_bot: false, role: "user" as const,
+      embeds: [],
+      stickers: [{ id: "12345", name: "wave", format_type: 1 }],
+      attachments: [],
+    }];
+    const template = `{% for msg in history %}{% for s in msg.stickers %}[sticker:{{ s.name }}]{% endfor %}{% endfor %}`;
+    const output = renderStructuredTemplate(template, ctx);
+    expect(output.messages[0].content).toContain("[sticker:wave]");
+  });
+
+  test("custom template can access nested embed sub-objects", () => {
+    const ctx = buildTemplateContext(
+      [mockEntity({ id: 1, name: "Aria", facts: ["is a character"] })],
+      [],
+      undefined,
+      [],
+    );
+    ctx.history = [{
+      author: "User", content: "embed test", author_id: "1", created_at: "2024-01-01",
+      is_bot: false, role: "user" as const,
+      embeds: [{
+        title: "Rich Embed",
+        author: { name: "Bot", icon_url: "https://example.com/icon.png" },
+        footer: { text: "Footer here" },
+        image: { url: "https://example.com/img.png", width: 400, height: 300 },
+        fields: [{ name: "HP", value: "100", inline: true }, { name: "MP", value: "50" }],
+        color: 0x00FF00,
+      }],
+      stickers: [], attachments: [],
+    }];
+    const template = [
+      `{% for msg in history %}{% for e in msg.embeds %}`,
+      `author={{ e.author.name }}`,
+      `footer={{ e.footer.text }}`,
+      `image={{ e.image.url }} ({{ e.image.width }}x{{ e.image.height }})`,
+      `color={{ e.color }}`,
+      `{% for f in e.fields %}{{ f.name }}={{ f.value }}{% if f.inline %} (inline){% endif %} {% endfor %}`,
+      `{% endfor %}{% endfor %}`,
+    ].join("\n");
+    const output = renderStructuredTemplate(template, ctx);
+    const content = output.messages[0].content;
+    expect(content).toContain("author=Bot");
+    expect(content).toContain("footer=Footer here");
+    expect(content).toContain("image=https://example.com/img.png (400x300)");
+    expect(content).toContain("color=65280");
+    expect(content).toContain("HP=100 (inline)");
+    expect(content).toContain("MP=50");
+  });
+
+  test("empty embeds/stickers/attachments don't affect rendering", () => {
+    const ctx = buildTemplateContext(
+      [mockEntity({ id: 1, name: "Aria", facts: ["is a character"] })],
+      [],
+      undefined,
+      [{ author: "User", content: "hello", author_id: "1", role: "user" as const }],
+    );
+    const template = `{% for msg in history %}{{ msg.content }} (embeds={{ msg.embeds | length }}, stickers={{ msg.stickers | length }}, attachments={{ msg.attachments | length }}){% endfor %}`;
+    const output = renderStructuredTemplate(template, ctx);
+    expect(output.messages[0].content).toContain("hello (embeds=0, stickers=0, attachments=0)");
+  });
+});
+
+// =============================================================================
 // Template Inheritance Tests ({% extends %})
 // =============================================================================
 
