@@ -84,12 +84,14 @@ All standard expression context variables are available (see `ExprContext`), plu
 
 | Variable | Type | Description |
 |----------|------|-------------|
-| `entities` | `Array<{id, name, facts}>` | Responding entities (facts as `string[]`) |
-| `others` | `Array<{id, name, facts}>` | Other referenced entities (facts as `string[]`) |
-| `memories` | `Record<number, string[]>` | Entity ID to memory strings |
+| `entities` | `Array<{id, name, facts}>` | Responding entities (facts have `toString() → join('\n')`) |
+| `others` | `Array<{id, name, facts}>` | Other referenced entities (facts have `toString() → join('\n')`) |
+| `memories` | `Record<number, string[]>` | Entity ID to memory strings (arrays have `toString() → join('\n')`) |
 | `entity_names` | `string` | Comma-separated names of responding entities |
 | `freeform` | `boolean` | True if any entity has `$freeform` |
 | `history` | `Array<{author, content, author_id, created_at, is_bot, role, embeds, stickers, attachments}>` | Structured message history (chronological) |
+| `char` | `{id, name, facts}` | First responding entity (`toString() → name`) |
+| `user` | `{id, name, facts}` | User entity from others (`toString() → name`, defaults to `{name: "user"}`) |
 | `_single_entity` | `boolean` | True when exactly one entity is responding |
 
 ### Structured Messages
@@ -108,51 +110,42 @@ The `history` variable provides the raw message history as structured objects:
 | `stickers` | `Array<{id, name, format_type}>` | Sticker data (format_type: 1=PNG, 2=APNG, 3=Lottie, 4=GIF) |
 | `attachments` | `Array<{filename, url, content_type?}>` | File attachments |
 
-### Role Blocks
+### `send_as` Macro
 
-Templates use named blocks to define structured chat messages. Three role blocks are available:
+The `send_as(role)` macro designates message roles in the LLM conversation. It is automatically injected into templates at render time — you don't need to define it.
 
-| Block | LLM Role | Description |
-|-------|----------|-------------|
-| `{% block system %}` | `system` | System-role message (entity defs, instructions) |
-| `{% block user %}` | `user` | User messages |
-| `{% block char %}` | `assistant` | Entity/character messages |
+Use `{% call send_as(role) %}...{% endcall %}` to wrap content that should be sent as a specific role:
 
-Blocks work inside for loops and conditionals (a Nunjucks extension over Jinja2), so `{% block user %}` and `{% block char %}` can appear inside a history loop:
+| Role | Description |
+|------|-------------|
+| `"system"` | System-role message |
+| `"user"` | User messages |
+| `"assistant"` | Entity/character messages |
+
+**Unmarked text** (outside any `send_as` call) automatically becomes system-role messages. This means entity definitions and instructions can be written as plain template text.
 
 ```
-{% block system %}
+{#- Entity defs (unmarked → system-role) -#}
 You are {{ entities[0].name }}.
-{{ entities[0].facts | join("\n") }}
-{% endblock %}
+{{ entities[0].facts }}
 
+{#- History (send_as → proper roles) -#}
 {% for msg in history %}
-  {% if msg.role == "assistant" %}
-    {% block char %}{{ msg.author }}: {{ msg.content }}{% endblock %}
-  {% else %}
-    {% block user %}{{ msg.author }}: {{ msg.content }}{% endblock %}
-  {% endif %}
+{% call send_as(msg.role) -%}
+{{ msg.author }}: {{ msg.content }}
+{%- endcall %}
 {% endfor %}
 ```
 
 **Behavior:**
-- Each block renders into a message with the corresponding LLM role
-- Blocks inside for loops produce one message per iteration
-- Empty blocks (whitespace-only) are filtered out
-- Content outside any role block is ignored
-- If no role blocks are present, the entire output is the system prompt (legacy behavior)
+- `send_as` calls produce messages with the specified role
+- Empty `send_as` calls (whitespace-only) are filtered out
+- Unmarked text between, before, or after `send_as` calls → system-role messages
+- No `send_as` calls at all → entire output is a single system message (legacy behavior)
 
-**Overriding blocks via inheritance:** Use `{% extends "entity-name" %}` and `{{ super() }}` to override specific role blocks while inheriting the rest:
+**Blocks are organizational only:** `{% block name %}` is for template inheritance — block names have no role semantics. Content inside blocks renders as unmarked text unless wrapped in `send_as`.
 
-```
-{% extends "base-entity" %}
-{% block system %}
-Custom system prompt for {{ entities[0].name }}.
-{{ super() }}
-{% endblock %}
-```
-
-**Security:** Role blocks are wrapped with cryptographic nonce markers (256-bit random hex) at render time. Template context values are strings, not template code — Discord user messages containing marker-like text cannot trigger the parser.
+**Security:** `send_as` markers use cryptographic nonce markers (256-bit random hex) at render time. Template context values are strings, not template code — Discord user messages containing marker-like text cannot trigger the parser.
 
 ### Template Inheritance
 
@@ -166,24 +159,33 @@ Custom content here
 {% endblock %}
 ```
 
-The parent template is loaded by looking up the entity by name and reading its template. The child template overrides parent `{% block %}` sections. Nunjucks provides built-in circular inheritance detection.
+The parent template is loaded by looking up the entity by name and reading its template. The child template overrides parent `{% block %}` sections. Nunjucks provides built-in circular inheritance detection. Child templates in an inheritance chain inherit the `send_as` macro from their root parent.
 
 **Note:** The parent template runs with the same context as the child (entities, history, etc. come from the current render call, not from the parent entity).
 
-### Full Prompt Control
+### Per-Entity System Prompt
 
-When a template uses role blocks (`{% block system %}`, `{% block user %}`, `{% block char %}`), its output is parsed into a structured system prompt + message array. Without role blocks, the entire output is the system prompt and only the latest message is sent as user content. The built-in default template uses role blocks to produce proper role-based chat messages.
+Each entity can have a custom system prompt template (separate from the main template):
 
 ```
-{% block system %}
+/edit <entity> type:System Prompt
+```
+
+This controls the AI SDK `system` parameter — the top-level system instruction the LLM sees before any messages. Empty = use global default (currently empty).
+
+### Full Prompt Control
+
+Templates produce structured message arrays using `send_as` for role designation. Unmarked text becomes system-role messages. The built-in default template uses `send_as(msg.role)` for history and unmarked text for entity definitions.
+
+```
+{#- Unmarked text → system-role message -#}
 You are {{ entities[0].name }}.
-{% endblock %}
+{{ entities[0].facts }}
+{#- History → proper roles via send_as -#}
 {% for msg in history %}
-  {% if msg.role == "assistant" %}
-    {% block char %}{{ msg.author }}: {{ msg.content }}{% endblock %}
-  {% else %}
-    {% block user %}{{ msg.author }}: {{ msg.content }}{% endblock %}
-  {% endif %}
+{% call send_as(msg.role) -%}
+{{ msg.author }}: {{ msg.content }}
+{%- endcall %}
 {% endfor %}
 ```
 
@@ -202,7 +204,7 @@ Inside `{% for %}` blocks, Nunjucks provides the `loop` variable:
 ## Example
 
 ```
-{# Custom system prompt template #}
+{# Custom template — entity defs are unmarked (→ system role) #}
 {% for entity in entities %}
 You are {{ entity.name }}.
 
@@ -229,11 +231,21 @@ Memories:
 Write naturally with all characters.
 {% endif %}
 
-{# Include message history with formatting #}
-Recent conversation:
+{# Message history with proper roles via send_as #}
 {% for msg in history %}
+{% call send_as(msg.role) -%}
 {{ msg.author }}: {{ msg.content }}
+{%- endcall %}
 {% endfor %}
+```
+
+### Array toString
+
+Facts and memories arrays have `toString()` overrides that join with newlines, so `{{ char.facts }}` outputs the same as `{{ char.facts | join("\n") }}`:
+
+```
+{{ char.name }}'s facts:
+{{ char.facts }}
 ```
 
 ### Using Filters
@@ -280,11 +292,9 @@ Entities with different templates get **separate LLM calls**. Entities with the 
 
 ## Deferred Features
 
-The following Nunjucks features are not yet available and will be implemented in a future update:
+The following Nunjucks feature is not yet available:
 
 - `{% include %}` — template inclusion
-- `{% macro %}` — reusable template macros
-- `{% set %}` — variable assignment
 
 ## Known Limitations
 

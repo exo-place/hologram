@@ -69,7 +69,7 @@ Facts:
 ### Database (8 tables)
 
 ```sql
-entities         -- id, name, owned_by, created_at, template
+entities         -- id, name, owned_by, created_at, template, system_template
 facts            -- id, entity_id, content, created_at, updated_at
 discord_entities -- discord_id, discord_type, entity_id, scope_guild_id, scope_channel_id
 fact_embeddings  -- (planned) vector search
@@ -191,48 +191,50 @@ Override the default system prompt formatting per entity using custom templates 
 **Filters:** `default(val)`, `length`, `join(sep)`, `first`, `last`, `upper`, `lower`, `trim`, `nl2br`, `int`, `float`, `abs`, `round(precision)`, `reverse`, `sort`, `batch(n)`
 
 **Template context variables** (in addition to standard expr context):
-- `entities` — array of responding entities `[{id, name, facts}]`
-- `others` — array of other entities `[{id, name, facts}]` (facts as `string[]`)
-- `memories` — object mapping entity ID to array of memory strings
+- `entities` — array of responding entities `[{id, name, facts}]` (facts have `toString() → join('\n')`)
+- `others` — array of other entities `[{id, name, facts}]` (facts as `string[]` with `toString() → join('\n')`)
+- `memories` — object mapping entity ID to array of memory strings (arrays have `toString() → join('\n')`)
 - `entity_names` — comma-separated names of responding entities
 - `freeform` — boolean, true if any entity has `$freeform`
 - `history` — array of structured messages `[{author, content, author_id, created_at, is_bot, role, embeds, stickers, attachments}]` (chronological order). `role` is `"assistant"` for entity messages, `"user"` for human messages. `stickers` are `[{id, name, format_type}]` objects.
+- `char` — first responding entity: `{ id, name, facts, toString() → name }`
+- `user` — user entity from others: `{ id, name, facts, toString() → name }` (defaults to `{ name: "user" }`)
 - `_single_entity` — boolean, true when exactly one entity is responding (used by default template)
 
 **Two-layer system prompt:** The LLM receives two distinct system instruction channels:
-1. **Dedicated system parameter** — rendered from `SYSTEM_PROMPT_TEMPLATE`, passed as the AI SDK `system` field. Provides framing context.
+1. **Dedicated system parameter** — rendered from per-entity system template (or empty default), passed as the AI SDK `system` field. Edit via `/edit entity type:System Prompt`.
 2. **System-role messages** — system-role entries in the messages array from the main template. Carry entity definitions, memories, and response instructions.
 
 `/debug prompt` shows both layers separated by `---`.
 
-**Full prompt control:** Templates use role blocks (`{% block system %}`, `{% block user %}`, `{% block char %}`) to produce structured messages. `{% block system %}` maps to system role, `{% block user %}` to user role, `{% block char %}` to assistant role. Blocks work inside for loops (Nunjucks extension). Without role blocks, the entire output is a single system-role message and only the latest message is sent as user content. The built-in default template uses role blocks to produce proper role-based chat messages.
+**Note:** The AI SDK's `prompt` parameter is mutually exclusive with `messages` — since we use `messages` for structured conversation history, only `system` + `messages` are used.
 
-**Role blocks:** Define content for each LLM role. Blocks inside for loops produce one message per iteration. Empty blocks are filtered. Content outside blocks is ignored.
+**`send_as` macro:** Templates use `{% call send_as(role) %}...{% endcall %}` to designate message roles. The `send_as` macro is automatically injected into templates at render time. Unmarked text (outside `send_as` calls) becomes system-role messages. No `send_as` calls = entire output is a single system message.
 
 ```
-{% block system %}
+{#- Entity defs (unmarked → system-role message) -#}
 You are {{ entities[0].name }}.
-{{ entities[0].facts | join("\n") }}
-{% endblock %}
+{{ entities[0].facts }}
+{#- History (send_as → proper roles) -#}
 {% for msg in history %}
-  {% if msg.role == "assistant" %}
-    {% block char %}{{ msg.author }}: {{ msg.content }}{% endblock %}
-  {% else %}
-    {% block user %}{{ msg.author }}: {{ msg.content }}{% endblock %}
-  {% endif %}
+{% call send_as(msg.role) -%}
+{{ msg.author }}: {{ msg.content }}
+{%- endcall %}
 {% endfor %}
 ```
 
-**Template inheritance (`{% extends %}`):** Templates can inherit from other entities' templates using `{% extends "entity-name" %}`. The parent template is loaded by looking up the entity by name and reading its template. Override parent blocks with `{% block name %}...{% endblock %}`. Nunjucks has built-in circular inheritance detection.
+**Blocks:** `{% block name %}` is purely organizational (for template inheritance). Block names have no role semantics — content inside blocks renders as unmarked text unless wrapped in `send_as`.
+
+**Template inheritance (`{% extends %}`):** Templates can inherit from other entities' templates using `{% extends "entity-name" %}`. The parent template is loaded by looking up the entity by name and reading its template. Override parent blocks with `{% block name %}...{% endblock %}`. Nunjucks has built-in circular inheritance detection. Child templates in an inheritance chain inherit the `send_as` macro from their root parent.
 
 **Behavior:**
-- `null` template (default) = use built-in `DEFAULT_TEMPLATE` (Nunjucks template that replicates standard formatting with role blocks)
+- `null` template (default) = use built-in `DEFAULT_TEMPLATE` (entity defs as system-role, history via `send_as`)
 - Empty submission via `/edit type:template` clears template back to default
 - Entities with different templates get separate LLM calls
 - Entities with the same template (including null) share a call as before
 - Limits: 1000 iterations per for-loop, 1MB output
 
-**Deferred (TODO.md):** `{% include %}`, `{% macro %}`, `{% set %}` — not yet implemented.
+**Deferred (TODO.md):** `{% include %}` — not yet implemented.
 
 ### Context Window
 
@@ -321,6 +323,7 @@ Permissions are managed via `/edit entity type:permissions`, which presents Disc
 | `/view <entity>` | View entity facts |
 | `/edit <entity>` | Edit facts + memories (modal) |
 | `/edit <entity> type:config` | Edit model, context, stream, avatar, memory |
+| `/edit <entity> type:System Prompt` | Edit per-entity system prompt template |
 | `/edit <entity> type:permissions` | Edit view, edit, use, blacklist |
 | `/delete <entity>` | Delete entity |
 | `/transfer <entity> <user>` | Transfer ownership |

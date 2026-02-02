@@ -8,7 +8,7 @@
 
 ### Test Coverage
 
-Current: 717 tests across `src/logic/expr.test.ts`, `src/logic/expr.security.test.ts`, `src/logic/safe-regex.test.ts`, `src/ai/template.test.ts`, `src/ai/template-output.test.ts`, and `src/ai/template-parity.test.ts`. Covers:
+Current: 732 tests across `src/logic/expr.test.ts`, `src/logic/expr.security.test.ts`, `src/logic/safe-regex.test.ts`, `src/ai/template.test.ts`, `src/ai/template-output.test.ts`, and `src/ai/template-parity.test.ts`. Covers:
 - Expression evaluator (tokenizer, parser, operators, precedence)
 - Security (identifier whitelist, injection prevention, prototype access)
 - Adversarial sandbox escapes (184 tests): prototype chains, global access, constructors, module system, bracket notation, code injection, statement injection, unsupported syntax, call/apply/bind, string/array method abuse, DoS vectors (ReDoS + memory exhaustion runtime-bounded: repeat, padStart, padEnd, replaceAll, join), unicode tricks, numeric edge cases, known CVE patterns, combined multi-vector attacks, prototype-less objects, evalMacroValue sandbox
@@ -23,8 +23,8 @@ Current: 717 tests across `src/logic/expr.test.ts`, `src/logic/expr.security.tes
 - messages() with filter ($user, $char)
 - Discord emote edge cases
 - Real-world entity evaluation
-- Template engine (Nunjucks) security (142 tests): prototype chain escapes, RCE via constructor chains, global object access blocked, built-in constructor access blocked, call/apply/bind blocked, matchAll blocked, string method memory limits, loop iteration cap (1000), output size cap (1MB), ReDoS regex validation, context prototype leakage contained, known CVE patterns, multi-vector combined attacks, filter functionality, whitespace control, structured context rendering
-- Template tests (27 tests): DEFAULT_TEMPLATE snapshot tests (system prompt + messages for single/multi entity, freeform, memories, others, no entities, empty history), adversarial injection (nonce-like strings, template syntax in content), _msg() protocol unit tests, template inheritance
+- Template engine (Nunjucks) security (148 tests): prototype chain escapes, RCE via constructor chains, global object access blocked, built-in constructor access blocked, call/apply/bind blocked, matchAll blocked, string method memory limits, loop iteration cap (1000), output size cap (1MB), ReDoS regex validation, context prototype leakage contained, known CVE patterns, multi-vector combined attacks, filter functionality, whitespace control, structured context rendering, send_as security (not available in plain render, role injection safe, prototype chain blocked)
+- Template tests (39 tests): DEFAULT_TEMPLATE snapshot tests (system prompt + messages for single/multi entity, freeform, memories, others, no entities, empty history), adversarial injection (nonce-like markers, template syntax in content), send_as protocol tests (role designation, for-loop, unmarked text interleaving, empty filtering, legacy compat), block invisibility tests (blocks are organizational only), template inheritance
 
 ---
 
@@ -96,14 +96,14 @@ Template engine migrated to Nunjucks with runtime security patches. Entity-name-
 
 - [x] `{% extends "base-prompt" %}` — template inheritance, resolves entity name to template source
 - [ ] `{% include "shared-facts" %}` — template inclusion
-- [ ] `{% macro %}` — reusable template macros
-- [ ] `{% set %}` — variable assignment within templates
+- [x] `{% macro %}` — reusable template macros (send_as is a macro; user-defined macros work via Nunjucks)
+- [x] `{% set %}` — variable assignment within templates (supported by Nunjucks)
 
 ---
 
 ### Structured Messages Refactor
 
-Current state: message history uses role-based `user`/`assistant` messages via `preparePromptContext()` in `prompt.ts` (shared by handler.ts, streaming.ts, and debug commands). Both custom templates and the built-in `DEFAULT_TEMPLATE` produce structured output via `_msg()` nonce protocol. Templates get rich structured `history` objects with `is_bot`, `role`, `embeds`, `stickers` (now `{id, name, format_type}` objects), `attachments`. Bot messages are tracked via `data` JSON column.
+Current state: message history uses role-based `user`/`assistant` messages via `preparePromptContext()` in `prompt.ts` (shared by handler.ts, streaming.ts, and debug commands). Both custom templates and the built-in `DEFAULT_TEMPLATE` produce structured output via `send_as()` macro protocol (plain-text nonce markers). Templates get rich structured `history` objects with `is_bot`, `role`, `embeds`, `stickers` (now `{id, name, format_type}` objects), `attachments`. Bot messages are tracked via `data` JSON column.
 
 - [x] **Role-based messages**: Model responses are `assistant` messages using AI SDK structured messages array. `buildPromptAndMessages()` in `prompt.ts` assigns roles based on `webhook_messages` lookup.
 - [x] **JSON blob storage**: `data TEXT` column on `messages` table stores `MessageData` JSON (is_bot, embeds, stickers, attachments). SQLite `json_extract()` used for `$user`/`$bot` classification.
