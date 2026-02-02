@@ -25,6 +25,7 @@ export default defineConfig({
           { text: 'Permissions', link: '/guide/permissions' },
           { text: 'Transformations', link: '/guide/transformations' },
           { text: 'SillyTavern Migration', link: '/guide/sillytavern' },
+          { text: 'Editor Setup', link: '/guide/editor-setup' },
         ]
       },
       {
