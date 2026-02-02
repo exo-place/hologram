@@ -196,6 +196,8 @@ nunjucks.runtime.fromIterator = function (arr: unknown): unknown {
 class EntityTemplateLoader extends nunjucks.Loader {
   cache: Record<string, unknown> = {};
   private internalTemplates = new Map<string, string>();
+  /** Macro definition to prepend to loaded entity templates (set per render call) */
+  private _macroDef: string | null = null;
 
   getSource(name: string): { src: string; path: string; noCache: boolean } | null {
     const internal = this.internalTemplates.get(name);
@@ -206,11 +208,17 @@ class EntityTemplateLoader extends nunjucks.Loader {
     if (!entity) return null;
     const template = getEntityTemplate(entity.id);
     if (!template) return null;
-    return { src: template, path: `entity:${entity.id}:${name}`, noCache: true };
+    // Prepend send_as macro to entity templates that don't start with {% extends %}
+    let src = template;
+    if (this._macroDef && !startsWithExtends(template)) {
+      src = this._macroDef + "\n" + template;
+    }
+    return { src, path: `entity:${entity.id}:${name}`, noCache: true };
   }
 
   setInternal(name: string, source: string) { this.internalTemplates.set(name, source); }
   clearInternal(name: string) { this.internalTemplates.delete(name); }
+  setMacroDef(def: string | null) { this._macroDef = def; }
 }
 
 // =============================================================================
@@ -355,9 +363,17 @@ export function renderEntityTemplate(
 // Nonce-Based Structured Output Protocol
 // =============================================================================
 
-/** Marker format: <<<HMSG:{nonce}:{base64(JSON)}>>> (open) / <<<HMSG:{nonce}:END>>> (close) */
-const MARKER_PREFIX = "<<<HMSG:";
+/**
+ * Marker format (plain-text roles):
+ * - Open:  <<<HMSG:{nonce}:{role}>>>  (role is system|user|assistant)
+ * - Close: <<<HMSG_END:{nonce}>>>
+ */
+const MARKER_OPEN_PREFIX = "<<<HMSG:";
+const MARKER_CLOSE_PREFIX = "<<<HMSG_END:";
 const MARKER_SUFFIX = ">>>";
+
+/** Regex for role validation — only word characters allowed */
+const VALID_ROLE = /^\w+$/;
 
 export interface ParsedTemplateMessage {
   role: "system" | "user" | "assistant";
@@ -371,24 +387,34 @@ export interface ParsedTemplateOutput {
 
 /**
  * Parse structured output from a rendered template.
- * Matches open/close nonce marker pairs to extract a flat list of messages.
- * Content outside marker pairs is ignored. No markers = legacy single system message.
+ * Collects open/close marker pairs to extract messages. Unmarked text between
+ * (or outside) marker pairs becomes system-role messages. No markers at all =
+ * entire output is a single system message (legacy compat).
  */
 export function parseStructuredOutput(rendered: string, nonce: string): ParsedTemplateOutput {
-  const markerPattern = new RegExp(
-    `${escapeRegExp(MARKER_PREFIX)}${escapeRegExp(nonce)}:([A-Za-z0-9+/=]+)${escapeRegExp(MARKER_SUFFIX)}`,
+  // Build patterns for open and close markers
+  const openPattern = new RegExp(
+    `${escapeRegExp(MARKER_OPEN_PREFIX)}${escapeRegExp(nonce)}:(\\w+)${escapeRegExp(MARKER_SUFFIX)}`,
+    "g",
+  );
+  const closePattern = new RegExp(
+    `${escapeRegExp(MARKER_CLOSE_PREFIX)}${escapeRegExp(nonce)}${escapeRegExp(MARKER_SUFFIX)}`,
     "g",
   );
 
-  // Find all markers (both open and close)
-  const allMarkers: Array<{ index: number; length: number; payload: string }> = [];
+  // Collect all markers with their positions
+  interface Marker { index: number; length: number; type: "open" | "close"; role?: string }
+  const allMarkers: Marker[] = [];
+
   let match: RegExpExecArray | null;
-  while ((match = markerPattern.exec(rendered)) !== null) {
-    allMarkers.push({
-      index: match.index,
-      length: match[0].length,
-      payload: match[1],
-    });
+  while ((match = openPattern.exec(rendered)) !== null) {
+    const role = match[1];
+    if (VALID_ROLE.test(role)) {
+      allMarkers.push({ index: match.index, length: match[0].length, type: "open", role });
+    }
+  }
+  while ((match = closePattern.exec(rendered)) !== null) {
+    allMarkers.push({ index: match.index, length: match[0].length, type: "close" });
   }
 
   // No markers → entire output is a single system message (legacy compat)
@@ -397,35 +423,58 @@ export function parseStructuredOutput(rendered: string, nonce: string): ParsedTe
     return { messages: trimmed ? [{ role: "system", content: trimmed }] : [] };
   }
 
-  const messages: ParsedTemplateMessage[] = [];
+  // Sort by position
+  allMarkers.sort((a, b) => a.index - b.index);
 
-  // Process open/close pairs sequentially
+  const messages: ParsedTemplateMessage[] = [];
+  let cursor = 0;
+
   let i = 0;
   while (i < allMarkers.length) {
     const marker = allMarkers[i];
 
-    // Close marker without open → skip
-    if (marker.payload === "END") {
+    // Unmarked text before this marker → system-role message
+    const unmarked = rendered.slice(cursor, marker.index).trim();
+    if (unmarked) {
+      messages.push({ role: "system", content: unmarked });
+    }
+
+    if (marker.type === "close") {
+      // Orphaned close marker — skip
+      cursor = marker.index + marker.length;
       i++;
       continue;
     }
 
-    // Open marker — expect next marker to be close
+    // Open marker — find matching close
     const contentStart = marker.index + marker.length;
-    let contentEnd = rendered.length;
-    if (i + 1 < allMarkers.length && allMarkers[i + 1].payload === "END") {
-      contentEnd = allMarkers[i + 1].index;
-      i += 2; // Skip both open and close
+    const role = marker.role as "system" | "user" | "assistant";
+
+    if (i + 1 < allMarkers.length && allMarkers[i + 1].type === "close") {
+      // Matched pair
+      const contentEnd = allMarkers[i + 1].index;
+      const content = rendered.slice(contentStart, contentEnd).trim();
+      if (content) {
+        messages.push({ role, content });
+      }
+      cursor = allMarkers[i + 1].index + allMarkers[i + 1].length;
+      i += 2;
     } else {
-      i++; // Orphaned open marker — take content until next marker or end
+      // Orphaned open marker — take content until next marker or end
+      const nextIdx = i + 1 < allMarkers.length ? allMarkers[i + 1].index : rendered.length;
+      const content = rendered.slice(contentStart, nextIdx).trim();
+      if (content) {
+        messages.push({ role, content });
+      }
+      cursor = nextIdx;
+      i++;
     }
+  }
 
-    const content = rendered.slice(contentStart, contentEnd).trim();
-    if (!content) continue;
-
-    const decoded = JSON.parse(Buffer.from(marker.payload, "base64").toString("utf-8"));
-    const role = decoded.role as "system" | "user" | "assistant";
-    messages.push({ role, content });
+  // Trailing unmarked text → system-role message
+  const trailing = rendered.slice(cursor).trim();
+  if (trailing) {
+    messages.push({ role: "system", content: trailing });
   }
 
   return { messages };
@@ -433,6 +482,24 @@ export function parseStructuredOutput(rendered: string, nonce: string): ParsedTe
 
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Build the send_as macro definition string for a given nonce.
+ * Produces: {% macro send_as(role) %}<<<HMSG:{nonce}:{{ role }}>>>{{ caller() }}<<<HMSG_END:{nonce}>>>{% endmacro %}
+ */
+function buildSendAsMacro(nonce: string): string {
+  return `{% macro send_as(role) %}${MARKER_OPEN_PREFIX}${nonce}:{{ role }}${MARKER_SUFFIX}{{ caller() }}${MARKER_CLOSE_PREFIX}${nonce}${MARKER_SUFFIX}{% endmacro %}`;
+}
+
+/**
+ * Check if a template source starts with {% extends %} (after comments and whitespace).
+ * Required because {% extends %} must be the first tag in Nunjucks.
+ */
+function startsWithExtends(source: string): boolean {
+  // Strip leading whitespace and {# comments #}
+  const stripped = source.replace(/^\s*(\{#[\s\S]*?#\}\s*)*/g, "");
+  return /^\{%[-\s]*extends\s/.test(stripped);
 }
 
 // =============================================================================
@@ -450,20 +517,14 @@ function escapeRegExp(s: string): string {
 export const SYSTEM_PROMPT_TEMPLATE = "";
 
 /**
- * Default template using role blocks (system, user, char).
+ * Default template using send_as() macro for role designation.
  *
- * Produces system-role messages (entity defs, memories, multi-entity guidance)
- * followed by user/assistant chat messages from history.
- *
- * The Nunjucks env has trimBlocks + lstripBlocks enabled, so block tags on
- * their own lines can be freely indented without affecting output.
- *
- * renderStructuredTemplate() generates a child template that wraps each
- * role block with nonce markers via {{ super() }}.
+ * Unmarked text (entity defs, memories, multi-entity guidance) becomes
+ * system-role messages automatically. History messages use
+ * {% call send_as(role) %} for proper user/assistant roles.
  */
 export const DEFAULT_TEMPLATE = `\
-{#- Entity definitions -#}
-{% block system -%}
+{#- Entity definitions (unmarked → system-role message) -#}
 {%- if entities | length == 0 and others | length == 0 -%}
 You are a helpful assistant. Respond naturally to the user.
 {%- else -%}
@@ -517,51 +578,46 @@ Not everyone needs to respond to every message. Only respond as those who would 
   {%- endif -%}
 
 {%- endif -%}
-{%- endblock %}
-{#- Message history -#}
-{%- for msg in history -%}
-  {%- if msg.role == "assistant" %}
-{% block char %}{{ msg.author }}: {{ msg.content }}{% endblock %}
-  {%- else %}
-{% block user %}{{ msg.author }}: {{ msg.content }}{% endblock %}
-  {%- endif -%}
+{#- Message history (send_as → proper roles) -#}
+{%- for msg in history %}
+{% call send_as(msg.role) -%}
+{{ msg.author }}: {{ msg.content }}
+{%- endcall %}
 {%- endfor -%}`;
 
 /**
  * Render a template and parse structured output.
- * Generates a child template that extends the source and wraps each role block
- * (system, user, char) with nonce markers via {{ super() }}.
- * Returns a flat list of messages (system, user, assistant).
+ * Injects a `send_as(role)` macro via `{% call send_as("user") %}...{% endcall %}`.
+ * Unmarked text becomes system-role messages. No markers = single system message.
  */
 export function renderStructuredTemplate(
   source: string,
   ctx: Record<string, unknown>,
 ): ParsedTemplateOutput {
   const nonce = randomBytes(32).toString("hex");
+  const macroDef = buildSendAsMacro(nonce);
 
-  // Register user template under a unique internal name
+  // Augment user template: prepend macro if it doesn't start with {% extends %}
+  let augmented: string;
+  if (startsWithExtends(source)) {
+    augmented = source;
+  } else {
+    augmented = macroDef + "\n" + source;
+  }
+
+  // Register augmented template as internal parent
   const parentName = `_render_${nonce}`;
-  loader.setInternal(parentName, source);
-
-  // Generate child that wraps role blocks with nonce markers
-  const open = (role: string): string => {
-    const payload = JSON.stringify({ role });
-    const encoded = Buffer.from(payload).toString("base64");
-    return `${MARKER_PREFIX}${nonce}:${encoded}${MARKER_SUFFIX}`;
-  };
-  const close = `${MARKER_PREFIX}${nonce}:END${MARKER_SUFFIX}`;
-
-  const childSource =
-    `{% extends "${parentName}" %}` +
-    `{% block system %}${open("system")}{{ super() }}${close}{% endblock %}` +
-    `{% block user %}${open("user")}{{ super() }}${close}{% endblock %}` +
-    `{% block char %}${open("assistant")}{{ super() }}${close}{% endblock %}`;
+  loader.setInternal(parentName, augmented);
+  loader.setMacroDef(macroDef);
 
   try {
-    const rendered = renderEntityTemplate(childSource, ctx);
+    // Render via empty child that extends the parent — this triggers the parent
+    // render and works uniformly whether or not the source uses {% extends %}
+    const rendered = renderEntityTemplate(`{% extends "${parentName}" %}`, ctx);
     return parseStructuredOutput(rendered, nonce);
   } finally {
     loader.clearInternal(parentName);
+    loader.setMacroDef(null);
   }
 }
 
