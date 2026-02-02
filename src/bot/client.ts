@@ -146,7 +146,7 @@ function guildNsfwLevelString(level: number): string {
   }
 }
 
-async function getChannelMetadata(channelId: string): Promise<Omit<ChannelMeta, "fetchedAt">> {
+export async function getChannelMetadata(channelId: string): Promise<Omit<ChannelMeta, "fetchedAt">> {
   const cached = channelMetaCache.get(channelId);
   if (cached && Date.now() - cached.fetchedAt < META_TTL_MS) {
     return cached;
@@ -169,7 +169,7 @@ async function getChannelMetadata(channelId: string): Promise<Omit<ChannelMeta, 
   }
 }
 
-async function getGuildMetadata(guildId: string): Promise<Omit<GuildMeta, "fetchedAt">> {
+export async function getGuildMetadata(guildId: string): Promise<Omit<GuildMeta, "fetchedAt">> {
   const cached = guildMetaCache.get(guildId);
   if (cached && Date.now() - cached.fetchedAt < META_TTL_MS) {
     return cached;

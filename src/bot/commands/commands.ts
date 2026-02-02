@@ -46,7 +46,7 @@ import { parsePermissionDirectives, matchesUserEntry, isUserBlacklisted, isUserA
 import { formatEntityDisplay } from "../../ai/context";
 import type { EvaluatedEntity } from "../../ai/context";
 import { preparePromptContext } from "../../ai/prompt";
-import { sendResponse } from "../client";
+import { sendResponse, getChannelMetadata, getGuildMetadata } from "../client";
 import { debug } from "../../logger";
 import { formatMessagesForContext, getFilteredMessages } from "../../db/discord";
 
@@ -1546,8 +1546,12 @@ async function handleInfoPrompt(ctx: CommandContext, options: Record<string, unk
   const targetEntity = await resolveTargetEntity(ctx, entityInput, "prompt");
   if (!targetEntity) return;
 
+  // Fetch channel/server metadata for template context
+  const channelMeta = await getChannelMetadata(ctx.channelId);
+  const guildMeta = ctx.guildId ? await getGuildMetadata(ctx.guildId) : undefined;
+
   // Evaluate facts with a mock context (no triggers active)
-  const evaluated = buildEvaluatedEntity(targetEntity);
+  const evaluated = buildEvaluatedEntity(targetEntity, { channel: channelMeta, server: guildMeta });
 
   // Use the actual template pipeline to build messages
   const { systemPrompt } = preparePromptContext(
@@ -1558,12 +1562,17 @@ async function handleInfoPrompt(ctx: CommandContext, options: Record<string, unk
 }
 
 /** Build an EvaluatedEntity from a raw entity using a mock expression context */
-function buildEvaluatedEntity(entity: EntityWithFacts): EvaluatedEntity {
+function buildEvaluatedEntity(entity: EntityWithFacts, options?: {
+  channel?: { id: string; name: string; description: string; is_nsfw: boolean; type: string; mention: string };
+  server?: { id: string; name: string; description: string; nsfw_level: string };
+}): EvaluatedEntity {
   const rawFacts = entity.facts.map(f => f.content);
   const mockContext = createBaseContext({
     facts: rawFacts,
     has_fact: (pattern: string) => rawFacts.some(f => new RegExp(pattern, "i").test(f)),
     name: entity.name,
+    channel: options?.channel,
+    server: options?.server,
   });
   const result = evaluateFacts(rawFacts, mockContext);
   return {
@@ -1589,8 +1598,12 @@ async function handleInfoHistory(ctx: CommandContext, options: Record<string, un
   const targetEntity = await resolveTargetEntity(ctx, entityInput, "history");
   if (!targetEntity) return;
 
+  // Fetch channel/server metadata for template context
+  const channelMeta = await getChannelMetadata(ctx.channelId);
+  const guildMeta = ctx.guildId ? await getGuildMetadata(ctx.guildId) : undefined;
+
   // Evaluate facts with a mock context (no triggers active)
-  const evaluated = buildEvaluatedEntity(targetEntity);
+  const evaluated = buildEvaluatedEntity(targetEntity, { channel: channelMeta, server: guildMeta });
 
   // Use the actual template pipeline to build structured messages
   const { messages } = preparePromptContext(
