@@ -13,6 +13,9 @@ export interface ContextValues {
   response_ms: number
   idle_ms: number
   retry_ms: number
+  channel_name: string
+  channel_is_nsfw: boolean
+  server_name: string
 }
 
 const props = defineProps<{
@@ -124,6 +127,30 @@ function update(field: keyof ContextValues, value: unknown) {
           type="number"
           :value="modelValue.retry_ms"
           @input="update('retry_ms', parseInt(($event.target as HTMLInputElement).value) || 0)"
+        />
+      </div>
+      <div class="context-field">
+        <label>channel.name</label>
+        <input
+          type="text"
+          :value="modelValue.channel_name"
+          @input="update('channel_name', ($event.target as HTMLInputElement).value)"
+        />
+      </div>
+      <div class="context-field context-field-toggle">
+        <input
+          type="checkbox"
+          :checked="modelValue.channel_is_nsfw"
+          @change="update('channel_is_nsfw', ($event.target as HTMLInputElement).checked)"
+        />
+        <label>channel.is_nsfw</label>
+      </div>
+      <div class="context-field">
+        <label>server.name</label>
+        <input
+          type="text"
+          :value="modelValue.server_name"
+          @input="update('server_name', ($event.target as HTMLInputElement).value)"
         />
       </div>
     </div>

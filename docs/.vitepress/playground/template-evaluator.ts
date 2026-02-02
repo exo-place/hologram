@@ -79,7 +79,11 @@ export function evaluateTemplate(input: TemplateInput): TemplateEvalResult {
     const user = others.find(o => o.name.toLowerCase() === 'user')
       ?? { id: 0, name: 'user', facts: makeFactsArray(''), toString: () => 'user' }
 
+    const now = new Date()
+    const hour = now.getHours()
+
     const ctx: Record<string, unknown> = {
+      // Template-specific variables
       entities,
       others,
       memories,
@@ -89,6 +93,23 @@ export function evaluateTemplate(input: TemplateInput): TemplateEvalResult {
       char,
       user,
       _single_entity: entities.length === 1,
+      // ExprContext variables (mirroring what the real bot provides)
+      channel: { id: '1234567890', name: 'general', description: '', is_nsfw: false, type: 'text', mention: '<#1234567890>' },
+      server: { id: '9876543210', name: 'My Server', description: '', nsfw_level: 'default' },
+      name: char.name,
+      chars: entities.map(e => e.name),
+      group: entities.map(e => e.name).join(', '),
+      mentioned: false,
+      replied: false,
+      is_forward: false,
+      is_self: false,
+      content: history.length > 0 ? history[history.length - 1].content : '',
+      author: history.length > 0 ? history[history.length - 1].author : '',
+      time: { hour, is_day: hour >= 6 && hour < 18, is_night: hour < 6 || hour >= 18 },
+      self: {},
+      response_ms: 0,
+      idle_ms: 0,
+      retry_ms: 0,
     }
 
     const source = input.template || DEFAULT_TEMPLATE

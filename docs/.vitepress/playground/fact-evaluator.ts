@@ -20,6 +20,9 @@ export interface FactContextOverrides {
   response_ms?: number
   idle_ms?: number
   retry_ms?: number
+  channel_name?: string
+  channel_is_nsfw?: boolean
+  server_name?: string
 }
 
 export interface FactEvalResult {
@@ -59,6 +62,20 @@ export function evaluateFactsInBrowser(
       response_ms: overrides.response_ms ?? 0,
       idle_ms: overrides.idle_ms ?? 0,
       retry_ms: overrides.retry_ms ?? 0,
+      channel: {
+        id: '1234567890',
+        name: overrides.channel_name ?? 'general',
+        description: '',
+        is_nsfw: overrides.channel_is_nsfw ?? false,
+        type: 'text',
+        mention: '<#1234567890>',
+      },
+      server: {
+        id: '9876543210',
+        name: overrides.server_name ?? 'My Server',
+        description: '',
+        nsfw_level: 'default',
+      },
     })
 
     const result = evaluateFacts(lines, ctx)

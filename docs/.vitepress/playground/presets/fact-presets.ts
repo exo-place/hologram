@@ -13,6 +13,9 @@ export interface FactPreset {
     response_ms: number
     idle_ms: number
     retry_ms: number
+    channel_name: string
+    channel_is_nsfw: boolean
+    server_name: string
   }
 }
 
@@ -36,6 +39,9 @@ likes exploring old ruins`,
       response_ms: 0,
       idle_ms: 0,
       retry_ms: 0,
+      channel_name: 'general',
+      channel_is_nsfw: false,
+      server_name: 'My Server',
     },
   },
   {
@@ -57,6 +63,9 @@ $if time.is_night: is extra vigilant`,
       response_ms: 0,
       idle_ms: 0,
       retry_ms: 0,
+      channel_name: 'general',
+      channel_is_nsfw: false,
+      server_name: 'My Server',
     },
   },
   {
@@ -81,6 +90,9 @@ $if self.mood == "playful": is in a teasing mood`,
       response_ms: 0,
       idle_ms: 0,
       retry_ms: 0,
+      channel_name: 'general',
+      channel_is_nsfw: false,
+      server_name: 'My Server',
     },
   },
   {
@@ -103,6 +115,9 @@ $respond`,
       response_ms: 0,
       idle_ms: 0,
       retry_ms: 0,
+      channel_name: 'general',
+      channel_is_nsfw: false,
+      server_name: 'My Server',
     },
   },
   {
@@ -124,6 +139,9 @@ $context chars < 8000`,
       response_ms: 60000,
       idle_ms: 5000,
       retry_ms: 0,
+      channel_name: 'general',
+      channel_is_nsfw: false,
+      server_name: 'My Server',
     },
   },
   {
@@ -148,6 +166,9 @@ $respond`,
       response_ms: 0,
       idle_ms: 0,
       retry_ms: 0,
+      channel_name: 'general',
+      channel_is_nsfw: false,
+      server_name: 'My Server',
     },
   },
 ]
