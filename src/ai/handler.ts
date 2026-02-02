@@ -68,7 +68,7 @@ export async function handleMessage(ctx: MessageContext): Promise<ResponseResult
 
     const result = await generateText({
       model,
-      system: systemPrompt,
+      system: systemPrompt || undefined,
       messages: llmMessages,
       tools,
       stopWhen: stepCountIs(5), // Allow up to 5 tool call rounds

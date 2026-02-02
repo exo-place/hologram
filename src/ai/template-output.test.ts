@@ -6,7 +6,7 @@
  * resistance. Protocol tests cover block mechanics (system, user, char).
  */
 import { describe, expect, test } from "bun:test";
-import { DEFAULT_TEMPLATE, renderStructuredTemplate } from "./template";
+import { DEFAULT_TEMPLATE, renderStructuredTemplate, renderSystemPrompt } from "./template";
 import type { EvaluatedEntity } from "./context";
 import type { EntityWithFacts } from "../db/entities";
 
@@ -528,6 +528,33 @@ describe("block invisibility", () => {
     const output = renderStructuredTemplate(template, {});
     expect(output.messages.length).toBe(1);
     expect(output.messages[0]).toEqual({ role: "system", content: "BeforeAfter" });
+  });
+});
+
+// =============================================================================
+// Template Inheritance Tests ({% extends %})
+// =============================================================================
+
+// =============================================================================
+// System Prompt Tests
+// =============================================================================
+
+describe("renderSystemPrompt", () => {
+  test("default (empty) template returns empty string", () => {
+    expect(renderSystemPrompt({})).toBe("");
+  });
+
+  test("custom template renders with context", () => {
+    const ctx = { char: { name: "Aria", toString: () => "Aria" } };
+    expect(renderSystemPrompt(ctx, "You are {{ char }}.")).toBe("You are Aria.");
+  });
+
+  test("explicit empty string template returns empty string", () => {
+    expect(renderSystemPrompt({}, "")).toBe("");
+  });
+
+  test("whitespace-only template returns empty string", () => {
+    expect(renderSystemPrompt({}, "   \n  ")).toBe("");
   });
 });
 

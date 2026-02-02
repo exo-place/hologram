@@ -106,7 +106,7 @@ export async function* handleMessageStreaming(
 
     const result = streamText({
       model,
-      system: systemPrompt,
+      system: systemPrompt || undefined,
       messages: llmMessages,
       tools,
       stopWhen: stepCountIs(5),
