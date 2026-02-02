@@ -148,7 +148,7 @@ const env = new nunjucks.Environment(loader as unknown as nunjucks.ILoader, {
   autoescape: false,
   trimBlocks: true,
   lstripBlocks: true,
-  throwOnUndefined: false,
+  throwOnUndefined: true,
 })
 
 // Built-in filters

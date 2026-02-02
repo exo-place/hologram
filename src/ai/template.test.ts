@@ -39,8 +39,8 @@ describe("template: basic rendering", () => {
     expect(render("Hello {{ name }}", { name: "Alice" })).toBe("Hello Alice");
   });
 
-  test("renders undefined variables as empty string", () => {
-    expect(render("Hello {{ missing }}")).toBe("Hello ");
+  test("throws on undefined variables", () => {
+    expect(() => render("Hello {{ missing }}")).toThrow("attempted to output null or undefined value");
   });
 
   test("renders nested property access", () => {
@@ -206,85 +206,85 @@ describe("template: filters", () => {
 
 describe("template: prototype chain escapes", () => {
   test("blocks constructor on strings", () => {
-    expect(render("{{ s.constructor }}", { s: "test" })).toBe("");
-    expect(render('{{ "".constructor }}')).toBe("");
+    expect(() => render("{{ s.constructor }}", { s: "test" })).toThrow();
+    expect(() => render('{{ "".constructor }}')).toThrow();
   });
 
   test("blocks constructor on numbers", () => {
-    expect(render("{{ (0).constructor }}")).toBe("");
-    expect(render("{{ n.constructor }}", { n: 42 })).toBe("");
+    expect(() => render("{{ (0).constructor }}")).toThrow();
+    expect(() => render("{{ n.constructor }}", { n: 42 })).toThrow();
   });
 
   test("blocks constructor on arrays", () => {
-    expect(render("{{ arr.constructor }}", { arr: [1, 2] })).toBe("");
+    expect(() => render("{{ arr.constructor }}", { arr: [1, 2] })).toThrow();
   });
 
   test("blocks constructor on objects", () => {
-    expect(render("{{ obj.constructor }}", { obj: {} })).toBe("");
+    expect(() => render("{{ obj.constructor }}", { obj: {} })).toThrow();
   });
 
   test("blocks constructor on functions", () => {
-    expect(render("{{ fn.constructor }}", { fn: () => 42 })).toBe("");
+    expect(() => render("{{ fn.constructor }}", { fn: () => 42 })).toThrow();
   });
 
   test("blocks constructor on booleans", () => {
-    expect(render("{{ b.constructor }}", { b: true })).toBe("");
+    expect(() => render("{{ b.constructor }}", { b: true })).toThrow();
   });
 
   test("blocks __proto__ on all types", () => {
-    expect(render("{{ s.__proto__ }}", { s: "test" })).toBe("");
-    expect(render("{{ n.__proto__ }}", { n: 42 })).toBe("");
-    expect(render("{{ arr.__proto__ }}", { arr: [] })).toBe("");
-    expect(render("{{ obj.__proto__ }}", { obj: {} })).toBe("");
+    expect(() => render("{{ s.__proto__ }}", { s: "test" })).toThrow();
+    expect(() => render("{{ n.__proto__ }}", { n: 42 })).toThrow();
+    expect(() => render("{{ arr.__proto__ }}", { arr: [] })).toThrow();
+    expect(() => render("{{ obj.__proto__ }}", { obj: {} })).toThrow();
   });
 
   test("blocks prototype access", () => {
-    expect(render("{{ fn.prototype }}", { fn: function() {} })).toBe("");
+    expect(() => render("{{ fn.prototype }}", { fn: function() {} })).toThrow();
   });
 
   test("blocks __defineGetter__", () => {
-    expect(render("{{ obj.__defineGetter__ }}", { obj: {} })).toBe("");
+    expect(() => render("{{ obj.__defineGetter__ }}", { obj: {} })).toThrow();
   });
 
   test("blocks __defineSetter__", () => {
-    expect(render("{{ obj.__defineSetter__ }}", { obj: {} })).toBe("");
+    expect(() => render("{{ obj.__defineSetter__ }}", { obj: {} })).toThrow();
   });
 
   test("blocks __lookupGetter__", () => {
-    expect(render("{{ obj.__lookupGetter__ }}", { obj: {} })).toBe("");
+    expect(() => render("{{ obj.__lookupGetter__ }}", { obj: {} })).toThrow();
   });
 
   test("blocks __lookupSetter__", () => {
-    expect(render("{{ obj.__lookupSetter__ }}", { obj: {} })).toBe("");
+    expect(() => render("{{ obj.__lookupSetter__ }}", { obj: {} })).toThrow();
   });
 
   test("blocks constructor through method chain", () => {
-    expect(render("{{ s.trim().constructor }}", { s: "test" })).toBe("");
-    expect(render("{{ s.toLowerCase().constructor }}", { s: "TEST" })).toBe("");
-    expect(render("{{ s.slice(0).constructor }}", { s: "test" })).toBe("");
+    expect(() => render("{{ s.trim().constructor }}", { s: "test" })).toThrow();
+    expect(() => render("{{ s.toLowerCase().constructor }}", { s: "TEST" })).toThrow();
+    expect(() => render("{{ s.slice(0).constructor }}", { s: "test" })).toThrow();
   });
 
   test("blocks double constructor chain (Function access)", () => {
-    expect(render("{{ s.constructor.constructor }}", { s: "test" })).toBe("");
+    expect(() => render("{{ s.constructor.constructor }}", { s: "test" })).toThrow();
   });
 
   test("blocks __proto__ through method chain", () => {
-    expect(render("{{ s.trim().__proto__ }}", { s: "test" })).toBe("");
+    expect(() => render("{{ s.trim().__proto__ }}", { s: "test" })).toThrow();
   });
 
   test("blocks constructor on function return values", () => {
-    expect(render("{{ fn().constructor }}", { fn: () => "test" })).toBe("");
+    expect(() => render("{{ fn().constructor }}", { fn: () => "test" })).toThrow();
   });
 
   test("blocks constructor via bracket notation", () => {
-    expect(render('{{ s["constructor"] }}', { s: "test" })).toBe("");
-    expect(render('{{ obj["__proto__"] }}', { obj: {} })).toBe("");
-    expect(render('{{ obj["prototype"] }}', { obj: {} })).toBe("");
+    expect(() => render('{{ s["constructor"] }}', { s: "test" })).toThrow();
+    expect(() => render('{{ obj["__proto__"] }}', { obj: {} })).toThrow();
+    expect(() => render('{{ obj["prototype"] }}', { obj: {} })).toThrow();
   });
 
   test("blocks constructor chain via bracket notation", () => {
-    expect(render('{{ ""["constructor"] }}')).toBe("");
-    expect(render('{{ (0)["constructor"] }}')).toBe("");
+    expect(() => render('{{ ""["constructor"] }}')).toThrow();
+    expect(() => render('{{ (0)["constructor"] }}')).toThrow();
   });
 });
 
@@ -313,17 +313,17 @@ describe("template: RCE attempts", () => {
   });
 
   test("array method constructor chain is blocked", () => {
-    expect(render("{{ [].join.constructor }}", {})).toBe("");
-    expect(render("{{ [].map.constructor }}", {})).toBe("");
-    expect(render("{{ [].filter.constructor }}", {})).toBe("");
+    expect(() => render("{{ [].join.constructor }}", {})).toThrow();
+    expect(() => render("{{ [].map.constructor }}", {})).toThrow();
+    expect(() => render("{{ [].filter.constructor }}", {})).toThrow();
   });
 
   test("nested property chain to Function is blocked", () => {
     // Even through multiple safe property accesses
-    expect(render("{{ s.toString.constructor }}", { s: "test" })).toBe("");
-    expect(render("{{ s.valueOf.constructor }}", { s: "test" })).toBe("");
-    expect(render("{{ arr.join.constructor }}", { arr: [1] })).toBe("");
-    expect(render("{{ arr.map.constructor }}", { arr: [1] })).toBe("");
+    expect(() => render("{{ s.toString.constructor }}", { s: "test" })).toThrow();
+    expect(() => render("{{ s.valueOf.constructor }}", { s: "test" })).toThrow();
+    expect(() => render("{{ arr.join.constructor }}", { arr: [1] })).toThrow();
+    expect(() => render("{{ arr.map.constructor }}", { arr: [1] })).toThrow();
   });
 });
 
@@ -336,44 +336,44 @@ describe("template: global object access", () => {
   // JS globals are NOT accessible unless injected into context.
 
   test("process is not accessible", () => {
-    expect(render("{{ process }}")).toBe("");
+    expect(() => render("{{ process }}")).toThrow();
   });
 
   test("globalThis is not accessible", () => {
-    expect(render("{{ globalThis }}")).toBe("");
+    expect(() => render("{{ globalThis }}")).toThrow();
   });
 
   test("global is not accessible", () => {
-    expect(render("{{ global }}")).toBe("");
+    expect(() => render("{{ global }}")).toThrow();
   });
 
   test("window is not accessible", () => {
-    expect(render("{{ window }}")).toBe("");
+    expect(() => render("{{ window }}")).toThrow();
   });
 
   test("Bun is not accessible", () => {
-    expect(render("{{ Bun }}")).toBe("");
+    expect(() => render("{{ Bun }}")).toThrow();
   });
 
   test("eval is not accessible", () => {
-    expect(render("{{ eval }}")).toBe("");
+    expect(() => render("{{ eval }}")).toThrow();
   });
 
   test("require is not accessible", () => {
-    expect(render("{{ require }}")).toBe("");
+    expect(() => render("{{ require }}")).toThrow();
   });
 
   test("console is not accessible", () => {
-    expect(render("{{ console }}")).toBe("");
+    expect(() => render("{{ console }}")).toThrow();
   });
 
   test("setTimeout/setInterval is not accessible", () => {
-    expect(render("{{ setTimeout }}")).toBe("");
-    expect(render("{{ setInterval }}")).toBe("");
+    expect(() => render("{{ setTimeout }}")).toThrow();
+    expect(() => render("{{ setInterval }}")).toThrow();
   });
 
   test("fetch is not accessible", () => {
-    expect(render("{{ fetch }}")).toBe("");
+    expect(() => render("{{ fetch }}")).toThrow();
   });
 });
 
@@ -384,75 +384,75 @@ describe("template: global object access", () => {
 describe("template: built-in constructor access", () => {
   // These JS built-in constructors are not in template context
   test("Function is not accessible", () => {
-    expect(render("{{ Function }}")).toBe("");
+    expect(() => render("{{ Function }}")).toThrow();
   });
 
   test("Object is not accessible", () => {
-    expect(render("{{ Object }}")).toBe("");
+    expect(() => render("{{ Object }}")).toThrow();
   });
 
   test("Array is not accessible", () => {
-    expect(render("{{ Array }}")).toBe("");
+    expect(() => render("{{ Array }}")).toThrow();
   });
 
   test("String is not accessible", () => {
-    expect(render("{{ String }}")).toBe("");
+    expect(() => render("{{ String }}")).toThrow();
   });
 
   test("Number is not accessible", () => {
-    expect(render("{{ Number }}")).toBe("");
+    expect(() => render("{{ Number }}")).toThrow();
   });
 
   test("Boolean is not accessible", () => {
-    expect(render("{{ Boolean }}")).toBe("");
+    expect(() => render("{{ Boolean }}")).toThrow();
   });
 
   test("RegExp is not accessible", () => {
-    expect(render("{{ RegExp }}")).toBe("");
+    expect(() => render("{{ RegExp }}")).toThrow();
   });
 
   test("Symbol is not accessible", () => {
-    expect(render("{{ Symbol }}")).toBe("");
+    expect(() => render("{{ Symbol }}")).toThrow();
   });
 
   test("Proxy is not accessible", () => {
-    expect(render("{{ Proxy }}")).toBe("");
+    expect(() => render("{{ Proxy }}")).toThrow();
   });
 
   test("Promise is not accessible", () => {
-    expect(render("{{ Promise }}")).toBe("");
+    expect(() => render("{{ Promise }}")).toThrow();
   });
 
   test("Map is not accessible", () => {
-    expect(render("{{ Map }}")).toBe("");
+    expect(() => render("{{ Map }}")).toThrow();
   });
 
   test("Set is not accessible", () => {
-    expect(render("{{ Set }}")).toBe("");
+    expect(() => render("{{ Set }}")).toThrow();
   });
 
   test("WeakRef is not accessible", () => {
-    expect(render("{{ WeakRef }}")).toBe("");
+    expect(() => render("{{ WeakRef }}")).toThrow();
   });
 
   test("Error is not accessible", () => {
-    expect(render("{{ Error }}")).toBe("");
+    expect(() => render("{{ Error }}")).toThrow();
   });
 
   test("JSON is not accessible", () => {
-    expect(render("{{ JSON }}")).toBe("");
+    expect(() => render("{{ JSON }}")).toThrow();
   });
 
   test("Math is not accessible", () => {
-    expect(render("{{ Math }}")).toBe("");
+    expect(() => render("{{ Math }}")).toThrow();
   });
 
   test("Date is not accessible", () => {
-    expect(render("{{ Date }}")).toBe("");
+    expect(() => render("{{ Date }}")).toThrow();
   });
 
   test("Reflect is not accessible", () => {
-    expect(render("{{ Reflect }}")).toBe("");
+    expect(() => render("{{ Reflect }}")).toThrow();
   });
 });
 
@@ -473,8 +473,8 @@ describe("template: syntax injection", () => {
   });
 
   test("no template literals (backticks)", () => {
-    // Nunjucks treats backticks as regular characters in expressions — renders empty
-    expect(render("{{ `test` }}")).toBe("");
+    // Nunjucks treats backticks as regular characters in expressions — undefined → throws
+    expect(() => render("{{ `test` }}")).toThrow();
   });
 
   test("no assignment in expressions (rejected by parser)", () => {
@@ -514,15 +514,15 @@ describe("template: call/apply/bind", () => {
 
   test("cannot reach Function via call chain", () => {
     // fn.call.constructor would be Function — but constructor is blocked
-    expect(render("{{ fn.call.constructor }}", { fn: () => 42 })).toBe("");
+    expect(() => render("{{ fn.call.constructor }}", { fn: () => 42 })).toThrow();
   });
 
   test("cannot reach Function via bind chain", () => {
-    expect(render("{{ fn.bind.constructor }}", { fn: () => 42 })).toBe("");
+    expect(() => render("{{ fn.bind.constructor }}", { fn: () => 42 })).toThrow();
   });
 
   test("cannot reach Function via apply chain", () => {
-    expect(render("{{ fn.apply.constructor }}", { fn: () => 42 })).toBe("");
+    expect(() => render("{{ fn.apply.constructor }}", { fn: () => 42 })).toThrow();
   });
 });
 
@@ -540,11 +540,11 @@ describe("template: string method abuse", () => {
   });
 
   test("match returns result, constructor still blocked", () => {
-    expect(render('{{ s.match("t").constructor }}', { s: "test" })).toBe("");
+    expect(() => render('{{ s.match("t").constructor }}', { s: "test" })).toThrow();
   });
 
   test("split returns array, constructor still blocked", () => {
-    expect(render('{{ s.split("").constructor }}', { s: "ab" })).toBe("");
+    expect(() => render('{{ s.split("").constructor }}', { s: "ab" })).toThrow();
   });
 
   test("safe string methods work", () => {
@@ -572,12 +572,12 @@ describe("template: array method abuse", () => {
   });
 
   test("array constructor blocked", () => {
-    expect(render("{{ arr.constructor }}", { arr: [1, 2] })).toBe("");
+    expect(() => render("{{ arr.constructor }}", { arr: [1, 2] })).toThrow();
   });
 
   test("array method constructor blocked", () => {
-    expect(render("{{ arr.join.constructor }}", { arr: [1] })).toBe("");
-    expect(render("{{ arr.includes.constructor }}", { arr: [1] })).toBe("");
+    expect(() => render("{{ arr.join.constructor }}", { arr: [1] })).toThrow();
+    expect(() => render("{{ arr.includes.constructor }}", { arr: [1] })).toThrow();
   });
 });
 
@@ -771,23 +771,19 @@ describe("template: context prototype leakage", () => {
   // because constructor access is blocked.
 
   test("toString is accessible but constructor is blocked", () => {
-    // toString resolves from Object.prototype on the context
-    const result = render("{{ toString.constructor }}");
-    expect(result).toBe("");
+    expect(() => render("{{ toString.constructor }}")).toThrow();
   });
 
   test("hasOwnProperty is accessible but harmless", () => {
-    // Can't do anything dangerous without constructor
-    const result = render("{{ hasOwnProperty.constructor }}");
-    expect(result).toBe("");
+    expect(() => render("{{ hasOwnProperty.constructor }}")).toThrow();
   });
 
   test("__proto__.constructor is blocked", () => {
-    expect(render("{{ __proto__.constructor }}")).toBe("");
+    expect(() => render("{{ __proto__.constructor }}")).toThrow();
   });
 
   test("valueOf.constructor is blocked", () => {
-    expect(render("{{ valueOf.constructor }}")).toBe("");
+    expect(() => render("{{ valueOf.constructor }}")).toThrow();
   });
 });
 
@@ -798,41 +794,41 @@ describe("template: context prototype leakage", () => {
 describe("template: known sandbox escape patterns", () => {
   test("constructor.constructor('return this')()", () => {
     // Classic: get Function via constructor chain, execute arbitrary code
-    // Step 1: memberLookup blocks .constructor → undefined
-    expect(render('{{ "".constructor }}')).toBe("");
+    // Step 1: memberLookup blocks .constructor → undefined → throws
+    expect(() => render('{{ "".constructor }}')).toThrow();
   });
 
   test("__proto__.constructor pattern", () => {
-    expect(render('{{ "".__proto__ }}')).toBe("");
+    expect(() => render('{{ "".__proto__ }}')).toThrow();
   });
 
   test("toString.call pattern for type confusion", () => {
     // toString is accessible (inherited from Object.prototype) but .constructor is blocked
-    expect(render("{{ toString.constructor }}")).toBe("");
+    expect(() => render("{{ toString.constructor }}")).toThrow();
   });
 
   test("[].fill.constructor pattern", () => {
     // Array literal → method → constructor all go through memberLookup
-    expect(render("{{ [].fill.constructor }}")).toBe("");
+    expect(() => render("{{ [].fill.constructor }}")).toThrow();
   });
 
   test("string sub.call.call pattern", () => {
-    expect(render('{{ "".constructor }}')).toBe("");
+    expect(() => render('{{ "".constructor }}')).toThrow();
   });
 
   test("range().constructor attempt", () => {
     // Nunjucks built-in range → constructor blocked
-    expect(render("{{ range(5).constructor }}")).toBe("");
+    expect(() => render("{{ range(5).constructor }}")).toThrow();
   });
 
   test("cycler/joiner built-in constructor", () => {
     // Nunjucks built-in cycler/joiner (if available) → constructor blocked
-    expect(render("{{ cycler.constructor }}")).toBe("");
+    expect(() => render("{{ cycler.constructor }}")).toThrow();
   });
 
   test("loop variable prototype access", () => {
-    expect(render("{% for x in [1] %}{{ loop.__proto__ }}{% endfor %}")).toBe("");
-    expect(render("{% for x in [1] %}{{ loop.constructor }}{% endfor %}")).toBe("");
+    expect(() => render("{% for x in [1] %}{{ loop.__proto__ }}{% endfor %}")).toThrow();
+    expect(() => render("{% for x in [1] %}{{ loop.constructor }}{% endfor %}")).toThrow();
   });
 });
 
@@ -842,30 +838,30 @@ describe("template: known sandbox escape patterns", () => {
 
 describe("template: combined attack vectors", () => {
   test("method chain + constructor attempt", () => {
-    expect(render("{{ s.trim().toLowerCase().constructor }}", { s: "test" })).toBe("");
+    expect(() => render("{{ s.trim().toLowerCase().constructor }}", { s: "test" })).toThrow();
   });
 
   test("ternary + constructor attempt", () => {
-    expect(render("{{ s.constructor if true else 'safe' }}", { s: "test" })).toBe("");
-    expect(render("{{ 'safe' if false else s.constructor }}", { s: "test" })).toBe("");
+    expect(() => render("{{ s.constructor if true else 'safe' }}", { s: "test" })).toThrow();
+    expect(() => render("{{ 'safe' if false else s.constructor }}", { s: "test" })).toThrow();
   });
 
   test("filter chain + constructor attempt", () => {
     const result = render("{{ (arr | join(',')) }}", { arr: [1, 2] });
     expect(result).toBe("1,2");
     // Constructor on filter result blocked
-    expect(render("{{ (arr | first).constructor }}", { arr: ["a"] })).toBe("");
+    expect(() => render("{{ (arr | first).constructor }}", { arr: ["a"] })).toThrow();
   });
 
   test("nested for-loop with constructor attempt", () => {
-    expect(render(
+    expect(() => render(
       "{% for item in arr %}{{ item.constructor }}{% endfor %}",
       { arr: ["a", "b"] },
-    )).toBe("");
+    )).toThrow();
   });
 
   test("set + constructor attempt", () => {
-    expect(render("{% set x = s.constructor %}{{ x }}", { s: "test" })).toBe("");
+    expect(() => render("{% set x = s.constructor %}{{ x }}", { s: "test" })).toThrow();
   });
 
   test("if condition using constructor", () => {
@@ -886,11 +882,9 @@ describe("template: accepted risks", () => {
 
   test("Object.prototype methods are accessible but harmless", () => {
     // hasOwnProperty, toString, valueOf are accessible from context prototype
-    // but constructor access blocks any escalation
-    // Note: calling toString() may fail depending on Nunjucks context, but
-    // accessing the property itself is safe
-    expect(render("{{ toString.constructor }}")).toBe("");
-    expect(render("{{ valueOf.constructor }}")).toBe("");
+    // but constructor access blocks any escalation → throws with throwOnUndefined
+    expect(() => render("{{ toString.constructor }}")).toThrow();
+    expect(() => render("{{ valueOf.constructor }}")).toThrow();
   });
 
   test("array mutation in templates is contained", () => {
@@ -975,11 +969,9 @@ describe("template: send_as security", () => {
   });
 
   test("send_as inside prototype chain attack is blocked", () => {
-    // Can't access send_as.constructor or similar
+    // Can't access send_as.constructor or similar — throws with throwOnUndefined
     const { renderStructuredTemplate } = require("./template");
     const template = `{{ send_as.constructor }}`;
-    const output = renderStructuredTemplate(template, {});
-    // constructor is blocked by memberLookup, renders as empty string → no messages
-    expect(output.messages.length).toBe(0);
+    expect(() => renderStructuredTemplate(template, {})).toThrow();
   });
 });

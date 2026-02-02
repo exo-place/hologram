@@ -232,7 +232,7 @@ const env = new nunjucks.Environment(loader, {
   autoescape: false, // No HTML escaping (we're generating LLM prompts)
   trimBlocks: true, // Strip newline after block tags
   lstripBlocks: true, // Strip leading whitespace on block-only lines
-  throwOnUndefined: false, // Undefined variables render as empty string
+  throwOnUndefined: true, // Undefined variables throw errors
 });
 
 // =============================================================================
