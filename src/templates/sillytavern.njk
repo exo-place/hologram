@@ -1,0 +1,67 @@
+{% call send_as("system") %}
+Write the next reply in a fictional chat between {{char}} and {{user}}.
+{% endcall %}
+
+{#- Entity Definitions -#}
+{% block definitions %}
+<defs for="{{ char.name }}" id="{{ char.id }}">
+{{ char.facts | join("\n") }}
+</defs>
+{% if memories[char.id] and memories[char.id] | length > 0 %}
+<memories for="{{ char.name }}" id="{{ char.id }}">
+{{ memories[char.id] | join("\n") }}
+</memories>
+{% endif %}
+{% endblock definitions %}
+
+{#- User Entity -#}
+{% block persona %}
+<defs for="{{ user.name }}" id="{{ user.id }}">
+{{ user.facts | join("\n") }}
+</defs>
+{% endblock persona %}
+
+{#- Referenced Entities -#}
+{% block world_info %}
+    {% for entity in others %}
+      {% if entity.id != user.id %}
+        {{- "\n\n" if entities | length > 0 or not loop.first -}}
+<defs for="{{ entity.name }}" id="{{ entity.id }}">
+{{ entity.facts | join("\n") }}
+</defs>
+      {% endif %}
+    {% endfor %}
+{% endblock world_info %}
+
+{% block pre_history_instructions %}
+  {#- Multi-Entity Response Format -#}
+  {% if entities | length > 1 %}
+    {{- "\n" -}}
+    {% if freeform -%}
+      You are writing as: {{ entities | join(", ", "name") }}. They may interact naturally in your response. Not everyone needs to respond to every message - only include those who would naturally engage. If none would respond, reply with only: none
+    {%- else %}
+You are: {{ entities | join(", ", "name") }}. Format your response with name prefixes:
+{{ entities[0].name }}: Hello there!
+{{ entities[1].name }}: Nice to meet you.
+
+Start each character's dialogue on a new line with their name followed by a colon. They may interact naturally.
+
+Not everyone needs to respond to every message. Only respond as those who would naturally engage with what was said. If none would respond, reply with only: none
+    {% endif %}
+  {% endif %}
+{% endblock pre_history_instructions %}
+
+{#- Message history -#}
+{% block history %}
+  {{- "\n" -}}
+  {% for msg in history %}
+    {{- "\n" if not loop.first -}}
+    {% call send_as(msg.role) -%}
+      {{ msg.author }}: {{ msg.content }}
+    {%- endcall %}
+  {% endfor %}
+{% endblock history %}
+
+{% block post_history_instructions %}
+Write {{char}}'s next reply.
+{% endblock %}

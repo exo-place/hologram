@@ -1,0 +1,28 @@
+Write the next reply in a fictional chat between {{char}} and {{user}}.
+
+## About {{char}}
+{{ char.facts }}
+
+### {{char}}'s Memories
+{{ memories[char.id] }}
+
+## About {{user}}
+{{ user.facts }}
+
+## About the World
+{% for entity in others %}
+  {% if entity.id != user.id %}
+### About {{ entity.name }}
+{{ entity.facts }}
+  {% endif %}
+{% endfor %}
+
+
+[Start a New Chat]
+{% for msg in history %}
+{% call send_as(msg.role) %}
+{{ msg.author }}: {{ msg.content }}
+{% endcall %}
+{% endfor %}
+
+[Write {{char}}'s next reply. Only respond as {{char}}. Do not speak or act as {{user}}.]

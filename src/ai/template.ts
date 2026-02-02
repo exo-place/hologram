@@ -1,3 +1,5 @@
+import DEFAULT_TEMPLATE_SOURCE from "../templates/default.njk" with { type: "text" };
+
 /**
  * Nunjucks-based template engine with runtime security patches.
  *
@@ -247,9 +249,10 @@ env.addFilter("length", (val: unknown) => {
   return 0;
 });
 
-env.addFilter("join", (arr: unknown, sep?: unknown) => {
+env.addFilter("join", (arr: unknown, sep?: unknown, attr?: unknown) => {
   if (!Array.isArray(arr)) return "";
-  const result = sep !== undefined ? arr.join(String(sep)) : arr.join();
+  const items = attr !== undefined ? arr.map(v => v != null ? v[String(attr)] : v) : arr;
+  const result = sep !== undefined ? items.join(String(sep)) : items.join();
   if (result.length > MAX_STRING_OUTPUT) {
     throw new ExprError(
       `join() produced ${result.length.toLocaleString()} characters (limit: ${MAX_STRING_OUTPUT.toLocaleString()})`,
@@ -517,73 +520,13 @@ function startsWithExtends(source: string): boolean {
 export const SYSTEM_PROMPT_TEMPLATE = "";
 
 /**
- * Default template using send_as() macro for role designation.
+ * Default template loaded from src/templates/default.njk.
  *
- * Unmarked text (entity defs, memories, multi-entity guidance) becomes
+ * Uses send_as() macro for role designation. Unmarked text becomes
  * system-role messages automatically. History messages use
  * {% call send_as(role) %} for proper user/assistant roles.
  */
-export const DEFAULT_TEMPLATE = `\
-{#- Entity definitions (unmarked → system-role message) -#}
-{%- if entities | length == 0 and others | length == 0 -%}
-You are a helpful assistant. Respond naturally to the user.
-{%- else -%}
-
-  {#- Responding entities -#}
-  {%- for entity in entities -%}
-    {%- if not loop.first %}
-
-
-    {% endif -%}
-<defs for="{{ entity.name }}" id="{{ entity.id }}">
-{{ entity.facts | join("\\n") }}
-</defs>
-    {%- if memories[entity.id] and memories[entity.id] | length > 0 %}
-
-
-<memories for="{{ entity.name }}" id="{{ entity.id }}">
-{{ memories[entity.id] | join("\\n") }}
-</memories>
-    {%- endif -%}
-  {%- endfor -%}
-
-  {#- Referenced and user entities -#}
-  {%- for entity in others -%}
-    {%- if entities | length > 0 or not loop.first %}
-
-
-    {% endif -%}
-<defs for="{{ entity.name }}" id="{{ entity.id }}">
-{{ entity.facts | join("\\n") }}
-</defs>
-  {%- endfor -%}
-
-  {#- Multi-entity response format -#}
-  {%- if entities | length > 1 -%}
-    {%- if freeform %}
-
-
-You are writing as: {{ entity_names }}. They may interact naturally in your response. Not everyone needs to respond to every message - only include those who would naturally engage. If none would respond, reply with only: none
-    {%- else %}
-
-
-You are: {{ entity_names }}. Format your response with name prefixes:
-{{ entities[0].name }}: *waves* Hello there!
-{{ entities[1].name }}: Nice to meet you.
-
-Start each character's dialogue on a new line with their name followed by a colon. They may interact naturally.
-
-Not everyone needs to respond to every message. Only respond as those who would naturally engage with what was said. If none would respond, reply with only: none
-    {%- endif -%}
-  {%- endif -%}
-
-{%- endif -%}
-{#- Message history (send_as → proper roles) -#}
-{%- for msg in history %}
-{% call send_as(msg.role) -%}
-{{ msg.author }}: {{ msg.content }}
-{%- endcall %}
-{%- endfor -%}`;
+export const DEFAULT_TEMPLATE = DEFAULT_TEMPLATE_SOURCE;
 
 /**
  * Render a template and parse structured output.

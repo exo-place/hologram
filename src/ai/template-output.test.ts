@@ -98,11 +98,7 @@ describe("DEFAULT_TEMPLATE: system messages", () => {
   test("no entities, no others", () => {
     const ctx = buildTemplateContext([], []);
     const output = renderStructuredTemplate(DEFAULT_TEMPLATE, ctx);
-    expect(output.messages.length).toBe(1);
-    expect(output.messages[0].role).toBe("system");
-    expect(norm(output.messages[0].content)).toBe(
-      "You are a helpful assistant. Respond naturally to the user."
-    );
+    expect(output.messages.length).toBe(0);
   });
 
   test("single entity, no others", () => {
@@ -138,7 +134,7 @@ describe("DEFAULT_TEMPLATE: system messages", () => {
     expect(output.messages.length).toBe(1);
     expect(output.messages[0].role).toBe("system");
     expect(norm(output.messages[0].content)).toBe(
-      `<defs for="Aria" id="1">\nis a warrior\n</defs>\n\n<defs for="Bob" id="2">\nis a mage\n</defs>\n\nYou are: Aria, Bob. Format your response with name prefixes:\nAria: *waves* Hello there!\nBob: Nice to meet you.\n\nStart each character's dialogue on a new line with their name followed by a colon. They may interact naturally.\n\nNot everyone needs to respond to every message. Only respond as those who would naturally engage with what was said. If none would respond, reply with only: none`
+      `<defs for="Aria" id="1">\nis a warrior\n</defs>\n\n<defs for="Bob" id="2">\nis a mage\n</defs>\n\nYou are: Aria, Bob. Format your response with name prefixes:\nAria: Hello there!\nBob: Nice to meet you.\n\nStart each character's dialogue on a new line with their name followed by a colon. They may interact naturally.\n\nNot everyone needs to respond to every message. Only respond as those who would naturally engage with what was said. If none would respond, reply with only: none`
     );
   });
 
@@ -183,7 +179,7 @@ describe("DEFAULT_TEMPLATE: system messages", () => {
     expect(output.messages.length).toBe(1);
     expect(output.messages[0].role).toBe("system");
     expect(norm(output.messages[0].content)).toBe(
-      `<defs for="Aria" id="1">\nis a warrior\ncarries a sword\n</defs>\n\n<memories for="Aria" id="1">\nfought a dragon\n</memories>\n\n<defs for="Bob" id="2">\nis a mage\nwears a hat\n</defs>\n\n<defs for="Tavern" id="3">\nis a location\n</defs>\n\n<defs for="Market" id="4">\nis outdoors\n</defs>\n\nYou are: Aria, Bob. Format your response with name prefixes:\nAria: *waves* Hello there!\nBob: Nice to meet you.\n\nStart each character's dialogue on a new line with their name followed by a colon. They may interact naturally.\n\nNot everyone needs to respond to every message. Only respond as those who would naturally engage with what was said. If none would respond, reply with only: none`
+      `<defs for="Aria" id="1">\nis a warrior\ncarries a sword\n</defs>\n\n<memories for="Aria" id="1">\nfought a dragon\n</memories>\n\n<defs for="Bob" id="2">\nis a mage\nwears a hat\n</defs>\n\n<defs for="Tavern" id="3">\nis a location\n</defs>\n\n<defs for="Market" id="4">\nis outdoors\n</defs>\n\nYou are: Aria, Bob. Format your response with name prefixes:\nAria: Hello there!\nBob: Nice to meet you.\n\nStart each character's dialogue on a new line with their name followed by a colon. They may interact naturally.\n\nNot everyone needs to respond to every message. Only respond as those who would naturally engage with what was said. If none would respond, reply with only: none`
     );
   });
 
