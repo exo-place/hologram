@@ -61,6 +61,9 @@ export function setDiscordEntity(
 /**
  * Resolve a Discord ID to ALL matching entities, respecting scope precedence.
  * Returns all entities at the most specific scope level that has bindings.
+ *
+ * Scope precedence only applies to 'user' bindings (channel > guild > global).
+ * For 'channel' and 'guild' bindings, discord_id is the scope itself.
  */
 export function resolveDiscordEntities(
   discordId: string,
@@ -70,7 +73,17 @@ export function resolveDiscordEntities(
 ): number[] {
   const db = getDb();
 
-  // Try channel-scoped first (returns ALL channel-scoped entities)
+  // For channel/guild bindings, discord_id IS the scope - no precedence needed
+  if (discordType === "channel" || discordType === "guild") {
+    const rows = db.prepare(`
+      SELECT entity_id FROM discord_entities
+      WHERE discord_id = ? AND discord_type = ?
+    `).all(discordId, discordType) as { entity_id: number }[];
+    return rows.map(r => r.entity_id);
+  }
+
+  // For user bindings, apply scope precedence (channel > guild > global)
+  // Try channel-scoped first
   if (channelId) {
     const channelScoped = db.prepare(`
       SELECT entity_id FROM discord_entities
@@ -81,7 +94,7 @@ export function resolveDiscordEntities(
     }
   }
 
-  // Try guild-scoped (returns ALL guild-scoped entities)
+  // Try guild-scoped
   if (guildId) {
     const guildScoped = db.prepare(`
       SELECT entity_id FROM discord_entities
@@ -92,7 +105,7 @@ export function resolveDiscordEntities(
     }
   }
 
-  // Try global (returns ALL global entities)
+  // Try global
   const globalScoped = db.prepare(`
     SELECT entity_id FROM discord_entities
     WHERE discord_id = ? AND discord_type = ? AND scope_guild_id IS NULL AND scope_channel_id IS NULL
@@ -115,14 +128,15 @@ export function resolveDiscordEntity(
 }
 
 /**
- * Get channel-scoped entities directly (bypassing precedence).
+ * Get channel-bound entities directly.
+ * For channel bindings, discord_id is the channel ID itself, so no scope check needed.
  */
 export function getChannelScopedEntities(channelId: string): number[] {
   const db = getDb();
   const rows = db.prepare(`
     SELECT entity_id FROM discord_entities
-    WHERE discord_id = ? AND discord_type = 'channel' AND scope_channel_id = ?
-  `).all(channelId, channelId) as { entity_id: number }[];
+    WHERE discord_id = ? AND discord_type = 'channel'
+  `).all(channelId) as { entity_id: number }[];
   return rows.map(r => r.entity_id);
 }
 
