@@ -4,12 +4,11 @@ import {
   InteractionResponseTypes,
   MessageComponentTypes,
 } from "@discordeno/bot";
+import type { CreateApplicationCommand, TextInputComponent, TextStyles } from "@discordeno/bot";
 
-// Use loose types to avoid desiredProperties conflicts
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Bot = any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Interaction = any;
+import type { bot } from "../client";
+type Bot = typeof bot;
+type Interaction = Parameters<NonNullable<Bot["events"]["interactionCreate"]>>[0];
 import { info, warn, error } from "../../logger";
 import { searchEntities, searchEntitiesOwnedBy, getEntitiesWithFacts, getPermissionDefaults } from "../../db/entities";
 import { parsePermissionDirectives, matchesUserEntry, isUserBlacklisted, isUserAllowed } from "../../logic/expr";
@@ -132,7 +131,7 @@ export async function respondWithModal(
   components: Array<{
     customId: string;
     label: string;
-    style: number;
+    style: TextStyles;
     value?: string;
     required?: boolean;
     placeholder?: string;
@@ -144,18 +143,18 @@ export async function respondWithModal(
       customId,
       title,
       components: components.map(c => {
-        const textInput: Record<string, unknown> = {
+        const textInput: TextInputComponent = {
           type: MessageComponentTypes.TextInput,
           customId: c.customId,
           label: c.label,
           style: c.style,
           required: c.required ?? true,
+          value: c.value,
+          placeholder: c.placeholder,
         };
-        if (c.value !== undefined) textInput.value = c.value;
-        if (c.placeholder !== undefined) textInput.placeholder = c.placeholder;
 
         return {
-          type: MessageComponentTypes.ActionRow,
+          type: MessageComponentTypes.ActionRow as const,
           components: [textInput],
         };
       }),
@@ -206,10 +205,10 @@ export async function followUp(bot: Bot, interaction: Interaction, content: stri
 
 export async function registerCommands(bot: Bot) {
   // Build command definitions for Discord
-  const defs = [];
+  const defs: CreateApplicationCommand[] = [];
 
   for (const [_name, cmd] of commands) {
-    const def: Record<string, unknown> = {
+    const def: CreateApplicationCommand = {
       name: cmd.name,
       description: cmd.description,
       type: ApplicationCommandTypes.ChatInput,
