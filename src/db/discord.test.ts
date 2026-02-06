@@ -21,15 +21,25 @@ import {
   getGuildScopedEntities,
   removeDiscordEntityBinding,
   removeDiscordEntity,
+  listDiscordMappings,
+  getBoundEntityIds,
   setDiscordConfig,
   getDiscordConfig,
   deleteDiscordConfig,
   resolveDiscordConfig,
   addMessage,
   getMessages,
+  getFilteredMessages,
+  updateMessageByDiscordId,
+  deleteMessageByDiscordId,
+  clearMessages,
+  formatMessagesForContext,
   countUnreadMessages,
+  getChannelForgetTime,
+  clearChannelForgetTime,
   trackWebhookMessage,
   getWebhookMessageEntity,
+  isOurWebhookUserId,
   recordEvalError,
   getUnnotifiedErrors,
   markErrorsNotified,
@@ -41,6 +51,7 @@ import {
   type EmbedData,
   type AttachmentData,
   type StickerData,
+  type Message,
 } from "./discord";
 
 function createTestSchema(db: Database) {
@@ -877,5 +888,260 @@ describe("setChannelForgetTime", () => {
     const messages = getMessages("chan-1");
     expect(messages.length).toBe(1);
     expect(messages[0].content).toBe("new message");
+  });
+});
+
+// =============================================================================
+// Additional DB-backed tests
+// =============================================================================
+
+describe("formatMessagesForContext", () => {
+  test("formats messages in chronological order with default format", () => {
+    const messages: Message[] = [
+      { id: 2, channel_id: "c", author_id: "u2", author_name: "Bob", content: "Hi", discord_message_id: null, data: null, created_at: "2024-01-01 10:01:00" },
+      { id: 1, channel_id: "c", author_id: "u1", author_name: "Alice", content: "Hello", discord_message_id: null, data: null, created_at: "2024-01-01 10:00:00" },
+    ];
+    // Messages come in DESC order, formatMessagesForContext reverses for chronological
+    expect(formatMessagesForContext(messages)).toBe("Alice: Hello\nBob: Hi");
+  });
+
+  test("uses custom format string", () => {
+    const messages: Message[] = [
+      { id: 1, channel_id: "c", author_id: "u1", author_name: "Alice", content: "Hello", discord_message_id: null, data: null, created_at: "2024-01-01 10:00:00" },
+    ];
+    expect(formatMessagesForContext(messages, "[%a] %m")).toBe("[Alice] Hello");
+  });
+
+  test("handles empty message array", () => {
+    expect(formatMessagesForContext([])).toBe("");
+  });
+
+  test("does not mutate original array", () => {
+    const messages: Message[] = [
+      { id: 2, channel_id: "c", author_id: "u2", author_name: "B", content: "2", discord_message_id: null, data: null, created_at: "2" },
+      { id: 1, channel_id: "c", author_id: "u1", author_name: "A", content: "1", discord_message_id: null, data: null, created_at: "1" },
+    ];
+    formatMessagesForContext(messages);
+    expect(messages[0].id).toBe(2); // Still DESC order
+  });
+});
+
+describe("updateMessageByDiscordId", () => {
+  beforeEach(() => {
+    testDb = new Database(":memory:");
+    createTestSchema(testDb);
+  });
+
+  test("updates message content", () => {
+    addMessage("chan-1", "u1", "Alice", "original", "msg-1");
+    expect(updateMessageByDiscordId("msg-1", "edited")).toBe(true);
+    const messages = getMessages("chan-1");
+    expect(messages[0].content).toBe("edited");
+  });
+
+  test("returns false for missing message", () => {
+    expect(updateMessageByDiscordId("nonexistent", "content")).toBe(false);
+  });
+
+  test("merges data with existing data", () => {
+    addMessage("chan-1", "u1", "Alice", "text", "msg-1", { is_bot: true });
+    updateMessageByDiscordId("msg-1", "updated", { embeds: [{ title: "E" }] });
+    const messages = getMessages("chan-1");
+    const data = parseMessageData(messages[0].data);
+    expect(data!.is_bot).toBe(true);
+    expect(data!.embeds![0].title).toBe("E");
+  });
+});
+
+describe("deleteMessageByDiscordId", () => {
+  beforeEach(() => {
+    testDb = new Database(":memory:");
+    createTestSchema(testDb);
+  });
+
+  test("deletes message and returns true", () => {
+    addMessage("chan-1", "u1", "Alice", "text", "msg-1");
+    expect(deleteMessageByDiscordId("msg-1")).toBe(true);
+    expect(getMessages("chan-1")).toEqual([]);
+  });
+
+  test("returns false for missing message", () => {
+    expect(deleteMessageByDiscordId("nonexistent")).toBe(false);
+  });
+});
+
+describe("clearMessages", () => {
+  beforeEach(() => {
+    testDb = new Database(":memory:");
+    createTestSchema(testDb);
+  });
+
+  test("clears all messages in channel and returns count", () => {
+    addMessage("chan-1", "u1", "A", "1");
+    addMessage("chan-1", "u1", "A", "2");
+    addMessage("chan-1", "u1", "A", "3");
+    expect(clearMessages("chan-1")).toBe(3);
+    expect(getMessages("chan-1")).toEqual([]);
+  });
+
+  test("returns 0 for empty channel", () => {
+    expect(clearMessages("empty")).toBe(0);
+  });
+
+  test("only clears specified channel", () => {
+    addMessage("chan-1", "u1", "A", "1");
+    addMessage("chan-2", "u1", "A", "2");
+    clearMessages("chan-1");
+    expect(getMessages("chan-2").length).toBe(1);
+  });
+});
+
+describe("getFilteredMessages", () => {
+  beforeEach(() => {
+    testDb = new Database(":memory:");
+    createTestSchema(testDb);
+  });
+
+  test("$char filter returns only webhook entity messages", () => {
+    insertMessage("chan-1", "u1", "Alice", "user msg", null, "2024-01-01 10:00:00");
+    insertMessage("chan-1", "bot", "Aria", "entity msg", "msg-1", "2024-01-01 10:01:00");
+    trackWebhookMessage("msg-1", 1, "Aria");
+    const filtered = getFilteredMessages("chan-1", 50, "$char");
+    expect(filtered.length).toBe(1);
+    expect(filtered[0].content).toBe("entity msg");
+  });
+
+  test("$user filter returns non-webhook, non-bot messages", () => {
+    insertMessage("chan-1", "u1", "Alice", "user msg", "umsg-1", "2024-01-01 10:00:00");
+    insertMessage("chan-1", "bot", "Aria", "entity msg", "msg-1", "2024-01-01 10:01:00");
+    trackWebhookMessage("msg-1", 1, "Aria");
+    const filtered = getFilteredMessages("chan-1", 50, "$user");
+    expect(filtered.length).toBe(1);
+    expect(filtered[0].content).toBe("user msg");
+  });
+
+  test("author name filter is case-insensitive", () => {
+    insertMessage("chan-1", "u1", "Alice", "msg 1", null, "2024-01-01 10:00:00");
+    insertMessage("chan-1", "u2", "Bob", "msg 2", null, "2024-01-01 10:01:00");
+    const filtered = getFilteredMessages("chan-1", 50, "alice");
+    expect(filtered.length).toBe(1);
+    expect(filtered[0].author_name).toBe("Alice");
+  });
+
+  test("respects limit", () => {
+    insertMessage("chan-1", "u1", "Alice", "1", null, "2024-01-01 10:00:00");
+    insertMessage("chan-1", "u1", "Alice", "2", null, "2024-01-01 10:01:00");
+    insertMessage("chan-1", "u1", "Alice", "3", null, "2024-01-01 10:02:00");
+    const filtered = getFilteredMessages("chan-1", 2, "Alice");
+    expect(filtered.length).toBe(2);
+  });
+
+  test("$bot filter returns bot messages that aren't entities", () => {
+    // A bot message (is_bot=true, no webhook entry)
+    testDb.prepare(`
+      INSERT INTO messages (channel_id, author_id, author_name, content, discord_message_id, data, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run("chan-1", "bot-1", "OtherBot", "bot msg", "bmsg-1", '{"is_bot":true}', "2024-01-01 10:00:00");
+    // A regular user message
+    insertMessage("chan-1", "u1", "Alice", "user msg", null, "2024-01-01 10:01:00");
+    const filtered = getFilteredMessages("chan-1", 50, "$bot");
+    expect(filtered.length).toBe(1);
+    expect(filtered[0].author_name).toBe("OtherBot");
+  });
+});
+
+describe("getChannelForgetTime / clearChannelForgetTime", () => {
+  beforeEach(() => {
+    testDb = new Database(":memory:");
+    createTestSchema(testDb);
+  });
+
+  test("returns null when no forget time set", () => {
+    expect(getChannelForgetTime("chan-1")).toBeNull();
+  });
+
+  test("returns forget time after setting", () => {
+    setChannelForgetTime("chan-1");
+    expect(getChannelForgetTime("chan-1")).not.toBeNull();
+  });
+
+  test("clearChannelForgetTime removes the time", () => {
+    setChannelForgetTime("chan-1");
+    expect(clearChannelForgetTime("chan-1")).toBe(true);
+    expect(getChannelForgetTime("chan-1")).toBeNull();
+  });
+
+  test("clearChannelForgetTime returns false when nothing to clear", () => {
+    expect(clearChannelForgetTime("chan-1")).toBe(false);
+  });
+});
+
+describe("listDiscordMappings", () => {
+  beforeEach(() => {
+    testDb = new Database(":memory:");
+    createTestSchema(testDb);
+  });
+
+  test("lists all mappings for a discord ID", () => {
+    const e1 = createEntity("A");
+    const e2 = createEntity("B");
+    addDiscordEntity("chan-1", "channel", e1);
+    addDiscordEntity("chan-1", "channel", e2);
+    const mappings = listDiscordMappings("chan-1", "channel");
+    expect(mappings.length).toBe(2);
+  });
+
+  test("returns empty for no mappings", () => {
+    expect(listDiscordMappings("none", "channel")).toEqual([]);
+  });
+});
+
+describe("getBoundEntityIds", () => {
+  beforeEach(() => {
+    testDb = new Database(":memory:");
+    createTestSchema(testDb);
+  });
+
+  test("returns all bound entities without scope filter", () => {
+    const e1 = createEntity("A");
+    const e2 = createEntity("B");
+    addDiscordEntity("user-1", "user", e1);
+    addDiscordEntity("user-1", "user", e2, "guild-1");
+    const ids = getBoundEntityIds("user-1", "user");
+    expect(ids.length).toBe(2);
+  });
+
+  test("filters by channel scope", () => {
+    const e1 = createEntity("A");
+    const e2 = createEntity("B");
+    addDiscordEntity("user-1", "user", e1, "guild-1", "chan-1");
+    addDiscordEntity("user-1", "user", e2, "guild-1");
+    const ids = getBoundEntityIds("user-1", "user", undefined, "chan-1");
+    expect(ids).toEqual([e1]);
+  });
+
+  test("filters by guild scope (no channel)", () => {
+    const e1 = createEntity("A");
+    const e2 = createEntity("B");
+    addDiscordEntity("user-1", "user", e1, "guild-1");
+    addDiscordEntity("user-1", "user", e2);
+    const ids = getBoundEntityIds("user-1", "user", "guild-1");
+    expect(ids).toEqual([e1]);
+  });
+});
+
+describe("isOurWebhookUserId", () => {
+  beforeEach(() => {
+    testDb = new Database(":memory:");
+    createTestSchema(testDb);
+  });
+
+  test("returns true for known webhook ID", () => {
+    testDb.prepare(`INSERT INTO webhooks (channel_id, webhook_id, webhook_token) VALUES (?, ?, ?)`).run("chan-1", "wh-123", "token");
+    expect(isOurWebhookUserId("wh-123")).toBe(true);
+  });
+
+  test("returns false for unknown ID", () => {
+    expect(isOurWebhookUserId("unknown")).toBe(false);
   });
 });
