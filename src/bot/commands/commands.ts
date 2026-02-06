@@ -1186,13 +1186,15 @@ registerCommand({
   options: [
     {
       name: "target",
-      description: "What to bind (channel, server, or 'me')",
+      description: "What to bind",
       type: ApplicationCommandOptionTypes.String,
       required: true,
       choices: [
         { name: "This channel", value: "channel" },
         { name: "This server", value: "server" },
-        { name: "Me (user)", value: "me" },
+        { name: "Me (this channel)", value: "me:channel" },
+        { name: "Me (this server)", value: "me:server" },
+        { name: "Me (global)", value: "me:global" },
       ],
     },
     {
@@ -1202,22 +1204,10 @@ registerCommand({
       required: true,
       autocomplete: true,
     },
-    {
-      name: "scope",
-      description: "Scope of binding",
-      type: ApplicationCommandOptionTypes.String,
-      required: false,
-      choices: [
-        { name: "This channel only", value: "channel" },
-        { name: "This server", value: "guild" },
-        { name: "Global (everywhere)", value: "global" },
-      ],
-    },
   ],
   async handler(ctx, options) {
     const target = options.target as string;
     const entityInput = options.entity as string;
-    const scope = (options.scope as string) ?? "channel";
 
     // Find entity
     let entity = null;
@@ -1234,12 +1224,17 @@ registerCommand({
       return;
     }
 
-    // Determine what to bind
+    // Parse target into discordType and scope
     let discordId: string;
     let discordType: "user" | "channel" | "guild";
+    let scopeGuildId: string | undefined;
+    let scopeChannelId: string | undefined;
+    let targetDesc: string;
+
     if (target === "channel") {
       discordId = ctx.channelId;
       discordType = "channel";
+      targetDesc = "This channel";
     } else if (target === "server") {
       if (!ctx.guildId) {
         await respond(ctx.bot, ctx.interaction, "Cannot bind to server in DMs", true);
@@ -1247,32 +1242,36 @@ registerCommand({
       }
       discordId = ctx.guildId;
       discordType = "guild";
-    } else {
+      targetDesc = "This server";
+    } else if (target === "me:channel") {
       discordId = ctx.userId;
       discordType = "user";
-    }
-
-    // Determine scope
-    let scopeGuildId: string | undefined;
-    let scopeChannelId: string | undefined;
-    if (scope === "channel") {
       scopeChannelId = ctx.channelId;
-    } else if (scope === "guild") {
+      targetDesc = "You (in this channel)";
+    } else if (target === "me:server") {
+      if (!ctx.guildId) {
+        await respond(ctx.bot, ctx.interaction, "Cannot use server scope in DMs", true);
+        return;
+      }
+      discordId = ctx.userId;
+      discordType = "user";
       scopeGuildId = ctx.guildId;
+      targetDesc = "You (in this server)";
+    } else {
+      // me:global
+      discordId = ctx.userId;
+      discordType = "user";
+      targetDesc = "You (globally)";
     }
-    // global = no scope
 
     const result = addDiscordEntity(discordId, discordType, entity.id, scopeGuildId, scopeChannelId);
 
-    const scopeDesc = scope === "global" ? "globally" : scope === "guild" ? "in this server" : "in this channel";
-    const targetDesc = target === "channel" ? "This channel" : target === "server" ? "This server" : "You";
-
     if (!result) {
-      await respond(ctx.bot, ctx.interaction, `"${entity.name}" is already bound ${scopeDesc}`, true);
+      await respond(ctx.bot, ctx.interaction, `"${entity.name}" is already bound to ${targetDesc.toLowerCase()}`, true);
       return;
     }
 
-    await respond(ctx.bot, ctx.interaction, `${targetDesc} bound to "${entity.name}" ${scopeDesc}`, true);
+    await respond(ctx.bot, ctx.interaction, `${targetDesc} bound to "${entity.name}"`, true);
   },
 });
 
@@ -1292,7 +1291,9 @@ registerCommand({
       choices: [
         { name: "This channel", value: "channel" },
         { name: "This server", value: "server" },
-        { name: "Me (user)", value: "me" },
+        { name: "Me (this channel)", value: "me:channel" },
+        { name: "Me (this server)", value: "me:server" },
+        { name: "Me (global)", value: "me:global" },
       ],
     },
     {
@@ -1302,22 +1303,10 @@ registerCommand({
       required: true,
       autocomplete: true,
     },
-    {
-      name: "scope",
-      description: "Scope of binding to remove",
-      type: ApplicationCommandOptionTypes.String,
-      required: false,
-      choices: [
-        { name: "This channel only", value: "channel" },
-        { name: "This server", value: "guild" },
-        { name: "Global (everywhere)", value: "global" },
-      ],
-    },
   ],
   async handler(ctx, options) {
     const target = options.target as string;
     const entityInput = options.entity as string;
-    const scope = (options.scope as string) ?? "channel";
 
     // Find entity
     let entity = null;
@@ -1334,12 +1323,17 @@ registerCommand({
       return;
     }
 
-    // Determine what to unbind
+    // Parse target into discordType and scope
     let discordId: string;
     let discordType: "user" | "channel" | "guild";
+    let scopeGuildId: string | undefined;
+    let scopeChannelId: string | undefined;
+    let targetDesc: string;
+
     if (target === "channel") {
       discordId = ctx.channelId;
       discordType = "channel";
+      targetDesc = "This channel";
     } else if (target === "server") {
       if (!ctx.guildId) {
         await respond(ctx.bot, ctx.interaction, "Cannot unbind from server in DMs", true);
@@ -1347,31 +1341,36 @@ registerCommand({
       }
       discordId = ctx.guildId;
       discordType = "guild";
-    } else {
+      targetDesc = "This server";
+    } else if (target === "me:channel") {
       discordId = ctx.userId;
       discordType = "user";
-    }
-
-    // Determine scope
-    let scopeGuildId: string | undefined;
-    let scopeChannelId: string | undefined;
-    if (scope === "channel") {
       scopeChannelId = ctx.channelId;
-    } else if (scope === "guild") {
+      targetDesc = "You (in this channel)";
+    } else if (target === "me:server") {
+      if (!ctx.guildId) {
+        await respond(ctx.bot, ctx.interaction, "Cannot use server scope in DMs", true);
+        return;
+      }
+      discordId = ctx.userId;
+      discordType = "user";
       scopeGuildId = ctx.guildId;
+      targetDesc = "You (in this server)";
+    } else {
+      // me:global
+      discordId = ctx.userId;
+      discordType = "user";
+      targetDesc = "You (globally)";
     }
 
     const removed = removeDiscordEntityBinding(discordId, discordType, entity.id, scopeGuildId, scopeChannelId);
 
-    const scopeDesc = scope === "global" ? "globally" : scope === "guild" ? "from this server" : "from this channel";
-    const targetDesc = target === "channel" ? "Channel" : target === "server" ? "Server" : "You";
-
     if (!removed) {
-      await respond(ctx.bot, ctx.interaction, `"${entity.name}" was not bound ${scopeDesc}`, true);
+      await respond(ctx.bot, ctx.interaction, `"${entity.name}" was not bound to ${targetDesc.toLowerCase()}`, true);
       return;
     }
 
-    await respond(ctx.bot, ctx.interaction, `${targetDesc} unbound from "${entity.name}" ${scopeDesc}`, true);
+    await respond(ctx.bot, ctx.interaction, `${targetDesc} unbound from "${entity.name}"`, true);
   },
 });
 
