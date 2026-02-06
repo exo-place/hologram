@@ -470,7 +470,7 @@ Do not:
 - Announce actions ("I will now...") - just do them
 - Use `--no-verify` - fix the issue or fix the hook
 - Assume tools are missing - check if `bun` is available
-- Use `as any` type assertions - they hide type errors and indicate missing/wrong types. Fix the underlying type issue instead (add proper desiredProperties, use correct property paths like `toggles.nsfw` instead of `nsfw`, etc.)
+- Use `as any` type assertions or `type Foo = any` aliases - they hide type errors and indicate missing/wrong types. Fix the underlying type issue instead (add proper desiredProperties, use correct property paths like `toggles.nsfw` instead of `nsfw`, etc.). For Discordeno types, use `typeof bot` from `src/bot/client.ts` to get the fully-resolved `Bot<TProps, TBehavior>` without manually threading generics.
 
 ## Commits
 
