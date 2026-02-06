@@ -1394,18 +1394,48 @@ async function notifyUserOfError(userId: string, entityName: string, errorMsg: s
 }
 
 bot.events.messageUpdate = async (message) => {
-  // Ignore own messages and messages with no content (embed-only updates)
+  // Ignore own messages
   if (botUserId && message.author?.id === botUserId) return;
-  if (!message.content) return;
 
   const discordMessageId = message.id.toString();
 
   // Skip own webhook messages
   if (isOwnWebhookMessage(discordMessageId)) return;
 
-  const updated = updateMessageByDiscordId(discordMessageId, message.content);
+  // Build updated data blob if embeds arrived (common for URL previews)
+  const hasEmbeds = (message.embeds?.length ?? 0) > 0;
+  let newData: MessageData | undefined;
+  if (hasEmbeds) {
+    newData = {
+      embeds: message.embeds!.map(e => ({
+        ...(e.title && { title: e.title }),
+        ...(e.type && { type: e.type }),
+        ...(e.description && { description: e.description }),
+        ...(e.url && { url: e.url }),
+        ...(e.timestamp && { timestamp: e.timestamp }),
+        ...(e.color != null && { color: e.color }),
+        ...(e.footer && { footer: { text: e.footer.text, ...(e.footer.iconUrl && { icon_url: e.footer.iconUrl }) } }),
+        ...(e.image && { image: { url: e.image.url, ...(e.image.height != null && { height: e.image.height }), ...(e.image.width != null && { width: e.image.width }) } }),
+        ...(e.thumbnail && { thumbnail: { url: e.thumbnail.url, ...(e.thumbnail.height != null && { height: e.thumbnail.height }), ...(e.thumbnail.width != null && { width: e.thumbnail.width }) } }),
+        ...(e.video && { video: { ...(e.video.url && { url: e.video.url }), ...(e.video.height != null && { height: e.video.height }), ...(e.video.width != null && { width: e.video.width }) } }),
+        ...(e.provider && { provider: { ...(e.provider.name && { name: e.provider.name }), ...(e.provider.url && { url: e.provider.url }) } }),
+        ...(e.author && { author: { name: e.author.name, ...(e.author.url && { url: e.author.url }), ...(e.author.iconUrl && { icon_url: e.author.iconUrl }) } }),
+        ...(e.fields?.length && { fields: e.fields.map(f => ({ name: f.name, value: f.value, ...(f.inline != null && { inline: f.inline }) })) }),
+      })),
+    };
+  }
+
+  // Skip if no content and no embeds to update
+  if (!message.content && !newData) return;
+
+  const content = message.content ?? "";
+  const updated = updateMessageByDiscordId(discordMessageId, content, newData);
   if (updated) {
-    debug("Message updated", { messageId: discordMessageId, content: message.content.slice(0, 50) });
+    debug("Message updated", {
+      messageId: discordMessageId,
+      content: content.slice(0, 50),
+      hasEmbeds,
+    });
   }
 };
 

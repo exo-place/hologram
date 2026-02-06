@@ -385,9 +385,22 @@ export function addMessage(
 
 export function updateMessageByDiscordId(
   discordMessageId: string,
-  newContent: string
+  newContent: string,
+  newData?: MessageData
 ): boolean {
   const db = getDb();
+  if (newData) {
+    // Merge new data with existing data (preserves fields not in newData)
+    const existing = db.prepare(`
+      SELECT data FROM messages WHERE discord_message_id = ?
+    `).get(discordMessageId) as { data: string | null } | undefined;
+    const existingData = existing?.data ? parseMessageData(existing.data) : {};
+    const mergedData = { ...existingData, ...newData };
+    const result = db.prepare(`
+      UPDATE messages SET content = ?, data = ? WHERE discord_message_id = ?
+    `).run(newContent, JSON.stringify(mergedData), discordMessageId);
+    return result.changes > 0;
+  }
   const result = db.prepare(`
     UPDATE messages SET content = ? WHERE discord_message_id = ?
   `).run(newContent, discordMessageId);
