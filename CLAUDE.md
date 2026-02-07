@@ -34,6 +34,11 @@ src/
 ├── logic/
 │   ├── expr.ts           # $if expression evaluator + $respond control
 │   └── safe-regex.ts     # Regex pattern validator (ReDoS prevention)
+├── debug/
+│   ├── index.ts          # Re-exports all debug functions
+│   ├── embeddings.ts     # RAG/embedding debug (status, coverage, retrieval)
+│   ├── state.ts          # DB state inspection (bindings, memories, effects, errors, messages)
+│   └── evaluation.ts     # Fact evaluation tracing, buildEvaluatedEntity (shared)
 └── bot/
     ├── client.ts         # Discordeno setup + message handling
     └── commands/
@@ -57,6 +62,9 @@ docs/
 │       ├── template-engine.ts     # Browser-compatible Nunjucks renderer
 │       └── template-evaluator.ts  # Template context builder for playground
 └── archive/              # Old docs from previous architecture
+
+scripts/
+└── debug.ts              # CLI debug tool: bun run debug <subcommand>
 
 editors/
 └── vscode/               # VS Code extension: .holo + .njk syntax highlighting
@@ -177,6 +185,7 @@ Permission lists are stored as JSON arrays in entity config columns. Role IDs us
 | `/debug [status]` | Channel state (default) |
 | `/debug prompt [entity]` | Show system prompt for entity |
 | `/debug context [entity]` | Show message context for entity |
+| `/debug rag [entity] [query]` | Show embedding status + RAG retrieval results |
 | `/trigger <entity>` | Manually trigger entity response |
 | `/forget` | Exclude messages before now from context |
 
@@ -190,6 +199,7 @@ bun run dev          # Development with watch
 bun run start        # Production
 bun run lint         # oxlint
 bun run check:types  # TypeScript check
+bun run debug        # CLI debug tools (embeddings, state, eval)
 ```
 
 ## Environment Variables

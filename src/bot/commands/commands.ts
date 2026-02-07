@@ -45,15 +45,15 @@ import {
   getDiscordConfig,
   setDiscordConfig,
   deleteDiscordConfig,
-  countUnreadMessages,
 } from "../../db/discord";
 import { parsePermissionDirectives, matchesUserEntry, isUserBlacklisted, isUserAllowed, evaluateFacts, createBaseContext } from "../../logic/expr";
 import { formatEntityDisplay } from "../../ai/context";
-import type { EvaluatedEntity } from "../../ai/context";
 import { preparePromptContext } from "../../ai/prompt";
 import { sendResponse, getChannelMetadata, getGuildMetadata } from "../client";
 import { debug } from "../../logger";
 import { formatMessagesForContext, getFilteredMessages } from "../../db/discord";
+import { buildEvaluatedEntity } from "../../debug/evaluation";
+import { getEmbeddingStatus, getEmbeddingCoverage, testRagRetrieval } from "../../debug/embeddings";
 
 // =============================================================================
 // Text Helpers
@@ -1660,6 +1660,26 @@ registerCommand({
         },
       ],
     },
+    {
+      name: "rag",
+      description: "Show embedding status and test RAG retrieval",
+      type: ApplicationCommandOptionTypes.SubCommand,
+      options: [
+        {
+          name: "entity",
+          description: "Entity to query (defaults to channel-bound entity)",
+          type: ApplicationCommandOptionTypes.String,
+          required: false,
+          autocomplete: true,
+        },
+        {
+          name: "query",
+          description: "Search query for RAG retrieval",
+          type: ApplicationCommandOptionTypes.String,
+          required: false,
+        },
+      ],
+    },
   ],
   async handler(ctx, options) {
     // Get subcommand from nested options
@@ -1669,6 +1689,8 @@ registerCommand({
       await handleInfoPrompt(ctx, options);
     } else if (subcommand === "context") {
       await handleInfoContext(ctx, options);
+    } else if (subcommand === "rag") {
+      await handleInfoRag(ctx, options);
     } else {
       await handleInfoStatus(ctx);
     }
@@ -1805,39 +1827,7 @@ async function handleInfoPrompt(ctx: CommandContext, options: Record<string, unk
   await respond(ctx.bot, ctx.interaction, elideText(systemPrompt || "(no system prompt)"), true);
 }
 
-/** Build an EvaluatedEntity from a raw entity using a mock expression context */
-function buildEvaluatedEntity(entity: EntityWithFacts, options?: {
-  channel?: { id: string; name: string; description: string; is_nsfw: boolean; type: string; mention: string };
-  server?: { id: string; name: string; description: string; nsfw_level: string };
-  channelId?: string;
-}): EvaluatedEntity {
-  const rawFacts = entity.facts.map(f => f.content);
-  const mockContext = createBaseContext({
-    facts: rawFacts,
-    has_fact: (pattern: string) => rawFacts.some(f => new RegExp(pattern, "i").test(f)),
-    name: entity.name,
-    channel: options?.channel,
-    server: options?.server,
-    unread_count: options?.channelId ? countUnreadMessages(options.channelId, entity.id) : 0,
-  });
-  const result = evaluateFacts(rawFacts, mockContext);
-  return {
-    id: entity.id,
-    name: entity.name,
-    facts: result.facts,
-    avatarUrl: result.avatarUrl,
-    streamMode: result.streamMode,
-    streamDelimiter: result.streamDelimiter,
-    memoryScope: result.memoryScope,
-    contextExpr: result.contextExpr,
-    isFreeform: result.isFreeform,
-    modelSpec: result.modelSpec,
-    stripPatterns: result.stripPatterns,
-    template: entity.template,
-    systemTemplate: entity.system_template,
-    exprContext: mockContext,
-  };
-}
+// buildEvaluatedEntity is imported from ../../debug/evaluation
 
 async function handleInfoContext(ctx: CommandContext, options: Record<string, unknown>) {
   const entityInput = options.entity as string | undefined;
@@ -1859,6 +1849,47 @@ async function handleInfoContext(ctx: CommandContext, options: Record<string, un
   // Show all messages (system, user, assistant) — the full conversation the LLM sees
   const formatted = messages.map(m => `[${m.role}] ${m.content}`).join("\n\n");
   await respond(ctx.bot, ctx.interaction, elideText(formatted || "(no messages)"), true);
+}
+
+async function handleInfoRag(ctx: CommandContext, options: Record<string, unknown>) {
+  const entityInput = options.entity as string | undefined;
+  const query = options.query as string | undefined;
+  const targetEntity = await resolveTargetEntity(ctx, entityInput, "rag");
+  if (!targetEntity) return;
+
+  const lines: string[] = [];
+
+  // Embedding status
+  const status = getEmbeddingStatus();
+  lines.push(`**Embedding Model:** ${status.modelName}`);
+  lines.push(`**Loaded:** ${status.loaded ? "yes" : "no"}`);
+  lines.push(`**Dimensions:** ${status.dimensions}`);
+  lines.push(`**Cache:** ${status.cache.size}/${status.cache.max} (TTL: ${Math.round(status.cache.ttl / 1000)}s)`);
+
+  // Coverage
+  const coverage = getEmbeddingCoverage(targetEntity.id);
+  lines.push("");
+  lines.push(`**${targetEntity.name} [${targetEntity.id}] Coverage:**`);
+  lines.push(`Facts: ${coverage.facts.withEmbedding}/${coverage.facts.total} embedded`);
+  lines.push(`Memories: ${coverage.memories.withEmbedding}/${coverage.memories.total} embedded`);
+
+  // RAG retrieval if query provided
+  if (query) {
+    lines.push("");
+    lines.push(`**RAG Results for:** "${query}"`);
+    const results = await testRagRetrieval(targetEntity.id, query, "global", ctx.channelId, ctx.guildId);
+    if (results.length === 0) {
+      lines.push("No results found.");
+    } else {
+      for (const r of results.slice(0, 10)) {
+        const sim = (r.similarity * 100).toFixed(1);
+        const preview = r.content.length > 80 ? r.content.slice(0, 80) + "..." : r.content;
+        lines.push(`\`${sim}%\` [${r.type}:${r.id}] ${preview}`);
+      }
+    }
+  }
+
+  await respond(ctx.bot, ctx.interaction, elideText(lines.join("\n")), true);
 }
 
 // =============================================================================

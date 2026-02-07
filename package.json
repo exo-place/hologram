@@ -9,7 +9,8 @@
     "start": "bun run src/index.ts",
     "check:types": "tsgo --noEmit",
     "lint": "oxlint",
-    "test": "bun test"
+    "test": "bun test",
+    "debug": "bun run scripts/debug.ts"
   },
   "dependencies": {
     "@ai-sdk/amazon-bedrock": "^4.0.37",

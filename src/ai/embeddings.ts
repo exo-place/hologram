@@ -5,7 +5,7 @@ import { debug } from "../logger";
 let extractor: FeatureExtractionPipeline | null = null;
 let initPromise: Promise<FeatureExtractionPipeline> | null = null;
 
-const MODEL_NAME = "Xenova/all-MiniLM-L6-v2";
+export const MODEL_NAME = "Xenova/all-MiniLM-L6-v2";
 export const EMBEDDING_DIMENSIONS = 384;
 
 // =============================================================================
@@ -151,6 +151,11 @@ export async function embedBatch(texts: string[]): Promise<Float32Array[]> {
   }
 
   return results;
+}
+
+// Check if the embedding model is loaded (synchronous, no init)
+export function isEmbeddingModelLoaded(): boolean {
+  return extractor !== null;
 }
 
 // Preload the model (call during startup for faster first query)
