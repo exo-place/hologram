@@ -86,7 +86,7 @@ Patterns are quoted strings. Supports escape sequences: `\n`, `\t`, `\\`. Multip
 
 ### `$thinking` / `$thinking <level>`
 
-Control the thinking level for Google models. Higher levels use more reasoning tokens, increasing latency and cost but potentially improving output quality.
+Control the thinking/reasoning level for LLM calls. Higher levels use more reasoning tokens, increasing latency and cost but potentially improving output quality.
 
 ```
 $thinking                     # Enable high thinking
@@ -99,9 +99,18 @@ $if mentioned: $thinking high # Conditional: think harder when mentioned
 
 **Valid levels:** `minimal`, `low`, `medium`, `high`
 
-**Default behavior:** When no `$thinking` directive is present, Google models default to `minimal` thinking. This prevents accidental use of full reasoning on every LLM call. Bare `$thinking` (no level) defaults to `high`. Multiple `$thinking` directives are evaluated in order; the last one wins.
+**Default behavior:** All providers default to `minimal` when no `$thinking` directive is present. Bare `$thinking` (no level) defaults to `high`. Multiple `$thinking` directives are evaluated in order; the last one wins.
 
-**Non-Google models:** The directive is parsed and stored but has no effect on non-Google providers.
+**Provider mapping:**
+
+| `$thinking` | Google (Gemini 3) | Google (Gemini 2.5) | Anthropic | OpenAI |
+|---|---|---|---|---|
+| *minimal* (default) | `thinkingLevel: "minimal"` | `thinkingBudget: 0` | no change | no change |
+| `low` | `thinkingLevel: "low"` | `thinkingBudget: 1024` | `budgetTokens: 2048` | `reasoningEffort: "low"` |
+| `medium` | `thinkingLevel: "medium"` | `thinkingBudget: 8192` | `budgetTokens: 10000` | `reasoningEffort: "medium"` |
+| `high` | `thinkingLevel: "high"` | `thinkingBudget: 24576` | `budgetTokens: 32000` | `reasoningEffort: "high"` |
+
+Google models think by default, so `minimal` actively suppresses thinking. Anthropic and OpenAI don't think by default, so `minimal` is a no-op — only `low`/`medium`/`high` enables their reasoning features. Unsupported providers ignore the directive.
 
 Can also be set via `/edit <entity> type:Advanced`.
 
