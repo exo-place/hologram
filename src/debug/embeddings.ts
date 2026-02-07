@@ -117,13 +117,12 @@ export async function testRagRetrieval(
   scope: "channel" | "guild" | "global" = "global",
   channelId?: string,
   guildId?: string,
-  limit = 10,
 ): Promise<RagResult[]> {
   const results: RagResult[] = [];
 
   // Memory search via existing pipeline
   const memoryResults = await searchMemoriesBySimilarity(
-    entityId, query, scope, channelId, guildId, limit, 50,
+    entityId, query, scope, channelId, guildId,
   );
   for (const { memory, similarity } of memoryResults) {
     results.push({ content: memory.content, similarity, type: "memory", id: memory.id });
@@ -158,5 +157,5 @@ export async function testRagRetrieval(
 
   // Sort all results by similarity descending
   results.sort((a, b) => b.similarity - a.similarity);
-  return results.slice(0, limit);
+  return results;
 }

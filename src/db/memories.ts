@@ -338,15 +338,11 @@ export async function searchMemoriesBySimilarity(
   scope: MemoryScope,
   channelId?: string,
   guildId?: string,
-  limit: number = 20,
-  candidateLimit: number = 20
 ): Promise<Array<{ memory: Memory; similarity: number }>> {
   if (scope === "none") return [];
 
-  // 1. Pre-filter by scope, take top candidates by frecency
-  const candidates = getMemoriesForScope(entityId, scope, channelId, guildId)
-    .slice(0, candidateLimit);
-
+  // 1. Get all memories in scope
+  const candidates = getMemoriesForScope(entityId, scope, channelId, guildId);
   if (candidates.length === 0) return [];
 
   // 2. Generate query embedding
@@ -360,12 +356,14 @@ export async function searchMemoriesBySimilarity(
     if (!memoryEmbedding) continue;
 
     const similarity = cosineSimilarity(queryEmbedding, memoryEmbedding);
-    scored.push({ memory, similarity });
+    if (similarity >= MIN_SIMILARITY_THRESHOLD) {
+      scored.push({ memory, similarity });
+    }
   }
 
-  // 4. Sort by similarity, filter below threshold, return top results
+  // 4. Sort by similarity (all results pass threshold)
   scored.sort((a, b) => b.similarity - a.similarity);
-  return scored.filter(s => s.similarity >= MIN_SIMILARITY_THRESHOLD).slice(0, limit);
+  return scored;
 }
 
 /**
@@ -378,7 +376,6 @@ export async function retrieveRelevantMemories(
   scope: MemoryScope,
   channelId?: string,
   guildId?: string,
-  limit: number = 20
 ): Promise<Memory[]> {
   const results = await searchMemoriesBySimilarity(
     entityId,
@@ -386,7 +383,6 @@ export async function retrieveRelevantMemories(
     scope,
     channelId,
     guildId,
-    limit
   );
 
   // Boost frecency for retrieved memories
