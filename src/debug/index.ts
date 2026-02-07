@@ -4,6 +4,7 @@ export {
   testSimilarity,
   getEmbeddingCoverage,
   testRagRetrieval,
+  getRagCacheDebug,
   type EmbeddingStatus,
   type EmbedTestResult,
   type SimilarityTestResult,

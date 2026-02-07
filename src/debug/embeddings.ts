@@ -14,7 +14,7 @@ import {
 } from "../ai/embeddings";
 import { getDb } from "../db/index";
 import { getFactsForEntity } from "../db/entities";
-import { getMemoriesForEntity, searchMemoriesBySimilarity } from "../db/memories";
+import { getMemoriesForEntity, searchMemoriesBySimilarity, getRetrievalCacheStats, getSimilarityCacheDebug, type SimilarityCacheDebugInfo } from "../db/memories";
 
 // =============================================================================
 // Types
@@ -25,6 +25,7 @@ export interface EmbeddingStatus {
   modelName: string;
   dimensions: number;
   cache: { size: number; max: number; ttl: number };
+  retrievalCache: { embeddingEntries: number; similarityEntries: number; maxEntities: number };
 }
 
 export interface EmbedTestResult {
@@ -61,7 +62,18 @@ export function getEmbeddingStatus(): EmbeddingStatus {
     modelName: MODEL_NAME,
     dimensions: EMBEDDING_DIMENSIONS,
     cache: { size: cache.size, max: cache.maxSize, ttl: cache.ttlMs },
+    retrievalCache: getRetrievalCacheStats(),
   };
+}
+
+/** Get detailed similarity cache for an entity, showing per-message scores */
+export function getRagCacheDebug(
+  entityId: number,
+  scope: "channel" | "guild" | "global" = "global",
+  channelId?: string,
+  guildId?: string,
+): SimilarityCacheDebugInfo | null {
+  return getSimilarityCacheDebug(entityId, scope, channelId, guildId);
 }
 
 export async function testEmbed(text: string): Promise<EmbedTestResult> {

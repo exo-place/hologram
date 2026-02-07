@@ -6,7 +6,7 @@
  */
 
 import { getDb } from "./index";
-import { embed, maxSimilarityMatrix } from "../ai/embeddings";
+import { embed, similarityMatrix } from "../ai/embeddings";
 
 // =============================================================================
 // Types
@@ -28,6 +28,190 @@ export type MemoryScope = "none" | "channel" | "guild" | "global";
 
 /** Minimum cosine similarity for a memory to be included in retrieval results */
 const MIN_SIMILARITY_THRESHOLD = 0.2;
+
+// =============================================================================
+// Retrieval Caches
+// =============================================================================
+
+/**
+ * Two-level cache for memory retrieval:
+ *
+ * Level 1 — Memory embedding cache (per entity×scope):
+ *   Caches loaded Memory objects + Float32Array embeddings from DB.
+ *   Avoids N individual DB queries per retrieval.
+ *   Invalidated on any memory mutation for that entity.
+ *
+ * Level 2 — Similarity result cache (per entity×scope×channel):
+ *   Caches per-memory max-similarity scores and which messages contributed.
+ *   On new message: compute 1×N dot products instead of full M×N matrix.
+ *   Invalidated on memory change or message removal (context shrink, /forget).
+ */
+
+/** Max number of entities to cache embeddings for */
+export let memoryCacheMaxEntities = 50;
+
+/** Set the max number of entities to cache embeddings for */
+export function setMemoryCacheMaxEntities(max: number): void {
+  memoryCacheMaxEntities = max;
+}
+
+// --- Level 1: Memory embedding cache ---
+
+interface EmbeddingCacheEntry {
+  memories: Memory[];
+  embeddings: Float32Array[];
+  memoryIdSet: Set<number>; // for fast membership checks
+}
+
+const embeddingCache = new Map<string, EmbeddingCacheEntry>();
+
+function embeddingCacheKey(entityId: number, scope: MemoryScope, channelId?: string, guildId?: string): string {
+  if (scope === "global") return `${entityId}:global`;
+  if (scope === "guild") return `${entityId}:guild:${guildId}`;
+  if (scope === "channel") return `${entityId}:channel:${channelId}`;
+  return `${entityId}:none`;
+}
+
+function getOrLoadEmbeddings(
+  entityId: number, scope: MemoryScope, channelId?: string, guildId?: string,
+): EmbeddingCacheEntry | null {
+  const key = embeddingCacheKey(entityId, scope, channelId, guildId);
+  const cached = embeddingCache.get(key);
+  if (cached) return cached;
+
+  const candidates = getMemoriesForScope(entityId, scope, channelId, guildId);
+  if (candidates.length === 0) return null;
+
+  const memories: Memory[] = [];
+  const embeddings: Float32Array[] = [];
+  const memoryIdSet = new Set<number>();
+  for (const memory of candidates) {
+    const embedding = getMemoryEmbedding(memory.id);
+    if (embedding) {
+      memories.push(memory);
+      embeddings.push(embedding);
+      memoryIdSet.add(memory.id);
+    }
+  }
+  if (memories.length === 0) return null;
+
+  const entry: EmbeddingCacheEntry = { memories, embeddings, memoryIdSet };
+
+  // Evict oldest if at capacity
+  if (embeddingCache.size >= memoryCacheMaxEntities) {
+    const firstKey = embeddingCache.keys().next().value;
+    if (firstKey) embeddingCache.delete(firstKey);
+  }
+  embeddingCache.set(key, entry);
+  return entry;
+}
+
+// --- Level 2: Similarity result cache ---
+
+interface SimilarityCacheEntry {
+  /** Per-message similarity vectors: message content → similarity per memory (parallel to embedding cache) */
+  messageScores: Map<string, Float32Array>;
+  /** Pre-computed max across all messages per memory */
+  maxSims: Float32Array;
+  /** Memory ID set snapshot — if memories change, invalidate */
+  memoryIdSnapshot: Set<number>;
+}
+
+const similarityCache = new Map<string, SimilarityCacheEntry>();
+
+function similarityCacheKey(entityId: number, scope: MemoryScope, channelId?: string, guildId?: string): string {
+  return embeddingCacheKey(entityId, scope, channelId, guildId);
+}
+
+/** Recompute maxSims from individual message score vectors */
+function recomputeMaxSims(messageScores: Map<string, Float32Array>, N: number): Float32Array {
+  const maxSims = new Float32Array(N).fill(-Infinity);
+  for (const scores of messageScores.values()) {
+    for (let j = 0; j < N; j++) {
+      if (scores[j] > maxSims[j]) maxSims[j] = scores[j];
+    }
+  }
+  return maxSims;
+}
+
+// --- Invalidation ---
+
+/** Invalidate all caches for an entity (called on memory mutations) */
+function invalidateEntityCaches(entityId: number): void {
+  for (const key of embeddingCache.keys()) {
+    if (key.startsWith(`${entityId}:`)) embeddingCache.delete(key);
+  }
+  for (const key of similarityCache.keys()) {
+    if (key.startsWith(`${entityId}:`)) similarityCache.delete(key);
+  }
+}
+
+/** Clear all retrieval caches (e.g. for testing or bulk operations) */
+export function clearRetrievalCaches(): void {
+  embeddingCache.clear();
+  similarityCache.clear();
+}
+
+/** Get cache statistics for debugging */
+export function getRetrievalCacheStats(): { embeddingEntries: number; similarityEntries: number; maxEntities: number } {
+  return {
+    embeddingEntries: embeddingCache.size,
+    similarityEntries: similarityCache.size,
+    maxEntities: memoryCacheMaxEntities,
+  };
+}
+
+/** Detailed similarity cache state for /debug rag */
+export interface SimilarityCacheDebugInfo {
+  cacheKey: string;
+  memoriesCount: number;
+  messagesCount: number;
+  entries: Array<{
+    memoryId: number;
+    memoryContent: string;
+    maxSimilarity: number;
+    messageScores: Array<{ message: string; similarity: number }>;
+  }>;
+}
+
+/** Get detailed similarity cache for an entity (for debugging) */
+export function getSimilarityCacheDebug(
+  entityId: number, scope: MemoryScope, channelId?: string, guildId?: string,
+): SimilarityCacheDebugInfo | null {
+  const simKey = similarityCacheKey(entityId, scope, channelId, guildId);
+  const simCached = similarityCache.get(simKey);
+  const embKey = embeddingCacheKey(entityId, scope, channelId, guildId);
+  const embCached = embeddingCache.get(embKey);
+
+  if (!simCached || !embCached) return null;
+
+  const entries: SimilarityCacheDebugInfo["entries"] = [];
+  for (let j = 0; j < embCached.memories.length; j++) {
+    const memory = embCached.memories[j];
+    const messageScores: Array<{ message: string; similarity: number }> = [];
+
+    for (const [msg, scores] of simCached.messageScores) {
+      messageScores.push({ message: msg, similarity: scores[j] });
+    }
+    messageScores.sort((a, b) => b.similarity - a.similarity);
+
+    entries.push({
+      memoryId: memory.id,
+      memoryContent: memory.content,
+      maxSimilarity: simCached.maxSims[j],
+      messageScores,
+    });
+  }
+
+  entries.sort((a, b) => b.maxSimilarity - a.maxSimilarity);
+
+  return {
+    cacheKey: simKey,
+    memoriesCount: embCached.memories.length,
+    messagesCount: simCached.messageScores.size,
+    entries,
+  };
+}
 
 // =============================================================================
 // CRUD Operations
@@ -61,6 +245,7 @@ export async function addMemory(
   // Generate and store embedding
   const embedding = await embed(content);
   await storeMemoryEmbedding(memory.id, embedding);
+  invalidateEntityCaches(entityId);
 
   return memory;
 }
@@ -101,6 +286,7 @@ export async function updateMemory(id: number, content: string): Promise<Memory 
   if (memory) {
     const embedding = await embed(content);
     await storeMemoryEmbedding(memory.id, embedding);
+    invalidateEntityCaches(memory.entity_id);
   }
 
   return memory;
@@ -126,6 +312,7 @@ export async function updateMemoryByContent(
   if (memory) {
     const embedding = await embed(newContent);
     await storeMemoryEmbedding(memory.id, embedding);
+    invalidateEntityCaches(entityId);
   }
 
   return memory;
@@ -136,9 +323,12 @@ export async function updateMemoryByContent(
  */
 export function removeMemory(id: number): boolean {
   const db = getDb();
+  // Look up entity ID for cache invalidation
+  const mem = db.prepare(`SELECT entity_id FROM entity_memories WHERE id = ?`).get(id) as { entity_id: number } | null;
   // Remove embedding first
   db.prepare(`DELETE FROM memory_embeddings WHERE memory_id = ?`).run(id);
   const result = db.prepare(`DELETE FROM entity_memories WHERE id = ?`).run(id);
+  if (result.changes > 0 && mem) invalidateEntityCaches(mem.entity_id);
   return result.changes > 0;
 }
 
@@ -156,6 +346,7 @@ export function removeMemoryByContent(entityId: number, content: string): boolea
 
   db.prepare(`DELETE FROM memory_embeddings WHERE memory_id = ?`).run(memory.id);
   const result = db.prepare(`DELETE FROM entity_memories WHERE id = ?`).run(memory.id);
+  if (result.changes > 0) invalidateEntityCaches(entityId);
   return result.changes > 0;
 }
 
@@ -191,6 +382,7 @@ export async function setMemories(entityId: number, contents: string[]): Promise
     memories.push(memory);
   }
 
+  invalidateEntityCaches(entityId);
   return memories;
 }
 
@@ -285,6 +477,7 @@ export function cleanupLowFrecencyMemories(threshold: number = 0.01): number {
   }
 
   const result = db.prepare(`DELETE FROM entity_memories WHERE frecency < ?`).run(threshold);
+  if (result.changes > 0) clearRetrievalCaches();
   return result.changes;
 }
 
@@ -333,6 +526,11 @@ export function getMemoryEmbedding(memoryId: number): Float32Array | null {
  * Accepts multiple query texts (e.g. individual messages) and uses the max
  * similarity across all queries for each memory — so a single relevant message
  * is enough to surface a memory even if the rest are unrelated.
+ *
+ * Uses two-level caching:
+ *  1. Memory embeddings cached per entity (avoids N DB queries)
+ *  2. Similarity results cached incrementally (avoids full M×N matrix multiply
+ *     when only new messages are added — computes 1×N per new message instead)
  */
 export async function searchMemoriesBySimilarity(
   entityId: number,
@@ -343,37 +541,86 @@ export async function searchMemoriesBySimilarity(
 ): Promise<Array<{ memory: Memory; similarity: number }>> {
   if (scope === "none" || queryTexts.length === 0) return [];
 
-  // 1. Get all memories in scope
-  const candidates = getMemoriesForScope(entityId, scope, channelId, guildId);
-  if (candidates.length === 0) return [];
+  // Level 1: Load memory embeddings (cached per entity×scope)
+  const embEntry = getOrLoadEmbeddings(entityId, scope, channelId, guildId);
+  if (!embEntry) return [];
 
-  // 2. Embed all queries in parallel (cache makes repeated calls cheap)
-  const queryEmbeddings = await Promise.all(queryTexts.map(t => embed(t)));
+  const { memories: memoriesWithEmb, embeddings: memoryEmbeddings, memoryIdSet } = embEntry;
+  const N = memoriesWithEmb.length;
 
-  // 3. Load memory embeddings
-  const memoriesWithEmb: Memory[] = [];
-  const memoryEmbeddings: Float32Array[] = [];
-  for (const memory of candidates) {
-    const embedding = getMemoryEmbedding(memory.id);
-    if (embedding) {
-      memoriesWithEmb.push(memory);
-      memoryEmbeddings.push(embedding);
+  // Level 2: Check similarity cache for incremental update
+  const simKey = similarityCacheKey(entityId, scope, channelId, guildId);
+  const simCached = similarityCache.get(simKey);
+  const querySet = new Set(queryTexts);
+
+  let maxSims: Float32Array;
+
+  if (simCached && setsEqual(simCached.memoryIdSnapshot, memoryIdSet)) {
+    // Memory set unchanged — diff messages for incremental update
+    const newMessages: string[] = [];
+    let dirty = false;
+
+    // Remove scores for messages no longer in context (edited/deleted/aged out)
+    for (const msg of simCached.messageScores.keys()) {
+      if (!querySet.has(msg)) {
+        simCached.messageScores.delete(msg);
+        dirty = true;
+      }
     }
+
+    // Find messages not yet scored
+    for (const msg of queryTexts) {
+      if (!simCached.messageScores.has(msg)) newMessages.push(msg);
+    }
+
+    if (newMessages.length > 0) {
+      // Batch compute new messages × all memories in one matrix multiply
+      const newEmbeddings = await Promise.all(newMessages.map(t => embed(t)));
+      const newMatrix = similarityMatrix(newEmbeddings, memoryEmbeddings);
+      for (let i = 0; i < newMessages.length; i++) {
+        simCached.messageScores.set(newMessages[i], newMatrix.slice(i * N, (i + 1) * N));
+      }
+      dirty = true;
+    }
+
+    if (dirty || newMessages.length > 0) {
+      maxSims = recomputeMaxSims(simCached.messageScores, N);
+      simCached.maxSims = maxSims;
+    } else {
+      maxSims = simCached.maxSims;
+    }
+  } else {
+    // No cache or memories changed — batch compute full M×N matrix
+    const queryEmbeddings = await Promise.all(queryTexts.map(t => embed(t)));
+    const fullMatrix = similarityMatrix(queryEmbeddings, memoryEmbeddings);
+
+    // Extract per-message score rows from the flat M×N result
+    const messageScores = new Map<string, Float32Array>();
+    for (let i = 0; i < queryTexts.length; i++) {
+      messageScores.set(queryTexts[i], fullMatrix.slice(i * N, (i + 1) * N));
+    }
+    maxSims = recomputeMaxSims(messageScores, N);
+    similarityCache.set(simKey, { messageScores, maxSims, memoryIdSnapshot: memoryIdSet });
   }
-  if (memoriesWithEmb.length === 0) return [];
 
-  // 4. Compute max similarity per memory across all query embeddings
-  const maxSims = maxSimilarityMatrix(queryEmbeddings, memoryEmbeddings);
-
-  // 5. Filter by threshold and sort
+  // Filter by threshold and sort
   const scored: Array<{ memory: Memory; similarity: number }> = [];
-  for (let j = 0; j < memoriesWithEmb.length; j++) {
+  for (let j = 0; j < N; j++) {
     if (maxSims[j] >= MIN_SIMILARITY_THRESHOLD) {
       scored.push({ memory: memoriesWithEmb[j], similarity: maxSims[j] });
     }
   }
   scored.sort((a, b) => b.similarity - a.similarity);
   return scored;
+}
+
+/** Check if two sets have identical contents */
+function setsEqual<T>(a: Set<T>, b: Set<T>): boolean {
+  if (a.size !== b.size) return false;
+  for (const item of a) {
+    if (!b.has(item)) return false;
+  }
+  return true;
 }
 
 /**

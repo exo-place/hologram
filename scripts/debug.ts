@@ -16,6 +16,7 @@ import {
   testSimilarity,
   getEmbeddingCoverage,
   testRagRetrieval,
+  getRagCacheDebug,
   getBindingGraph,
   getMemoryStats,
   getEvalErrors,
@@ -59,6 +60,7 @@ function usage(): void {
   info("  sim <text-a> <text-b>         Test similarity between two texts");
   info("  coverage <entity>             Show embedding coverage for entity");
   info("  rag <entity> <query>          Test RAG retrieval");
+  info("  cache <entity> [--scope S]    Show similarity cache with per-message scores");
   info("");
   info("State:");
   info("  bindings [--guild ID] [--channel ID]   Show binding graph");
@@ -116,6 +118,32 @@ async function main() {
       info("RAG Results", { query, count: results.length });
       for (const r of results) {
         info(`  [${r.type}:${r.id}] sim=${(r.similarity * 100).toFixed(1)}%`, { content: r.content });
+      }
+    } else if (cmd === "cache") {
+      const entityId = resolveEntityId(rest[0]);
+      if (!entityId) { error("Usage: bun run debug embeddings cache <entity> [--scope global|guild|channel]"); process.exit(1); }
+      const scope = (getArg("--scope") ?? "global") as "channel" | "guild" | "global";
+      const channelId = getArg("--channel");
+      const guildId = getArg("--guild");
+      const cacheInfo = getRagCacheDebug(entityId, scope, channelId, guildId);
+      if (!cacheInfo) {
+        info("No similarity cache for this entity (run a RAG query first)");
+      } else {
+        info("Similarity Cache", {
+          key: cacheInfo.cacheKey,
+          memories: cacheInfo.memoriesCount,
+          messages: cacheInfo.messagesCount,
+        });
+        for (const entry of cacheInfo.entries) {
+          info(`  [memory:${entry.memoryId}] max=${(entry.maxSimilarity * 100).toFixed(1)}%`, {
+            content: entry.memoryContent,
+          });
+          for (const ms of entry.messageScores.slice(0, 5)) {
+            const pct = (ms.similarity * 100).toFixed(1);
+            const msgPreview = ms.message.length > 60 ? ms.message.slice(0, 60) + "..." : ms.message;
+            info(`    ${pct}% ← "${msgPreview}"`);
+          }
+        }
       }
     } else {
       error(`Unknown embeddings subcommand: ${cmd}`);
