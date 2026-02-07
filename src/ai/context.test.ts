@@ -19,6 +19,7 @@ function makeEntity(overrides: Partial<EvaluatedEntity> & { name: string; id: nu
     isFreeform: false,
     modelSpec: null,
     stripPatterns: null,
+    thinkingLevel: null,
     template: null,
     systemTemplate: null,
     ...overrides,

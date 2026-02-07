@@ -232,6 +232,7 @@ function configToDefaults(config: EntityConfig | null): EvaluatedFactsDefaults {
     isFreeform: !!config.config_freeform,
     stripPatterns: config.config_strip ? JSON.parse(config.config_strip) : null,
     shouldRespond: config.config_respond === "true" ? true : config.config_respond === "false" ? false : null,
+    thinkingLevel: config.config_thinking as import("../logic/expr").ThinkingLevel | null,
   };
 }
 
@@ -638,6 +639,7 @@ bot.events.messageCreate = async (message) => {
           isFreeform: result.isFreeform,
           modelSpec: result.modelSpec,
           stripPatterns: result.stripPatterns,
+          thinkingLevel: result.thinkingLevel,
           template: entity.template,
           systemTemplate: entity.system_template,
           exprContext: ctx,
@@ -790,6 +792,7 @@ async function processEntityRetry(
     isFreeform: result.isFreeform,
     modelSpec: result.modelSpec,
     stripPatterns: result.stripPatterns,
+    thinkingLevel: result.thinkingLevel,
     template: entity.template,
     systemTemplate: entity.system_template,
     exprContext: ctx,

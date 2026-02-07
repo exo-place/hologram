@@ -31,6 +31,7 @@ function mockEntity(overrides: Partial<EvaluatedEntity> & { id: number; name: st
     isFreeform: false,
     modelSpec: null,
     stripPatterns: null,
+    thinkingLevel: null,
     template: null,
     systemTemplate: null,
     ...overrides,

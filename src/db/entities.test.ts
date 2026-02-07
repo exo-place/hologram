@@ -68,7 +68,8 @@ function createTestSchema(db: Database) {
       config_view TEXT,
       config_edit TEXT,
       config_use TEXT,
-      config_blacklist TEXT
+      config_blacklist TEXT,
+      config_thinking TEXT
     )
   `);
 

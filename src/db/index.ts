@@ -214,4 +214,11 @@ function initSchema(db: Database) {
   } catch {
     // Column already exists
   }
+
+  // Add config_thinking column (thinking level for Google models)
+  try {
+    db.exec(`ALTER TABLE entities ADD COLUMN config_thinking TEXT`);
+  } catch {
+    // Column already exists
+  }
 }

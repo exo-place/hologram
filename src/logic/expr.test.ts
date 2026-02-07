@@ -2012,3 +2012,99 @@ describe("isUserBlacklisted with roles", () => {
     expect(isUserBlacklisted(perms, "456", "owner", "456", ["111222333444555666"])).toBe(false);
   });
 });
+
+// =============================================================================
+// $thinking directive
+// =============================================================================
+
+describe("$thinking directive", () => {
+  test("parses bare $thinking as high", () => {
+    const result = parseFact("$thinking");
+    expect(result.isThinking).toBe(true);
+    expect(result.thinkingLevel).toBe("high");
+  });
+
+  test("parses $thinking minimal", () => {
+    const result = parseFact("$thinking minimal");
+    expect(result.isThinking).toBe(true);
+    expect(result.thinkingLevel).toBe("minimal");
+  });
+
+  test("parses $thinking low", () => {
+    const result = parseFact("$thinking low");
+    expect(result.isThinking).toBe(true);
+    expect(result.thinkingLevel).toBe("low");
+  });
+
+  test("parses $thinking medium", () => {
+    const result = parseFact("$thinking medium");
+    expect(result.isThinking).toBe(true);
+    expect(result.thinkingLevel).toBe("medium");
+  });
+
+  test("parses $thinking high", () => {
+    const result = parseFact("$thinking high");
+    expect(result.isThinking).toBe(true);
+    expect(result.thinkingLevel).toBe("high");
+  });
+
+  test("invalid level is not parsed as $thinking", () => {
+    const result = parseFact("$thinking extreme");
+    expect(result.isThinking).toBe(false);
+  });
+
+  test("$thinkingfast is not parsed as $thinking", () => {
+    const result = parseFact("$thinkingfast");
+    expect(result.isThinking).toBe(false);
+  });
+
+  test("$thinking in evaluateFacts", () => {
+    const facts = ["$thinking medium", "some fact"];
+    const ctx = makeContext();
+    const result = evaluateFacts(facts, ctx);
+    expect(result.thinkingLevel).toBe("medium");
+    expect(result.facts).toEqual(["some fact"]);
+  });
+
+  test("last $thinking wins", () => {
+    const facts = ["$thinking low", "$thinking high"];
+    const ctx = makeContext();
+    const result = evaluateFacts(facts, ctx);
+    expect(result.thinkingLevel).toBe("high");
+  });
+
+  test("conditional $thinking", () => {
+    const facts = ["$if mentioned: $thinking high", "some fact"];
+    const ctx = makeContext({ mentioned: true });
+    const result = evaluateFacts(facts, ctx);
+    expect(result.thinkingLevel).toBe("high");
+  });
+
+  test("conditional $thinking not triggered", () => {
+    const facts = ["$if mentioned: $thinking high", "some fact"];
+    const ctx = makeContext({ mentioned: false });
+    const result = evaluateFacts(facts, ctx);
+    expect(result.thinkingLevel).toBeNull();
+  });
+
+  test("default thinkingLevel is null", () => {
+    const facts = ["some fact"];
+    const ctx = makeContext();
+    const result = evaluateFacts(facts, ctx);
+    expect(result.thinkingLevel).toBeNull();
+  });
+
+  test("defaults override applied when no directive present", () => {
+    const facts = ["some fact"];
+    const ctx = makeContext();
+    const result = evaluateFacts(facts, ctx, { thinkingLevel: "low" });
+    expect(result.thinkingLevel).toBe("low");
+  });
+
+  test("directive overrides defaults", () => {
+    const facts = ["$thinking high", "some fact"];
+    const ctx = makeContext();
+    const result = evaluateFacts(facts, ctx, { thinkingLevel: "minimal" });
+    expect(result.thinkingLevel).toBe("high");
+  });
+});

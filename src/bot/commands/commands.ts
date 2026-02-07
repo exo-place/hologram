@@ -459,6 +459,7 @@ registerCommand({
         { name: "Template", value: "template" },
         { name: "System Prompt", value: "system-template" },
         { name: "Config", value: "config" },
+        { name: "Advanced", value: "advanced" },
         { name: "Permissions", value: "permissions" },
       ],
     },
@@ -630,6 +631,25 @@ registerCommand({
       ];
 
       await respondWithModal(ctx.bot, ctx.interaction, `edit-config:${entity.id}`, `Config: ${entity.name}`, configFields);
+      return;
+    }
+
+    if (editType === "advanced") {
+      // Advanced config editing
+      const config = getEntityConfig(entity.id);
+
+      const advancedFields = [
+        {
+          customId: "thinking",
+          label: "Thinking",
+          style: TextStyles.Short,
+          value: config?.config_thinking ?? "",
+          required: false,
+          placeholder: "minimal, low, medium, high",
+        },
+      ];
+
+      await respondWithModal(ctx.bot, ctx.interaction, `edit-advanced:${entity.id}`, `Advanced: ${entity.name}`, advancedFields);
       return;
     }
 
@@ -994,6 +1014,47 @@ registerModalHandler("edit-config", async (bot, interaction, values) => {
   if (changes.length === 0) changes.push("all cleared");
 
   await respond(bot, interaction, `Updated config for "${entity.name}": ${changes.join(", ")}`, true);
+});
+
+// =============================================================================
+// Advanced Config Modal Handler
+// =============================================================================
+
+registerModalHandler("edit-advanced", async (bot, interaction, values) => {
+  const customId = interaction.data?.customId ?? "";
+  const entityId = parseInt(customId.split(":")[1]);
+
+  const entity = getEntityWithFacts(entityId);
+  if (!entity) {
+    await respond(bot, interaction, "Entity not found", true);
+    return;
+  }
+
+  // Check edit permission
+  const userId = interaction.user?.id?.toString() ?? "";
+  const username = interaction.user?.username ?? "";
+  if (!canUserEdit(entity, userId, username)) {
+    await respond(bot, interaction, "You don't have permission to edit this entity", true);
+    return;
+  }
+
+  const thinking = values.thinking?.trim().toLowerCase() || null;
+
+  // Validate thinking level
+  if (thinking && !["minimal", "low", "medium", "high"].includes(thinking)) {
+    await respond(bot, interaction, `Invalid thinking level: "${thinking}". Use: minimal, low, medium, high`, true);
+    return;
+  }
+
+  setEntityConfig(entityId, {
+    config_thinking: thinking,
+  });
+
+  const changes: string[] = [];
+  if (thinking) changes.push(`thinking: ${thinking}`);
+  if (changes.length === 0) changes.push("all cleared");
+
+  await respond(bot, interaction, `Updated advanced config for "${entity.name}": ${changes.join(", ")}`, true);
 });
 
 // =============================================================================
@@ -2002,6 +2063,7 @@ registerCommand({
       isFreeform: result.isFreeform,
       modelSpec: result.modelSpec,
       stripPatterns: result.stripPatterns,
+      thinkingLevel: result.thinkingLevel,
       template: entity.template,
       systemTemplate: entity.system_template,
       exprContext: ctx2,

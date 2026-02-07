@@ -95,6 +95,7 @@ export function buildEvaluatedEntity(
     isFreeform: result.isFreeform,
     modelSpec: result.modelSpec,
     stripPatterns: result.stripPatterns,
+    thinkingLevel: result.thinkingLevel,
     template: entity.template,
     systemTemplate: entity.system_template,
     exprContext: mockContext,
@@ -117,6 +118,7 @@ function categorize(raw: string): string {
   if (parsed.isFreeform) return "$freeform";
   if (parsed.isModel) return "$model";
   if (parsed.isStrip) return "$strip";
+  if (parsed.isThinking) return "$thinking";
   return "fact";
 }
 
@@ -190,6 +192,7 @@ export function traceFacts(
       isFreeform: false,
       modelSpec: null,
       stripPatterns: null,
+      thinkingLevel: null,
     };
   }
 

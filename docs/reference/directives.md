@@ -9,7 +9,7 @@ Directives fall into three distinct categories:
 | Category | Directives | Purpose |
 |----------|------------|---------|
 | **Flow Control** | `$if`, `$respond`, `$retry` | When and whether to respond |
-| **Output** | `$stream`, `$freeform`, `$model`, `$context`, `$strip` | How and what the LLM produces |
+| **Output** | `$stream`, `$freeform`, `$model`, `$context`, `$strip`, `$thinking` | How and what the LLM produces |
 | **Metadata** | `$avatar`, `$memory` | Entity presentation and memory |
 | **Permissions** | `$locked`, `$edit`, `$view`, `$use`, `$blacklist` | Access control |
 
@@ -83,6 +83,27 @@ $if mentioned: $strip "</blockquote>"  # Conditional stripping
 **Default behavior:** When no `$strip` directive is present, `</blockquote>` is automatically stripped for `gemini-2.5-flash-preview` models only. All other models default to no stripping. Use bare `$strip` (no arguments) to explicitly disable this default.
 
 Patterns are quoted strings. Supports escape sequences: `\n`, `\t`, `\\`. Multiple `$strip` directives are evaluated in order; the last one wins.
+
+### `$thinking` / `$thinking <level>`
+
+Control the thinking level for Google models. Higher levels use more reasoning tokens, increasing latency and cost but potentially improving output quality.
+
+```
+$thinking                     # Enable high thinking
+$thinking minimal             # Minimal thinking (default when absent)
+$thinking low                 # Low thinking
+$thinking medium              # Medium thinking
+$thinking high                # High thinking (same as bare $thinking)
+$if mentioned: $thinking high # Conditional: think harder when mentioned
+```
+
+**Valid levels:** `minimal`, `low`, `medium`, `high`
+
+**Default behavior:** When no `$thinking` directive is present, Google models default to `minimal` thinking. This prevents accidental use of full reasoning on every LLM call. Bare `$thinking` (no level) defaults to `high`. Multiple `$thinking` directives are evaluated in order; the last one wins.
+
+**Non-Google models:** The directive is parsed and stored but has no effect on non-Google providers.
+
+Can also be set via `/edit <entity> type:Advanced`.
 
 ## Permissions
 

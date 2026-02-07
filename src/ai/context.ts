@@ -1,4 +1,4 @@
-import type { ExprContext } from "../logic/expr";
+import type { ExprContext, ThinkingLevel } from "../logic/expr";
 
 // =============================================================================
 // Types
@@ -39,6 +39,8 @@ export interface EvaluatedEntity {
   modelSpec: string | null;
   /** Strip patterns from $strip directive. null = no directive (use default), [] = explicit no-strip */
   stripPatterns: string[] | null;
+  /** Thinking level from $thinking directive. null = no directive (use default) */
+  thinkingLevel: ThinkingLevel | null;
   /** Custom system prompt template (null = use default formatting) */
   template: string | null;
   /** Custom system prompt for AI SDK `system` parameter (null = use global default) */

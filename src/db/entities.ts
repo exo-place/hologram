@@ -1,6 +1,6 @@
 import { getDb } from "./index";
 import { getActiveEffectFacts } from "./effects";
-import type { EvaluatedFactsDefaults, MemoryScope } from "../logic/expr";
+import type { EvaluatedFactsDefaults, MemoryScope, ThinkingLevel } from "../logic/expr";
 
 // =============================================================================
 // Entity Operations
@@ -98,13 +98,15 @@ export interface EntityConfig {
   config_edit: string | null;
   config_use: string | null;
   config_blacklist: string | null;
+  config_thinking: string | null;
 }
 
 const CONFIG_COLUMNS = `
   config_context, config_model, config_respond,
   config_stream_mode, config_stream_delimiters,
   config_avatar, config_memory, config_freeform,
-  config_strip, config_view, config_edit, config_use, config_blacklist
+  config_strip, config_view, config_edit, config_use, config_blacklist,
+  config_thinking
 `.trim();
 
 export function getEntityConfig(entityId: number): EntityConfig | null {
@@ -156,6 +158,7 @@ export function getEntityEvalDefaults(entityId: number): EvaluatedFactsDefaults 
     isFreeform: !!config.config_freeform,
     stripPatterns: config.config_strip ? JSON.parse(config.config_strip) : null,
     shouldRespond: config.config_respond === "true" ? true : config.config_respond === "false" ? false : null,
+    thinkingLevel: config.config_thinking as ThinkingLevel | null,
   };
 }
 

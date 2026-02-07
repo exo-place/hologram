@@ -63,6 +63,7 @@ export async function handleMessage(ctx: MessageContext): Promise<ResponseResult
 
   const modelSpec = evaluated[0]?.modelSpec ?? DEFAULT_MODEL;
   const { providerName } = parseModelSpec(modelSpec);
+  const thinkingLevel = evaluated[0]?.thinkingLevel;
 
   try {
     const model = getLanguageModel(modelSpec);
@@ -71,11 +72,21 @@ export async function handleMessage(ctx: MessageContext): Promise<ResponseResult
     // Normalize messages for provider-specific restrictions (e.g., Google doesn't have system role)
     const normalizedMessages = normalizeMessagesForProvider(llmMessages, providerName);
 
+    // Build provider options (e.g., Google thinking config)
+    const providerOptions = providerName === "google" ? {
+      google: {
+        thinkingConfig: {
+          thinkingLevel: thinkingLevel ?? "minimal",
+        },
+      },
+    } : undefined;
+
     const result = await generateText({
       model,
       system: systemPrompt || undefined,
       messages: normalizedMessages,
       tools,
+      providerOptions,
       stopWhen: stepCountIs(5), // Allow up to 5 tool call rounds
       onStepFinish: ({ toolCalls }) => {
         for (const call of toolCalls ?? []) {

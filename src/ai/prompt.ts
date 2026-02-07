@@ -294,7 +294,8 @@ export function processRawFacts(rawFacts: string[]): string[] {
     if (
       parsed.isRespond || parsed.isRetry || parsed.isAvatar ||
       parsed.isLockedDirective || parsed.isStream || parsed.isMemory ||
-      parsed.isContext || parsed.isFreeform || parsed.isModel || parsed.isStrip
+      parsed.isContext || parsed.isFreeform || parsed.isModel || parsed.isStrip ||
+      parsed.isThinking
     ) {
       continue;
     }

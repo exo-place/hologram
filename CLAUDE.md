@@ -176,6 +176,7 @@ Permission lists are stored as JSON arrays in entity config columns. Role IDs us
 | `/edit <entity>` | Edit facts + memories (modal) |
 | `/edit <entity> type:config` | Edit model, context, stream, avatar, memory |
 | `/edit <entity> type:System Prompt` | Edit per-entity system prompt template |
+| `/edit <entity> type:advanced` | Edit thinking level |
 | `/edit <entity> type:permissions` | Edit view, edit, use, blacklist |
 | `/delete <entity>` | Delete entity |
 | `/transfer <entity> <user>` | Transfer ownership |

@@ -101,6 +101,7 @@ export async function* handleMessageStreaming(
 
   const modelSpec = entities[0]?.modelSpec ?? DEFAULT_MODEL;
   const { providerName } = parseModelSpec(modelSpec);
+  const thinkingLevel = entities[0]?.thinkingLevel;
 
   try {
     const model = getLanguageModel(modelSpec);
@@ -109,11 +110,21 @@ export async function* handleMessageStreaming(
     // Normalize messages for provider-specific restrictions (e.g., Google doesn't have system role)
     const normalizedMessages = normalizeMessagesForProvider(llmMessages, providerName);
 
+    // Build provider options (e.g., Google thinking config)
+    const providerOptions = providerName === "google" ? {
+      google: {
+        thinkingConfig: {
+          thinkingLevel: thinkingLevel ?? "minimal",
+        },
+      },
+    } : undefined;
+
     const result = streamText({
       model,
       system: systemPrompt || undefined,
       messages: normalizedMessages,
       tools,
+      providerOptions,
       stopWhen: stepCountIs(5),
     });
 

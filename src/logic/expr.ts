@@ -850,9 +850,13 @@ const CONTEXT_SIGIL = "$context";
 const FREEFORM_SIGIL = "$freeform";
 const MODEL_SIGIL = "$model ";
 const STRIP_SIGIL = "$strip";
+const THINKING_SIGIL = "$thinking";
 
 /** Memory retrieval scope */
 export type MemoryScope = "none" | "channel" | "guild" | "global";
+
+/** Thinking level for Google models */
+export type ThinkingLevel = "minimal" | "low" | "medium" | "high";
 
 export interface ProcessedFact {
   content: string;
@@ -898,6 +902,10 @@ export interface ProcessedFact {
   isStrip: boolean;
   /** For $strip directives, the patterns to strip */
   stripPatterns?: string[];
+  /** True if this fact is a $thinking directive */
+  isThinking: boolean;
+  /** For $thinking directives, the level */
+  thinkingLevel?: ThinkingLevel;
 }
 
 /** Parse expression, expect ':', return position after ':' */
@@ -939,6 +947,7 @@ export function parseFact(fact: string): ProcessedFact {
         isFreeform: false,
         isModel: false,
         isStrip: false,
+        isThinking: false,
       };
     } else {
       // $locked prefix - recursively parse the rest, then mark as locked
@@ -973,6 +982,7 @@ export function parseFact(fact: string): ProcessedFact {
         isFreeform: false,
         isModel: false,
         isStrip: false,
+        isThinking: false,
       };
     }
 
@@ -995,6 +1005,7 @@ export function parseFact(fact: string): ProcessedFact {
         isFreeform: false,
         isModel: false,
         isStrip: false,
+        isThinking: false,
       };
     }
 
@@ -1018,6 +1029,7 @@ export function parseFact(fact: string): ProcessedFact {
         isFreeform: false,
         isModel: false,
         isStrip: false,
+        isThinking: false,
       };
     }
 
@@ -1040,6 +1052,7 @@ export function parseFact(fact: string): ProcessedFact {
         isFreeform: false,
         isModel: false,
         isStrip: false,
+        isThinking: false,
       };
     }
 
@@ -1062,6 +1075,7 @@ export function parseFact(fact: string): ProcessedFact {
         isFreeform: false,
         isModel: false,
         isStrip: false,
+        isThinking: false,
       };
     }
 
@@ -1082,6 +1096,7 @@ export function parseFact(fact: string): ProcessedFact {
         isFreeform: true,
         isModel: false,
         isStrip: false,
+        isThinking: false,
       };
     }
 
@@ -1104,6 +1119,7 @@ export function parseFact(fact: string): ProcessedFact {
         isModel: true,
         modelSpec: modelResultCond,
         isStrip: false,
+        isThinking: false,
       };
     }
 
@@ -1126,10 +1142,34 @@ export function parseFact(fact: string): ProcessedFact {
         isModel: false,
         isStrip: true,
         stripPatterns: stripResultCond,
+        isThinking: false,
       };
     }
 
-    return { content, conditional: true, expression, isRespond: false, isRetry: false, isAvatar: false, isLockedDirective: false, isLockedFact: false, isStream: false, isMemory: false, isContext: false, isFreeform: false, isModel: false, isStrip: false };
+    // Check if content is a $thinking directive
+    const thinkingResultCond = parseThinkingDirective(content);
+    if (thinkingResultCond !== null) {
+      return {
+        content,
+        conditional: true,
+        expression,
+        isRespond: false,
+        isRetry: false,
+        isAvatar: false,
+        isLockedDirective: false,
+        isLockedFact: false,
+        isStream: false,
+        isMemory: false,
+        isContext: false,
+        isFreeform: false,
+        isModel: false,
+        isStrip: false,
+        isThinking: true,
+        thinkingLevel: thinkingResultCond,
+      };
+    }
+
+    return { content, conditional: true, expression, isRespond: false, isRetry: false, isAvatar: false, isLockedDirective: false, isLockedFact: false, isStream: false, isMemory: false, isContext: false, isFreeform: false, isModel: false, isStrip: false, isThinking: false };
   }
 
   // Check for unconditional $respond
@@ -1150,6 +1190,7 @@ export function parseFact(fact: string): ProcessedFact {
       isFreeform: false,
       isModel: false,
       isStrip: false,
+      isThinking: false,
     };
   }
 
@@ -1171,6 +1212,7 @@ export function parseFact(fact: string): ProcessedFact {
       isFreeform: false,
       isModel: false,
       isStrip: false,
+      isThinking: false,
     };
   }
 
@@ -1192,6 +1234,7 @@ export function parseFact(fact: string): ProcessedFact {
       isFreeform: false,
       isModel: false,
       isStrip: false,
+      isThinking: false,
     };
   }
 
@@ -1214,6 +1257,7 @@ export function parseFact(fact: string): ProcessedFact {
       isFreeform: false,
       isModel: false,
       isStrip: false,
+      isThinking: false,
     };
   }
 
@@ -1235,6 +1279,7 @@ export function parseFact(fact: string): ProcessedFact {
       isFreeform: false,
       isModel: false,
       isStrip: false,
+      isThinking: false,
     };
   }
 
@@ -1256,6 +1301,7 @@ export function parseFact(fact: string): ProcessedFact {
       isFreeform: false,
       isModel: false,
       isStrip: false,
+      isThinking: false,
     };
   }
 
@@ -1275,6 +1321,7 @@ export function parseFact(fact: string): ProcessedFact {
         isFreeform: true,
         isModel: false,
         isStrip: false,
+        isThinking: false,
       };
   }
 
@@ -1296,6 +1343,7 @@ export function parseFact(fact: string): ProcessedFact {
       isModel: true,
       modelSpec: modelResult,
       isStrip: false,
+      isThinking: false,
     };
   }
 
@@ -1317,11 +1365,33 @@ export function parseFact(fact: string): ProcessedFact {
       isModel: false,
       isStrip: true,
       stripPatterns: stripResult,
+      isThinking: false,
     };
   }
 
+  // Check for unconditional $thinking
+  const thinkingResult = parseThinkingDirective(trimmed);
+  if (thinkingResult !== null) {
+    return {
+      content: trimmed,
+      conditional: false,
+      isRespond: false,
+      isRetry: false,
+      isAvatar: false,
+      isLockedDirective: false,
+      isLockedFact: false,
+      isStream: false,
+      isMemory: false,
+      isContext: false,
+      isFreeform: false,
+      isModel: false,
+      isStrip: false,
+      isThinking: true,
+      thinkingLevel: thinkingResult,
+    };
+  }
 
-  return { content: trimmed, conditional: false, isRespond: false, isRetry: false, isAvatar: false, isLockedDirective: false, isLockedFact: false, isStream: false, isMemory: false, isContext: false, isFreeform: false, isModel: false, isStrip: false };
+  return { content: trimmed, conditional: false, isRespond: false, isRetry: false, isAvatar: false, isLockedDirective: false, isLockedFact: false, isStream: false, isMemory: false, isContext: false, isFreeform: false, isModel: false, isStrip: false, isThinking: false };
 }
 
 /**
@@ -1510,6 +1580,43 @@ function parseStripDirective(content: string): string[] | null {
   return patterns;
 }
 
+const VALID_THINKING_LEVELS = new Set<ThinkingLevel>(["minimal", "low", "medium", "high"]);
+
+/**
+ * Parse a $thinking directive.
+ * Returns null if not a thinking directive, or the thinking level.
+ *
+ * Syntax:
+ * - $thinking → defaults to "high"
+ * - $thinking minimal → minimal thinking
+ * - $thinking low → low thinking
+ * - $thinking medium → medium thinking
+ * - $thinking high → high thinking
+ */
+function parseThinkingDirective(content: string): ThinkingLevel | null {
+  if (!content.startsWith(THINKING_SIGIL)) {
+    return null;
+  }
+  const rest = content.slice(THINKING_SIGIL.length);
+  // Must be bare $thinking or $thinking followed by space
+  if (rest !== "" && !rest.startsWith(" ")) {
+    return null;
+  }
+  const trimmed = rest.trim().toLowerCase();
+
+  // Bare $thinking → high
+  if (trimmed === "") {
+    return "high";
+  }
+
+  if (VALID_THINKING_LEVELS.has(trimmed as ThinkingLevel)) {
+    return trimmed as ThinkingLevel;
+  }
+
+  // Unknown level — not a valid $thinking directive
+  return null;
+}
+
 /**
  * Parse a $memory directive.
  * Returns null if not a memory directive, or the scope.
@@ -1655,6 +1762,8 @@ export interface EvaluatedFacts {
   modelSpec: string | null;
   /** Strip patterns from $strip directive. null = no directive (use default), [] = explicit no-strip */
   stripPatterns: string[] | null;
+  /** Thinking level from $thinking directive. null = no directive (use default minimal for Google) */
+  thinkingLevel: ThinkingLevel | null;
 }
 
 /**
@@ -1679,6 +1788,7 @@ export interface EvaluatedFactsDefaults {
   isFreeform?: boolean;
   stripPatterns?: string[] | null;
   shouldRespond?: boolean | null;
+  thinkingLevel?: ThinkingLevel | null;
 }
 
 export function evaluateFacts(
@@ -1700,6 +1810,7 @@ export function evaluateFacts(
   let isFreeform = defaults?.isFreeform ?? false;
   let modelSpec: string | null = defaults?.modelSpec ?? null;
   let stripPatterns: string[] | null = defaults?.stripPatterns ?? null;
+  let thinkingLevel: ThinkingLevel | null = defaults?.thinkingLevel ?? null;
 
   // Strip comments first
   const uncommented = stripComments(facts);
@@ -1784,10 +1895,16 @@ export function evaluateFacts(
       continue;
     }
 
+    // Handle $thinking directives - last one wins, strip from LLM context
+    if (parsed.isThinking) {
+      thinkingLevel = parsed.thinkingLevel ?? null;
+      continue;
+    }
+
     results.push(parsed.content);
   }
 
-  return { facts: results, shouldRespond, respondSource, retryMs, avatarUrl, isLocked, lockedFacts, streamMode, streamDelimiter, memoryScope, contextExpr, isFreeform, modelSpec, stripPatterns };
+  return { facts: results, shouldRespond, respondSource, retryMs, avatarUrl, isLocked, lockedFacts, streamMode, streamDelimiter, memoryScope, contextExpr, isFreeform, modelSpec, stripPatterns, thinkingLevel };
 }
 
 // =============================================================================
