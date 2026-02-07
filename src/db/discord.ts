@@ -460,6 +460,7 @@ export interface AttachmentData {
 
 export interface MessageData {
   is_bot?: boolean;
+  is_forward?: boolean;
   embeds?: EmbedData[];
   stickers?: StickerData[];
   attachments?: AttachmentData[];

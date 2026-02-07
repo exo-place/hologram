@@ -409,6 +409,7 @@ bot.events.messageCreate = async (message) => {
   const isBot = !!message.author.toggles?.bot;
   const msgData: MessageData = {};
   if (isBot) msgData.is_bot = true;
+  if (isForward) msgData.is_forward = true;
   if (allEmbeds.length > 0) {
     msgData.embeds = allEmbeds.map(e => ({
       ...(e.title && { title: e.title }),
