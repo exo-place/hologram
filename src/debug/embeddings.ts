@@ -138,11 +138,15 @@ export async function testRagRetrieval(
     const placeholders = factIds.map(() => "?").join(",");
     const rows = db.prepare(
       `SELECT fact_id, embedding FROM fact_embeddings WHERE fact_id IN (${placeholders})`
-    ).all(...factIds) as { fact_id: number; embedding: Float32Array }[];
+    ).all(...factIds) as { fact_id: number; embedding: Uint8Array | Float32Array }[];
 
     const factMap = new Map(facts.map(f => [f.id, f.content]));
     for (const row of rows) {
-      const similarity = cosineSimilarity(queryEmbedding, row.embedding);
+      // sqlite-vec returns Uint8Array blobs — convert to Float32Array
+      const emb = row.embedding instanceof Float32Array
+        ? row.embedding
+        : new Float32Array(row.embedding.buffer, row.embedding.byteOffset, row.embedding.byteLength / 4);
+      const similarity = cosineSimilarity(queryEmbedding, emb);
       results.push({
         content: factMap.get(row.fact_id) ?? "",
         similarity,

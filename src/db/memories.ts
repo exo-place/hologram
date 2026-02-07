@@ -313,9 +313,12 @@ export function getMemoryEmbedding(memoryId: number): Float32Array | null {
   const db = getDb();
   const row = db.prepare(`
     SELECT embedding FROM memory_embeddings WHERE memory_id = ?
-  `).get(memoryId) as { embedding: Float32Array } | null;
+  `).get(memoryId) as { embedding: Uint8Array | Float32Array } | null;
 
-  return row?.embedding ?? null;
+  if (!row?.embedding) return null;
+  // sqlite-vec returns Uint8Array blobs — convert to Float32Array
+  if (row.embedding instanceof Float32Array) return row.embedding;
+  return new Float32Array(row.embedding.buffer, row.embedding.byteOffset, row.embedding.byteLength / 4);
 }
 
 // =============================================================================
