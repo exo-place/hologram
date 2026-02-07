@@ -27,7 +27,7 @@ export interface Memory {
 export type MemoryScope = "none" | "channel" | "guild" | "global";
 
 /** Minimum cosine similarity for a memory to be included in retrieval results */
-const MIN_SIMILARITY_THRESHOLD = 0.1;
+const MIN_SIMILARITY_THRESHOLD = 0.2;
 
 // =============================================================================
 // CRUD Operations
