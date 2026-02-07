@@ -35,6 +35,8 @@ interface Command {
   description: string;
   options?: CommandOption[];
   defaultMemberPermissions?: string;
+  /** Skip auto-defer for commands that may respond with a modal */
+  noDefer?: boolean;
   handler: CommandHandler;
 }
 
@@ -53,6 +55,9 @@ interface CommandOption {
 // =============================================================================
 
 const commands = new Map<string, Command>();
+
+/** Track which interactions have been deferred so respond() uses editOriginalInteractionResponse */
+const deferredInteractions = new Set<string>();
 
 export function registerCommand(command: Command) {
   commands.set(command.name, command);
@@ -104,15 +109,25 @@ export async function respond(
 ) {
   const chunks = splitContent(content);
   const flags = ephemeral ? 64 : undefined; // 64 = ephemeral
+  const interactionKey = interaction.id.toString();
+  const isDeferred = deferredInteractions.has(interactionKey);
 
-  // Send first chunk as initial response
-  await bot.helpers.sendInteractionResponse(interaction.id, interaction.token, {
-    type: InteractionResponseTypes.ChannelMessageWithSource,
-    data: {
+  if (isDeferred) {
+    deferredInteractions.delete(interactionKey);
+    // Edit the deferred response with first chunk
+    await bot.helpers.editOriginalInteractionResponse(interaction.token, {
       content: chunks[0],
-      flags,
-    },
-  });
+    });
+  } else {
+    // Send first chunk as initial response
+    await bot.helpers.sendInteractionResponse(interaction.id, interaction.token, {
+      type: InteractionResponseTypes.ChannelMessageWithSource,
+      data: {
+        content: chunks[0],
+        flags,
+      },
+    });
+  }
 
   // Send remaining chunks as follow-ups
   for (let i = 1; i < chunks.length; i++) {
@@ -245,6 +260,12 @@ export async function handleInteraction(bot: Bot, interaction: Interaction) {
       return;
     }
 
+    // Defer response unless command may respond with a modal
+    if (!command.noDefer) {
+      await defer(bot, interaction, true);
+      deferredInteractions.add(interaction.id.toString());
+    }
+
     const ctx: CommandContext = {
       bot,
       interaction,
@@ -273,7 +294,11 @@ export async function handleInteraction(bot: Bot, interaction: Interaction) {
       await command.handler(ctx, options);
     } catch (err) {
       error("Command error", err, { command: name });
-      await respond(bot, interaction, `Error: ${err}`, true);
+      try {
+        await respond(bot, interaction, `Error: ${err}`, true);
+      } catch {
+        // Interaction may have expired
+      }
     }
   }
 
@@ -281,6 +306,10 @@ export async function handleInteraction(bot: Bot, interaction: Interaction) {
   if (interaction.type === InteractionTypes.ModalSubmit) {
     const customId = interaction.data?.customId;
     if (!customId) return;
+
+    // Defer response — modal submissions always respond with text
+    await defer(bot, interaction, true);
+    deferredInteractions.add(interaction.id.toString());
 
     // Parse modal data
     const values: Record<string, string> = {};

@@ -283,6 +283,7 @@ function buildPermissionsLabels(entityId: number, ownerId: string): unknown[] {
 registerCommand({
   name: "create",
   description: "Create a new entity",
+  noDefer: true,
   options: [
     {
       name: "name",
@@ -437,6 +438,7 @@ registerCommand({
 registerCommand({
   name: "edit",
   description: "Edit an entity's facts and memories",
+  noDefer: true,
   options: [
     {
       name: "entity",
@@ -1536,6 +1538,7 @@ function buildConfigLabels(discordId: string, discordType: "channel" | "guild"):
 registerCommand({
   name: "config",
   description: "Configure channel or server bind permissions",
+  noDefer: true,
   defaultMemberPermissions: "16", // MANAGE_CHANNELS
   options: [
     {
