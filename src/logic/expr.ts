@@ -2078,7 +2078,7 @@ export function createBaseContext(options: BaseContextOptions): ExprContext {
     mentioned_in_dialogue: (name: string) => checkMentionedInDialogue(messages(1, "%m"), name),
     content: messages(1, "%m"),
     author: messages(1, "%a"),
-    interaction_type: options.interaction_type,
+    interaction_type: options.interaction_type ?? "",
     name: options.name ?? "",
     chars,
     messages,

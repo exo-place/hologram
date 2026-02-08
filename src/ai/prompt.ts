@@ -8,7 +8,7 @@ import {
   type EvaluatedEntity,
 } from "./context";
 import { getMessages, getWebhookMessageEntity, parseMessageData, resolveDiscordEntity, type EmbedData, type AttachmentData, type StickerData } from "../db/discord";
-import { evalMacroValue, formatDuration, rollDice, compileContextExpr, parseFact, stripComments, type ExprContext } from "../logic/expr";
+import { evalMacroValue, formatDuration, rollDice, compileContextExpr, parseFact, stripComments, ExprError, type ExprContext } from "../logic/expr";
 import { DEFAULT_MODEL } from "./models";
 import { DEFAULT_TEMPLATE, renderStructuredTemplate, renderSystemPrompt } from "./template";
 import {
@@ -466,11 +466,27 @@ export function buildPromptAndMessages(
   }
 
   // Render dedicated system prompt (AI SDK `system` parameter)
-  const systemPrompt = renderSystemPrompt(templateCtx, systemTemplate ?? undefined);
+  let systemPrompt: string;
+  try {
+    systemPrompt = renderSystemPrompt(templateCtx, systemTemplate ?? undefined);
+  } catch (err) {
+    const entityName = respondingEntities[0]?.name ?? "unknown";
+    throw new ExprError(
+      `Template error in entity "${entityName}" (system template): ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 
   // Render structured messages template
   const templateSource = template ?? DEFAULT_TEMPLATE;
-  const output = renderStructuredTemplate(templateSource, templateCtx);
+  let output: ReturnType<typeof renderStructuredTemplate>;
+  try {
+    output = renderStructuredTemplate(templateSource, templateCtx);
+  } catch (err) {
+    const entityName = respondingEntities[0]?.name ?? "unknown";
+    throw new ExprError(
+      `Template error in entity "${entityName}": ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 
   // Convert to StructuredMessage[]
   let messages: StructuredMessage[] = output.messages.map(m => ({ role: m.role, content: m.content }));

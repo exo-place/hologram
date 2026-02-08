@@ -9,7 +9,7 @@ import { isModelAllowed } from "../ai/models";
 import { retrieveRelevantMemories, type MemoryScope } from "../db/memories";
 import { resolveDiscordEntity, resolveDiscordEntities, isNewUser, markUserWelcomed, addMessage, updateMessageByDiscordId, deleteMessageByDiscordId, trackWebhookMessage, getWebhookMessageEntity, getMessages, getFilteredMessages, formatMessagesForContext, recordEvalError, isOurWebhookUserId, countUnreadMessages, type MessageData } from "../db/discord";
 import { getEntity, getEntityWithFacts, getEntityConfig, getSystemEntity, getFactsForEntity, type EntityWithFacts } from "../db/entities";
-import { evaluateFacts, createBaseContext, parsePermissionDirectives, isUserBlacklisted, isUserAllowed, compileContextExpr, type EvaluatedFactsDefaults, type PermissionDefaults } from "../logic/expr";
+import { evaluateFacts, createBaseContext, parsePermissionDirectives, isUserBlacklisted, isUserAllowed, compileContextExpr, ExprError, type EvaluatedFactsDefaults, type PermissionDefaults } from "../logic/expr";
 import { DEFAULT_CONTEXT_EXPR } from "../ai/context";
 import type { EntityConfig } from "../db/entities";
 import { executeWebhook, editWebhookMessage, setBot } from "./webhooks";
@@ -1242,6 +1242,8 @@ export async function sendResponse(
       } catch (streamErr) {
         // InferenceError = model/content issue, don't retry with non-streaming
         if (streamErr instanceof InferenceError) throw streamErr;
+        // Template errors (ExprError) won't be fixed by retrying without streaming
+        if (streamErr instanceof ExprError) throw streamErr;
         warn("Streaming failed, falling back to non-streaming", {
           error: streamErr instanceof Error ? streamErr.message : String(streamErr),
         });
@@ -1319,6 +1321,23 @@ export async function sendResponse(
         if (entityData) {
           const editors = getEditorsToNotify(entity.id, entityData.owned_by, entityData.facts.map(f => f.content));
           const errorMsg = `LLM error with model "${err.modelSpec}": ${err.message}`;
+          const isNew = recordEvalError(entity.id, editors[0] ?? "", errorMsg);
+          if (isNew) {
+            for (const uid of editors) {
+              notifyUserOfError(uid, entity.name, errorMsg).catch(() => {});
+            }
+          }
+        }
+      }
+    } else if (err instanceof ExprError) {
+      // Template/expression error — DM owner + editors so they can fix it
+      error("Template error in sendResponse", err);
+      const entity = respondingEntities?.[0];
+      if (entity) {
+        const entityData = getEntityWithFacts(entity.id);
+        if (entityData) {
+          const editors = getEditorsToNotify(entity.id, entityData.owned_by, entityData.facts.map(f => f.content));
+          const errorMsg = err.message;
           const isNew = recordEvalError(entity.id, editors[0] ?? "", errorMsg);
           if (isNew) {
             for (const uid of editors) {
