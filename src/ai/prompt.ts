@@ -444,15 +444,18 @@ export function buildPromptAndMessages(
     return result;
   }
 
-  templateCtx.entities = respondingEntities.map(e => {
+  const respondingObjs = respondingEntities.map(e => {
     const facts = withJoinToString(e.facts);
-    return { id: e.id, name: e.name, facts };
+    return { id: e.id, name: e.name, facts, responding: true };
   });
 
-  templateCtx.others = otherEntities.map(e => {
+  const otherObjs = otherEntities.map(e => {
     const facts = withJoinToString(processRawFacts(e.facts.map(f => f.content)));
-    return { id: e.id, name: e.name, facts };
+    return { id: e.id, name: e.name, facts, responding: false };
   });
+
+  templateCtx.entities = [...respondingObjs, ...otherObjs];
+  templateCtx.others = otherObjs; // backward compat for custom templates
 
   const memoriesObj: Record<number, string[]> = {};
   if (entityMemories) {
@@ -464,8 +467,7 @@ export function buildPromptAndMessages(
   templateCtx.entity_names = respondingEntities.map(e => e.name).join(", ");
   templateCtx.freeform = respondingEntities.some(e => e.isFreeform);
   templateCtx.history = history;
-  const entityObjs = templateCtx.entities as Array<{ id: number; name: string; facts: string[] }>;
-  templateCtx.responders = Object.fromEntries(entityObjs.map(e => [e.id, e]));
+  templateCtx.responders = Object.fromEntries(respondingObjs.map(e => [e.id, e]));
   templateCtx._single_entity = isSingleEntity;
 
   // Evaluation metadata (computed during fact evaluation, available to templates)

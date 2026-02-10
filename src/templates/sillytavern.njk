@@ -23,9 +23,9 @@ Write the next reply in a fictional chat between {{char}} and {{user}}.
 
 {#- Referenced Entities -#}
 {% block world_info %}
-    {% for entity in others %}
+    {% for entity in entities | rejectattr("responding") %}
       {% if entity.id != user.id %}
-        {{- "\n\n" if entities | length > 0 or not loop.first -}}
+        {{- "\n\n" if (entities | selectattr("responding") | length) > 0 or not loop.first -}}
 <defs for="{{ entity.name }}" id="{{ entity.id }}">
 {{ entity.facts | join("\n") }}
 </defs>
@@ -35,14 +35,15 @@ Write the next reply in a fictional chat between {{char}} and {{user}}.
 
 {% block pre_history_instructions %}
   {#- Multi-Entity Response Format -#}
-  {% if entities | length > 1 %}
+  {% set responding = entities | selectattr("responding") %}
+  {% if responding | length > 1 %}
     {{- "\n" -}}
     {% if freeform -%}
-      You are writing as: {{ entities | join(", ", "name") }}. They may interact naturally in your response. Not everyone needs to respond to every message - only include those who would naturally engage. If none would respond, reply with only: none
+      You are writing as: {{ responding | join(", ", "name") }}. They may interact naturally in your response. Not everyone needs to respond to every message - only include those who would naturally engage. If none would respond, reply with only: none
     {%- else %}
-You are: {{ entities | join(", ", "name") }}. Format your response with name prefixes:
-{{ entities[0].name }}: Hello there!
-{{ entities[1].name }}: Nice to meet you.
+You are: {{ responding | join(", ", "name") }}. Format your response with name prefixes:
+{{ responding[0].name }}: Hello there!
+{{ responding[1].name }}: Nice to meet you.
 
 Start each character's dialogue on a new line with their name followed by a colon. They may interact naturally.
 

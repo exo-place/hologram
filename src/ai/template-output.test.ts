@@ -71,9 +71,12 @@ function buildTemplateContext(
     }
   }
 
+  const respondingObjs = entities.map(e => ({ id: e.id, name: e.name, facts: e.facts, responding: true }));
+  const otherObjs = others.map(e => ({ id: e.id, name: e.name, facts: e.facts.map(f => f.content), responding: false }));
+
   return {
-    entities: entities.map(e => ({ id: e.id, name: e.name, facts: e.facts })),
-    others: others.map(e => ({ id: e.id, name: e.name, facts: e.facts.map(f => f.content) })),
+    entities: [...respondingObjs, ...otherObjs],
+    others: otherObjs,
     memories: memoriesObj,
     entity_names: entities.map(e => e.name).join(", "),
     freeform: entities.some(e => e.isFreeform),
@@ -88,7 +91,7 @@ function buildTemplateContext(
       stickers: [],
       attachments: [],
     })),
-    responders: Object.fromEntries(entities.map(e => [e.id, { id: e.id, name: e.name, facts: e.facts }])),
+    responders: Object.fromEntries(respondingObjs.map(e => [e.id, e])),
     _single_entity: entities.length <= 1,
   };
 }

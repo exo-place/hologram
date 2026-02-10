@@ -209,6 +209,20 @@ env.addFilter('batch', (val: unknown, n: unknown) => {
   return batches
 })
 
+env.addFilter('selectattr', (arr: unknown, attr?: unknown) => {
+  if (!Array.isArray(arr)) return []
+  if (attr === undefined) return arr.filter(Boolean)
+  const key = String(attr)
+  return arr.filter(item => item != null && (item as Record<string, unknown>)[key])
+})
+
+env.addFilter('rejectattr', (arr: unknown, attr?: unknown) => {
+  if (!Array.isArray(arr)) return []
+  if (attr === undefined) return arr.filter(item => !item)
+  const key = String(attr)
+  return arr.filter(item => item == null || !(item as Record<string, unknown>)[key])
+})
+
 // =============================================================================
 // Structured Output Protocol
 // =============================================================================
@@ -314,14 +328,14 @@ function startsWithExtends(source: string): boolean {
 
 export const DEFAULT_TEMPLATE = `{#- Entity Definitions -#}
 {% block definitions %}
-  {% if entities | length > 0 or others | length > 0 %}
-    {#- Responding entities -#}
+  {% if entities | length > 0 %}
+    {#- All entities (responding first, then referenced/user) -#}
     {% for entity in entities %}
       {{- "\\n\\n" if not loop.first -}}
 <defs for="{{ entity.name }}" id="{{ entity.id }}">
 {{ entity.facts | join("\\n") }}
 </defs>
-      {% if memories[entity.id] and memories[entity.id] | length > 0 %}
+      {% if entity.responding and memories[entity.id] and memories[entity.id] | length > 0 %}
 
 <memories for="{{ entity.name }}" id="{{ entity.id }}">
 {{ memories[entity.id] | join("\\n") }}
@@ -329,23 +343,16 @@ export const DEFAULT_TEMPLATE = `{#- Entity Definitions -#}
       {% endif %}
     {% endfor %}
 
-    {#- Referenced and User Entities -#}
-    {% for entity in others %}
-      {{- "\\n\\n" if entities | length > 0 or not loop.first -}}
-<defs for="{{ entity.name }}" id="{{ entity.id }}">
-{{ entity.facts | join("\\n") }}
-</defs>
-    {% endfor %}
-
     {#- Multi-Entity Response Format -#}
-    {% if entities | length > 1 %}
+    {% set responding = entities | selectattr("responding") %}
+    {% if responding | length > 1 %}
       {{- "\\n" -}}
       {% if freeform -%}
-        You are writing as: {{ entities | join(", ", "name") }}. They may interact naturally in your response. Not everyone needs to respond to every message - only include those who would naturally engage. If none would respond, reply with only: none
+        You are writing as: {{ responding | join(", ", "name") }}. They may interact naturally in your response. Not everyone needs to respond to every message - only include those who would naturally engage. If none would respond, reply with only: none
       {%- else %}
-You are: {{ entities | join(", ", "name") }}. Format your response with name prefixes:
-{{ entities[0].name }}: Hello there!
-{{ entities[1].name }}: Nice to meet you.
+You are: {{ responding | join(", ", "name") }}. Format your response with name prefixes:
+{{ responding[0].name }}: Hello there!
+{{ responding[1].name }}: Nice to meet you.
 
 Start each character's dialogue on a new line with their name followed by a colon. They may interact naturally.
 

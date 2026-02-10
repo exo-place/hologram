@@ -42,12 +42,6 @@ The expression evaluator (`src/logic/expr.ts`) runs `new Function()` synchronous
 
 See `docs/postmortem/2026-01-26-ux-critique.md` for full analysis.
 
-### Template Context Cleanup
-
-`entities`, `others`, and `responders` overlap in the template context. `entities` is the array of responding entities, `responders` is a lookup dict (entity id → entity object) built from the same data, and `others` is non-responding entities. Consider unifying into a single structure — e.g. one `entities` dict/array with a `responding` flag, or making `responders` the primary and deriving `entities` from it.
-
----
-
 ### Prompt & Context
 
 - [ ] Strip prompt scaffolding - remove `<defs>` XML tags and unnecessary structure from system prompt

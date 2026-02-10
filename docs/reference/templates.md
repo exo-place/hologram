@@ -77,6 +77,8 @@ By default, `trimBlocks` and `lstripBlocks` are enabled — the newline after a 
 | `reverse` | `{{ arr \| reverse }}` | Reverse array/string |
 | `sort` | `{{ arr \| sort }}` | Sort array |
 | `batch` | `{{ arr \| batch(3) }}` | Group into n-sized chunks |
+| `selectattr` | `{{ arr \| selectattr("responding") }}` | Filter items where attr is truthy |
+| `rejectattr` | `{{ arr \| rejectattr("responding") }}` | Filter items where attr is falsy |
 
 ## Template Context
 
@@ -84,8 +86,9 @@ All standard expression context variables are available (see `ExprContext`), plu
 
 | Variable | Type | Description |
 |----------|------|-------------|
-| `entities` | `Array<{id, name, facts}>` | Responding entities (facts have `toString() → join('\n')`) |
-| `others` | `Array<{id, name, facts}>` | Other referenced entities (facts have `toString() → join('\n')`) |
+| `entities` | `Array<{id, name, facts, responding}>` | All entities — responding first, then referenced/user. Each has a `responding` boolean. Facts have `toString() → join('\n')`. |
+| `others` | `Array<{id, name, facts, responding}>` | Backward-compat alias: non-responding entities only |
+| `responders` | `Record<number, entity>` | ID→entity dict for responding entities (for message role lookup) |
 | `memories` | `Record<number, string[]>` | Entity ID to memory strings (arrays have `toString() → join('\n')`) |
 | `entity_names` | `string` | Comma-separated names of responding entities |
 | `freeform` | `boolean` | True if any entity has `$freeform` |
@@ -93,6 +96,8 @@ All standard expression context variables are available (see `ExprContext`), plu
 | `char` | `{id, name, facts}` | First responding entity (`toString() → name`) |
 | `user` | `{id, name, facts}` | User entity from others (`toString() → name`, defaults to `{name: "user"}`) |
 | `_single_entity` | `boolean` | True when exactly one entity is responding |
+
+Use `entities \| selectattr("responding")` to get responding entities, `entities \| rejectattr("responding")` for non-responding.
 
 ### Structured Messages
 
@@ -247,7 +252,8 @@ Inside `{% for %}` blocks, Nunjucks provides the `loop` variable:
 
 ```
 {# Custom template — entity defs are unmarked (→ system role) #}
-{% for entity in entities %}
+{% set responding = entities | selectattr("responding") %}
+{% for entity in responding %}
 You are {{ entity.name }}.
 
 {% for fact in entity.facts %}
@@ -262,9 +268,9 @@ Memories:
 {% endif %}
 {% endfor %}
 
-{% for other in others %}
-{{ other.name }} is nearby.
-{% for fact in other.facts %}
+{% for entity in entities | rejectattr("responding") %}
+{{ entity.name }} is nearby.
+{% for fact in entity.facts %}
 - {{ fact }}
 {% endfor %}
 {% endfor %}

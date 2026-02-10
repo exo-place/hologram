@@ -82,15 +82,18 @@ export function evaluateTemplate(input: TemplateInput): TemplateEvalResult {
     const now = new Date()
     const hour = now.getHours()
 
+    const respondingObjs = entities.map(e => ({ ...e, responding: true }))
+    const otherObjs = others.map(e => ({ ...e, responding: false }))
+
     const ctx: Record<string, unknown> = {
       // Template-specific variables
-      entities,
-      others,
+      entities: [...respondingObjs, ...otherObjs],
+      others: otherObjs,
       memories,
       entity_names: entities.map(e => e.name).join(', '),
       freeform: input.freeform,
       history,
-      responders: Object.fromEntries(entities.map(e => [e.id, e])),
+      responders: Object.fromEntries(respondingObjs.map(e => [e.id, e])),
       char,
       user,
       _single_entity: entities.length === 1,

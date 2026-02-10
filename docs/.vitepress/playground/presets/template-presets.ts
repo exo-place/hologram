@@ -49,16 +49,18 @@ export const templatePresets: TemplatePreset[] = [
     name: 'Custom Template',
     template: `{#- Simple custom template -#}
 {% block definitions %}
-You are {{ entities[0].name }}, a character in an interactive story.
+{% set responding = entities | selectattr("responding") %}
+You are {{ responding[0].name }}, a character in an interactive story.
 
 Your traits:
-{% for fact in entities[0].facts %}
+{% for fact in responding[0].facts %}
 - {{ fact }}
 {% endfor %}
 
-{% if others | length > 0 %}
+{% set non_responding = entities | rejectattr("responding") %}
+{% if non_responding | length > 0 %}
 Other characters present:
-{% for entity in others %}
+{% for entity in non_responding %}
 - {{ entity.name }}: {{ entity.facts | join(", ") }}
 {% endfor %}
 {% endif %}

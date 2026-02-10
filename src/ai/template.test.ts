@@ -198,6 +198,55 @@ describe("template: filters", () => {
     const result = render("{% for b in arr | batch(2) %}[{% for x in b %}{{ x }}{% endfor %}]{% endfor %}", { arr: [1, 2, 3, 4, 5] });
     expect(result).toBe("[12][34][5]");
   });
+
+  test("selectattr filter with attr", () => {
+    const arr = [{ name: "a", active: true }, { name: "b", active: false }, { name: "c", active: true }];
+    expect(render('{{ arr | selectattr("active") | join(", ", "name") }}', { arr })).toBe("a, c");
+  });
+
+  test("selectattr filter without attr (truthy filter)", () => {
+    const arr = [1, 0, "hello", "", null, true];
+    expect(render("{{ arr | selectattr() | length }}", { arr })).toBe("3");
+  });
+
+  test("selectattr filter on non-array returns empty", () => {
+    expect(render('{{ x | selectattr("a") | length }}', { x: "not an array" })).toBe("0");
+  });
+
+  test("selectattr filter with null items", () => {
+    const arr = [null, { responding: true }, undefined, { responding: false }];
+    expect(render('{{ arr | selectattr("responding") | length }}', { arr })).toBe("1");
+  });
+
+  test("rejectattr filter with attr", () => {
+    const arr = [{ name: "a", active: true }, { name: "b", active: false }, { name: "c", active: true }];
+    expect(render('{{ arr | rejectattr("active") | join(", ", "name") }}', { arr })).toBe("b");
+  });
+
+  test("rejectattr filter without attr (falsy filter)", () => {
+    const arr = [1, 0, "hello", "", null, true];
+    expect(render("{{ arr | rejectattr() | length }}", { arr })).toBe("3");
+  });
+
+  test("rejectattr filter on non-array returns empty", () => {
+    expect(render('{{ x | rejectattr("a") | length }}', { x: 42 })).toBe("0");
+  });
+
+  test("rejectattr filter includes null/undefined items", () => {
+    const arr = [null, { responding: true }, undefined, { responding: false }];
+    expect(render('{{ arr | rejectattr("responding") | length }}', { arr })).toBe("3");
+  });
+
+  test("selectattr + rejectattr are complementary", () => {
+    const arr = [
+      { name: "a", responding: true },
+      { name: "b", responding: false },
+      { name: "c", responding: true },
+      { name: "d", responding: false },
+    ];
+    expect(render('{{ arr | selectattr("responding") | length }}', { arr })).toBe("2");
+    expect(render('{{ arr | rejectattr("responding") | length }}', { arr })).toBe("2");
+  });
 });
 
 // =============================================================================

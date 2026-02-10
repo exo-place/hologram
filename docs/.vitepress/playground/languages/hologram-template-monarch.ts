@@ -18,10 +18,11 @@ export const hologramTemplateLanguage: languages.IMonarchLanguage = {
     'default', 'length', 'join', 'first', 'last',
     'upper', 'lower', 'trim', 'nl2br', 'int', 'float',
     'abs', 'round', 'reverse', 'sort', 'batch',
+    'selectattr', 'rejectattr',
   ],
 
   contextVariables: [
-    'entities', 'others', 'memories', 'entity_names', 'freeform',
+    'entities', 'others', 'responders', 'responding', 'memories', 'entity_names', 'freeform',
     'history', 'char', 'user', '_single_entity',
     'mentioned', 'replied', 'replied_to', 'is_forward', 'is_self',
     'content', 'author', 'interaction_type', 'name', 'chars',
@@ -97,7 +98,7 @@ export const hologramTemplateLanguage: languages.IMonarchLanguage = {
       [/<=|>=|==|!=|\|\||&&|\*\*|\/\/|[<>!~+\-*/%]/, 'operator'],
 
       // Filters
-      [/(\|)\s*(default|length|join|first|last|upper|lower|trim|nl2br|int|float|abs|round|reverse|sort|batch)\b/, ['operator.pipe', 'function.filter']],
+      [/(\|)\s*(default|length|join|first|last|upper|lower|trim|nl2br|int|float|abs|round|reverse|sort|batch|selectattr|rejectattr)\b/, ['operator.pipe', 'function.filter']],
 
       // Functions
       [/\b(?:random|has_fact|roll|messages|duration|mentioned_in_dialogue|date_str|time_str|isodate|isotime|weekday|send_as|caller)\s*(?=\()/, 'function'],
@@ -109,7 +110,7 @@ export const hologramTemplateLanguage: languages.IMonarchLanguage = {
       [/\b(?:self|channel|server|time)(?=\.)/, 'variable.object'],
 
       // Context variables
-      [/\b(?:entities|others|memories|entity_names|freeform|history|char|user|_single_entity|mentioned|replied|replied_to|is_forward|is_self|content|author|interaction_type|name|chars|group|response_ms|retry_ms|idle_ms|unread_count)\b/, 'variable.context'],
+      [/\b(?:entities|others|responders|responding|memories|entity_names|freeform|history|char|user|_single_entity|mentioned|replied|replied_to|is_forward|is_self|content|author|interaction_type|name|chars|group|response_ms|retry_ms|idle_ms|unread_count)\b/, 'variable.context'],
 
       // send_as (not followed by parens)
       [/\bsend_as\b(?!\s*\()/, 'function.macro'],

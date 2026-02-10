@@ -333,6 +333,20 @@ env.addFilter("batch", (val: unknown, n: unknown) => {
   return batches;
 });
 
+env.addFilter("selectattr", (arr: unknown, attr?: unknown) => {
+  if (!Array.isArray(arr)) return [];
+  if (attr === undefined) return arr.filter(Boolean);
+  const key = String(attr);
+  return arr.filter(item => item != null && (item as Record<string, unknown>)[key]);
+});
+
+env.addFilter("rejectattr", (arr: unknown, attr?: unknown) => {
+  if (!Array.isArray(arr)) return [];
+  if (attr === undefined) return arr.filter(item => !item);
+  const key = String(attr);
+  return arr.filter(item => item == null || !(item as Record<string, unknown>)[key]);
+});
+
 // =============================================================================
 // Public API
 // =============================================================================

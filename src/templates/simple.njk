@@ -10,7 +10,7 @@ Write the next reply in a fictional chat between {{char}} and {{user}}.
 {{ user.facts }}
 
 ## About the World
-{% for entity in others %}
+{% for entity in entities | rejectattr("responding") %}
   {% if entity.id != user.id %}
 ### About {{ entity.name }}
 {{ entity.facts }}
