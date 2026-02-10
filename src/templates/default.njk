@@ -41,6 +41,15 @@ Not everyone needs to respond to every message. Only respond as those who would 
     {{- "\n" if not loop.first -}}
     {% call send_as("assistant" if responders[msg.entity_id] else "user") -%}
       {{ msg.author }}: {{ msg.content }}
+      {%- for embed in msg.embeds %}
+      <embed>{{ embed.toJSON() }}</embed>
+      {%- endfor %}
+      {%- for attachment in msg.attachments %}
+      <attachment name="{{ attachment.filename }}"{{ ' type="' + attachment.content_type + '"' if attachment.content_type }} url="{{ attachment.url }}" />
+      {%- endfor %}
+      {%- for sticker in msg.stickers %}
+      [sticker: {{ sticker.name }}]
+      {%- endfor %}
     {%- endcall %}
   {% endfor %}
 {% endblock history %}
