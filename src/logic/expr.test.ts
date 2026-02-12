@@ -18,6 +18,30 @@ import {
 // Test Helpers
 // =============================================================================
 
+/** Helper to create a test context via createBaseContext with sensible defaults */
+function testContext(overrides: Partial<Parameters<typeof createBaseContext>[0]> = {}): ExprContext {
+  return createBaseContext({
+    facts: [],
+    has_fact: () => false,
+    messages: () => "",
+    response_ms: 0,
+    retry_ms: 0,
+    idle_ms: 0,
+    unread_count: 0,
+    mentioned: false,
+    replied: false,
+    replied_to: "",
+    is_forward: false,
+    is_self: false,
+    interaction_type: "",
+    name: "",
+    chars: [],
+    channel: { id: "", name: "", description: "", is_nsfw: false, type: "text", mention: "" },
+    server: { id: "", name: "", description: "", nsfw_level: "default" },
+    ...overrides,
+  });
+}
+
 function checkMentionedInDialogue(content: string, name: string): boolean {
   if (!name) return false;
 
@@ -622,7 +646,7 @@ describe("evaluateFacts", () => {
 
 describe("integration", () => {
   test("createBaseContext builds proper context", () => {
-    const ctx = createBaseContext({
+    const ctx = testContext({
       facts: ["name: Alice", "level: 5"],
       has_fact: (p) => p === "poisoned",
       mentioned: true,
@@ -639,10 +663,7 @@ describe("integration", () => {
   });
 
   test("random() returns values in correct ranges", () => {
-    const ctx = createBaseContext({
-      facts: [],
-      has_fact: () => false,
-    });
+    const ctx = testContext();
 
     // Test many times to check range bounds
     for (let i = 0; i < 100; i++) {
@@ -663,10 +684,7 @@ describe("integration", () => {
   });
 
   test("roll() returns values in correct ranges", () => {
-    const ctx = createBaseContext({
-      facts: [],
-      has_fact: () => false,
-    });
+    const ctx = testContext();
 
     // Test dice rolls
     for (let i = 0; i < 100; i++) {
@@ -693,10 +711,7 @@ describe("integration", () => {
   });
 
   test("roll() throws on invalid dice expression", () => {
-    const ctx = createBaseContext({
-      facts: [],
-      has_fact: () => false,
-    });
+    const ctx = testContext();
 
     expect(() => ctx.roll("invalid")).toThrow("Invalid dice expression");
     expect(() => ctx.roll("d6")).toThrow("Invalid dice expression");
@@ -704,10 +719,7 @@ describe("integration", () => {
   });
 
   test("random() and roll() work in expressions", () => {
-    const ctx = createBaseContext({
-      facts: [],
-      has_fact: () => false,
-    });
+    const ctx = testContext();
 
     // These should all evaluate without error
     for (let i = 0; i < 20; i++) {
@@ -729,19 +741,15 @@ describe("integration", () => {
   });
 
   test("real-world expression: self-reference", () => {
-    const ctx = createBaseContext({
+    const ctx = testContext({
       facts: ["fox_tf: 0.7"],
-      has_fact: () => false,
     });
     expect(evalExpr("self.fox_tf >= 0.5", ctx)).toBe(true);
     expect(evalExpr("self.fox_tf >= 0.8", ctx)).toBe(false);
   });
 
   test("real-world expression: time-based", () => {
-    const ctx = createBaseContext({
-      facts: [],
-      has_fact: () => false,
-    });
+    const ctx = testContext();
     // time.is_day and time.is_night should be mutually exclusive
     expect(evalExpr("time.is_day || time.is_night", ctx)).toBe(true);
     expect(evalExpr("time.is_day && time.is_night", ctx)).toBe(false);
@@ -784,9 +792,7 @@ describe("integration", () => {
   });
 
   test("mentioned_in_dialogue handles multiple quotes", () => {
-    const ctx = createBaseContext({
-      facts: [],
-      has_fact: () => false,
+    const ctx = testContext({
       messages: (n, fmt) => fmt === "%m" ? '<Alice> "Hello" <Bob> "Hey Alice!"' : "",
     });
     // Alice is mentioned in second quote
@@ -798,9 +804,7 @@ describe("integration", () => {
   });
 
   test("mentioned_in_dialogue handles single quotes", () => {
-    const ctx = createBaseContext({
-      facts: [],
-      has_fact: () => false,
+    const ctx = testContext({
       messages: (n, fmt) => fmt === "%m" ? "<Alice> 'Hey Bob!'" : "",
     });
     expect(ctx.mentioned_in_dialogue("Bob")).toBe(true);
@@ -809,18 +813,14 @@ describe("integration", () => {
 
   test("mentioned_in_dialogue with multiple paragraphs requires quotes", () => {
     // Multiple paragraphs without quotes - name should NOT match
-    const ctx = createBaseContext({
-      facts: [],
-      has_fact: () => false,
+    const ctx = testContext({
       messages: (n, fmt) => fmt === "%m" ? "Alice walked into the room.\nShe looked around." : "",
     });
     expect(ctx.mentioned_in_dialogue("Alice")).toBe(false);
     expect(ctx.mentioned_in_dialogue("She")).toBe(false);
 
     // Multiple paragraphs with quotes - only check within quotes
-    const ctx2 = createBaseContext({
-      facts: [],
-      has_fact: () => false,
+    const ctx2 = testContext({
       messages: (n, fmt) => fmt === "%m" ? 'Alice walked in.\n"Hey Bob!" she said.' : "",
     });
     expect(ctx2.mentioned_in_dialogue("Bob")).toBe(true);
@@ -828,9 +828,7 @@ describe("integration", () => {
   });
 
   test("is_self and mentioned_in_dialogue combined", () => {
-    const ctx = createBaseContext({
-      facts: [],
-      has_fact: () => false,
+    const ctx = testContext({
       messages: (n, fmt) => fmt === "%m" ? "Hey Alice!" : "",
       is_self: false,
       name: "Alice",
@@ -838,9 +836,7 @@ describe("integration", () => {
     // Common pattern: respond when name mentioned but not self-triggered
     expect(evalExpr('mentioned_in_dialogue("Alice") && !is_self', ctx)).toBe(true);
 
-    const selfCtx = createBaseContext({
-      facts: [],
-      has_fact: () => false,
+    const selfCtx = testContext({
       messages: (n, fmt) => fmt === "%m" ? "Hey Alice!" : "",
       is_self: true,
       name: "Alice",
@@ -935,8 +931,7 @@ describe("complex expression edge cases", () => {
   });
 
   test("multiple function calls", () => {
-    const ctx = createBaseContext({
-      facts: [],
+    const ctx = testContext({
       has_fact: (p) => p === "wings" || p === "can fly",
     });
     expect(evalExpr('has_fact("wings") && has_fact("can fly")', ctx)).toBe(true);
@@ -1135,10 +1130,7 @@ describe("error messages", () => {
   });
 
   test("invalid dice expression error", () => {
-    const ctx = createBaseContext({
-      facts: [],
-      has_fact: () => false,
-    });
+    const ctx = testContext();
     expect(() => evalExpr('roll("notdice")', ctx)).toThrow("Invalid dice expression");
   });
 });
@@ -1249,9 +1241,7 @@ describe("real world: complex entity with apostrophes", () => {
   });
 
   test("responds when name mentioned in dialogue", () => {
-    const ctx = createBaseContext({
-      facts: [],
-      has_fact: () => false,
+    const ctx = testContext({
       messages: (n, fmt) => fmt === "%m" ? '"Hey buddy, come here!"' : "User",
       is_self: false,
     });
@@ -1260,9 +1250,7 @@ describe("real world: complex entity with apostrophes", () => {
   });
 
   test("does not respond when is_self", () => {
-    const ctx = createBaseContext({
-      facts: [],
-      has_fact: () => false,
+    const ctx = testContext({
       messages: (n, fmt) => fmt === "%m" ? '"Hey buddy!"' : "User",
       is_self: true,
     });
@@ -1271,9 +1259,7 @@ describe("real world: complex entity with apostrophes", () => {
   });
 
   test("includes emote info when emote in messages", () => {
-    const ctx = createBaseContext({
-      facts: [],
-      has_fact: () => false,
+    const ctx = testContext({
       messages: () => "look at this <:happy:123456>",
       is_self: false,
     });
@@ -1292,9 +1278,7 @@ describe("real world: complex entity with apostrophes", () => {
   });
 
   test("includes term definition when keyword mentioned", () => {
-    const ctx = createBaseContext({
-      facts: [],
-      has_fact: () => false,
+    const ctx = testContext({
       messages: () => "hello there friend",
       is_self: false,
     });
@@ -1329,9 +1313,7 @@ describe("real world: complex entity with apostrophes", () => {
 
 describe("messages() function", () => {
   test("default call returns last message formatted", () => {
-    const ctx = createBaseContext({
-      facts: [],
-      has_fact: () => false,
+    const ctx = testContext({
       messages: (n = 1, fmt = "%a: %m") => {
         const msgs = [{ a: "Alice", m: "Hello!" }];
         return msgs.slice(0, n).map(msg =>
@@ -1344,9 +1326,7 @@ describe("messages() function", () => {
   });
 
   test("messages with custom format", () => {
-    const ctx = createBaseContext({
-      facts: [],
-      has_fact: () => false,
+    const ctx = testContext({
       messages: (n = 1, fmt = "%a: %m") => {
         if (fmt === "%m") return "Hello!";
         if (fmt === "%a") return "Alice";
@@ -1358,9 +1338,7 @@ describe("messages() function", () => {
   });
 
   test("messages(n) returns multiple", () => {
-    const ctx = createBaseContext({
-      facts: [],
-      has_fact: () => false,
+    const ctx = testContext({
       messages: (n = 1) => {
         const all = ["Alice: Hi", "Bob: Hello", "Carol: Hey"];
         return all.slice(0, n).join("\n");
@@ -1373,9 +1351,7 @@ describe("messages() function", () => {
   });
 
   test("content is alias for messages(1, %m)", () => {
-    const ctx = createBaseContext({
-      facts: [],
-      has_fact: () => false,
+    const ctx = testContext({
       messages: (n = 1, fmt = "%a: %m") => {
         if (fmt === "%m") return "the message content";
         return "Author: the message content";
@@ -1386,9 +1362,7 @@ describe("messages() function", () => {
   });
 
   test("author is alias for messages(1, %a)", () => {
-    const ctx = createBaseContext({
-      facts: [],
-      has_fact: () => false,
+    const ctx = testContext({
       messages: (n = 1, fmt = "%a: %m") => {
         if (fmt === "%a") return "TheAuthor";
         return "TheAuthor: message";
@@ -1700,63 +1674,42 @@ describe("parseOffset", () => {
 
 describe("new ExprContext functions", () => {
   test("duration formats ms as human-readable", () => {
-    const ctx = createBaseContext({
-      facts: [],
-      has_fact: () => false,
-    });
+    const ctx = testContext();
     expect(ctx.duration(5400000)).toBe("1 hour 30 minutes");
     expect(ctx.duration(0)).toBe("just now");
     expect(ctx.duration(Infinity)).toBe("a long time");
   });
 
   test("date_str returns non-empty string", () => {
-    const ctx = createBaseContext({
-      facts: [],
-      has_fact: () => false,
-    });
+    const ctx = testContext();
     expect(ctx.date_str()).toBeTruthy();
     expect(typeof ctx.date_str()).toBe("string");
   });
 
   test("time_str returns non-empty string", () => {
-    const ctx = createBaseContext({
-      facts: [],
-      has_fact: () => false,
-    });
+    const ctx = testContext();
     expect(ctx.time_str()).toBeTruthy();
     expect(typeof ctx.time_str()).toBe("string");
   });
 
   test("isodate returns YYYY-MM-DD format", () => {
-    const ctx = createBaseContext({
-      facts: [],
-      has_fact: () => false,
-    });
+    const ctx = testContext();
     expect(ctx.isodate()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
   test("isotime returns HH:MM format", () => {
-    const ctx = createBaseContext({
-      facts: [],
-      has_fact: () => false,
-    });
+    const ctx = testContext();
     expect(ctx.isotime()).toMatch(/^\d{2}:\d{2}$/);
   });
 
   test("weekday returns a valid day name", () => {
-    const ctx = createBaseContext({
-      facts: [],
-      has_fact: () => false,
-    });
+    const ctx = testContext();
     const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
     expect(days).toContain(ctx.weekday());
   });
 
   test("date functions accept offset", () => {
-    const ctx = createBaseContext({
-      facts: [],
-      has_fact: () => false,
-    });
+    const ctx = testContext();
     // Should not throw with offset
     expect(typeof ctx.date_str("1d")).toBe("string");
     expect(typeof ctx.time_str("-1h")).toBe("string");
@@ -1766,27 +1719,19 @@ describe("new ExprContext functions", () => {
   });
 
   test("group returns comma-separated chars", () => {
-    const ctx = createBaseContext({
-      facts: [],
-      has_fact: () => false,
+    const ctx = testContext({
       chars: ["Alice", "Bob", "Carol"],
     });
     expect(ctx.group).toBe("Alice, Bob, Carol");
   });
 
   test("group is empty when no chars", () => {
-    const ctx = createBaseContext({
-      facts: [],
-      has_fact: () => false,
-      chars: [],
-    });
+    const ctx = testContext();
     expect(ctx.group).toBe("");
   });
 
   test("group works in expressions", () => {
-    const ctx = createBaseContext({
-      facts: [],
-      has_fact: () => false,
+    const ctx = testContext({
       chars: ["Alice", "Bob"],
     });
     expect(evalExpr('group.includes("Alice")', ctx)).toBe(true);
@@ -1795,37 +1740,25 @@ describe("new ExprContext functions", () => {
   });
 
   test("duration works in expressions", () => {
-    const ctx = createBaseContext({
-      facts: [],
-      has_fact: () => false,
-    });
+    const ctx = testContext();
     expect(evalExpr('duration(60000) == "1 minute"', ctx)).toBe(true);
   });
 
   test("isodate works in expressions", () => {
-    const ctx = createBaseContext({
-      facts: [],
-      has_fact: () => false,
-    });
+    const ctx = testContext();
     const result = evalMacroValue("isodate()", ctx);
     expect(result).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
   test("weekday works in expressions", () => {
-    const ctx = createBaseContext({
-      facts: [],
-      has_fact: () => false,
-    });
+    const ctx = testContext();
     const result = evalMacroValue("weekday()", ctx);
     const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
     expect(days).toContain(result);
   });
 
   test("pick returns element from array", () => {
-    const ctx = createBaseContext({
-      facts: [],
-      has_fact: () => false,
-    });
+    const ctx = testContext();
     const arr = ["a", "b", "c"];
     const result = ctx.pick(arr);
     expect(result).toBeDefined();
@@ -1833,27 +1766,19 @@ describe("new ExprContext functions", () => {
   });
 
   test("pick returns undefined for empty array", () => {
-    const ctx = createBaseContext({
-      facts: [],
-      has_fact: () => false,
-    });
+    const ctx = testContext();
     expect(ctx.pick([])).toBeUndefined();
   });
 
   test("pick returns undefined for non-array", () => {
-    const ctx = createBaseContext({
-      facts: [],
-      has_fact: () => false,
-    });
+    const ctx = testContext();
     expect(ctx.pick("not an array" as unknown as string[])).toBeUndefined();
     expect(ctx.pick(null as unknown as string[])).toBeUndefined();
     expect(ctx.pick(undefined as unknown as string[])).toBeUndefined();
   });
 
   test("pick works in expressions with chars array", () => {
-    const ctx = createBaseContext({
-      facts: [],
-      has_fact: () => false,
+    const ctx = testContext({
       chars: ["Alice", "Bob", "Carol"],
     });
     const result = evalMacroValue("pick(chars)", ctx);
@@ -1868,9 +1793,7 @@ describe("new ExprContext functions", () => {
 describe("messages() with filter", () => {
   test("filter parameter is passed through", () => {
     let lastFilter: string | undefined;
-    const ctx = createBaseContext({
-      facts: [],
-      has_fact: () => false,
+    const ctx = testContext({
       messages: (n = 1, fmt?: string, filter?: string) => {
         lastFilter = filter;
         return "test";
@@ -1885,9 +1808,7 @@ describe("messages() with filter", () => {
 
   test("messages without filter works normally", () => {
     let lastFilter: string | undefined;
-    const ctx = createBaseContext({
-      facts: [],
-      has_fact: () => false,
+    const ctx = testContext({
       messages: (n = 1, fmt?: string, filter?: string) => {
         lastFilter = filter;
         return "test";

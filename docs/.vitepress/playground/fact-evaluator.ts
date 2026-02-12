@@ -54,16 +54,18 @@ export function evaluateFactsInBrowser(
         const fmt = format ?? '%a: %m'
         return fmt.replace(/%a/g, author).replace(/%m/g, content)
       },
+      response_ms: overrides.response_ms ?? 0,
+      retry_ms: overrides.retry_ms ?? 0,
+      idle_ms: overrides.idle_ms ?? 0,
+      unread_count: overrides.unread_count ?? 0,
       mentioned: overrides.mentioned ?? false,
       replied: overrides.replied ?? false,
+      replied_to: '',
       is_forward: overrides.is_forward ?? false,
       is_self: overrides.is_self ?? false,
+      interaction_type: '',
       name: overrides.name ?? 'Entity',
       chars: overrides.chars ?? ['Entity'],
-      response_ms: overrides.response_ms ?? 0,
-      idle_ms: overrides.idle_ms ?? 0,
-      retry_ms: overrides.retry_ms ?? 0,
-      unread_count: overrides.unread_count ?? 0,
       channel: {
         id: '1234567890',
         name: overrides.channel_name ?? 'general',
@@ -99,6 +101,7 @@ export function evaluateFactsInBrowser(
         isFreeform: false,
         modelSpec: null,
         stripPatterns: null,
+        thinkingLevel: null,
       },
       error: err instanceof Error ? err.message : String(err),
     }

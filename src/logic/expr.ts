@@ -1977,33 +1977,31 @@ export function parseSelfContext(facts: string[]): SelfContext {
 
 export interface BaseContextOptions {
   /** Entity's raw facts (used to build self context) */
-  facts?: string[];
+  facts: string[];
   /** Function to check if entity has a fact matching pattern */
   has_fact: (pattern: string) => boolean;
   /** Function to get the last N messages from the channel. Format: %a=author, %m=message. Filter: "user", "char", or name. */
-  messages?: (n?: number, format?: string, filter?: string) => string;
-  response_ms?: number;
-  retry_ms?: number;
-  idle_ms?: number;
-  unread_count?: number;
-  mentioned?: boolean;
-  replied?: boolean;
+  messages: (n?: number, format?: string, filter?: string) => string;
+  response_ms: number;
+  retry_ms: number;
+  idle_ms: number;
+  unread_count: number;
+  mentioned: boolean;
+  replied: boolean;
   /** Name of entity that was replied to (for webhook replies) */
-  replied_to?: string;
-  is_forward?: boolean;
+  replied_to: string;
+  is_forward: boolean;
   /** Whether the message is from this entity's own webhook */
-  is_self?: boolean;
-  interaction_type?: string;
+  is_self: boolean;
+  interaction_type: string;
   /** This entity's name */
-  name?: string;
+  name: string;
   /** Names of all characters bound to channel */
-  chars?: string[];
-  /** Explicit group string override (defaults to chars joined) */
-  group?: string;
+  chars: string[];
   /** Channel metadata */
-  channel?: { id: string; name: string; description: string; is_nsfw: boolean; type: string; mention: string };
+  channel: { id: string; name: string; description: string; is_nsfw: boolean; type: string; mention: string };
   /** Server metadata */
-  server?: { id: string; name: string; description: string; nsfw_level: string };
+  server: { id: string; name: string; description: string; nsfw_level: string };
 }
 
 /**
@@ -2049,11 +2047,10 @@ function checkMentionedInDialogue(content: string, name: string): boolean {
 export function createBaseContext(options: BaseContextOptions): ExprContext {
   const now = new Date();
   const hour = now.getHours();
-  const messages = options.messages ?? (() => "");
-  const chars = options.chars ?? [];
+  const { messages, chars } = options;
 
   return {
-    self: parseSelfContext(options.facts ?? []),
+    self: parseSelfContext(options.facts),
     random: (min?: number, max?: number) => {
       if (min === undefined) return Math.random();
       if (max === undefined) return Math.floor(Math.random() * min) + 1; // 1 to min
@@ -2066,23 +2063,23 @@ export function createBaseContext(options: BaseContextOptions): ExprContext {
       is_day: hour >= 6 && hour < 18,
       is_night: hour < 6 || hour >= 18,
     }),
-    response_ms: options.response_ms ?? 0,
-    retry_ms: options.retry_ms ?? 0,
-    idle_ms: options.idle_ms ?? 0,
-    unread_count: options.unread_count ?? 0,
-    mentioned: options.mentioned ?? false,
-    replied: options.replied ?? false,
-    replied_to: options.replied_to ?? "",
-    is_forward: options.is_forward ?? false,
-    is_self: options.is_self ?? false,
+    response_ms: options.response_ms,
+    retry_ms: options.retry_ms,
+    idle_ms: options.idle_ms,
+    unread_count: options.unread_count,
+    mentioned: options.mentioned,
+    replied: options.replied,
+    replied_to: options.replied_to,
+    is_forward: options.is_forward,
+    is_self: options.is_self,
     mentioned_in_dialogue: (name: string) => checkMentionedInDialogue(messages(1, "%m"), name),
     content: messages(1, "%m"),
     author: messages(1, "%a"),
-    interaction_type: options.interaction_type ?? "",
-    name: options.name ?? "",
+    interaction_type: options.interaction_type,
+    name: options.name,
     chars,
     messages,
-    group: options.group ?? chars.join(", "),
+    group: chars.join(", "),
     duration: (ms: number) => formatDuration(ms),
     date_str: (offset?: string) => {
       const d = offset ? applyOffset(now, offset) : now;
@@ -2108,8 +2105,8 @@ export function createBaseContext(options: BaseContextOptions): ExprContext {
       if (!Array.isArray(arr) || arr.length === 0) return undefined;
       return arr[Math.floor(Math.random() * arr.length)];
     },
-    channel: Object.assign(Object.create(null), options.channel ?? { id: "", name: "", description: "", is_nsfw: false, type: "text", mention: "" }),
-    server: Object.assign(Object.create(null), options.server ?? { id: "", name: "", description: "", nsfw_level: "default" }),
+    channel: Object.assign(Object.create(null), options.channel),
+    server: Object.assign(Object.create(null), options.server),
     // Safe Date wrapper with null prototype to prevent prototype chain escapes
     Date: Object.freeze(Object.assign(Object.create(null), {
       new: (...args: unknown[]) => {

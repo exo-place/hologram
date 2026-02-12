@@ -36,6 +36,31 @@ import {
   buildEvaluatedEntity,
 } from "./index";
 
+import { createBaseContext } from "../logic/expr";
+
+function testContext(overrides: Partial<Parameters<typeof createBaseContext>[0]> = {}) {
+  return createBaseContext({
+    facts: [],
+    has_fact: () => false,
+    messages: () => "",
+    response_ms: 0,
+    retry_ms: 0,
+    idle_ms: 0,
+    unread_count: 0,
+    mentioned: false,
+    replied: false,
+    replied_to: "",
+    is_forward: false,
+    is_self: false,
+    interaction_type: "",
+    name: "",
+    chars: [],
+    channel: { id: "", name: "", description: "", is_nsfw: false, type: "text", mention: "" },
+    server: { id: "", name: "", description: "", nsfw_level: "default" },
+    ...overrides,
+  });
+}
+
 import { createEntity, addFact, getEntityWithFacts, setEntityConfig } from "../db/entities";
 import {
   addDiscordEntity,
@@ -602,7 +627,8 @@ describe("buildEvaluatedEntity", () => {
     addFact(entity.id, "$if true: glows faintly");
 
     const ewf = getEntityWithFacts(entity.id)!;
-    const evaluated = buildEvaluatedEntity(ewf);
+    const ctx = testContext({ facts: ewf.facts.map(f => f.content) });
+    const evaluated = buildEvaluatedEntity(ewf, ctx);
 
     expect(evaluated.id).toBe(entity.id);
     expect(evaluated.name).toBe("Aria");
@@ -616,9 +642,11 @@ describe("buildEvaluatedEntity", () => {
     addFact(entity.id, "is a character");
 
     const ewf = getEntityWithFacts(entity.id)!;
-    const evaluated = buildEvaluatedEntity(ewf, {
+    const ctx = testContext({
+      facts: ewf.facts.map(f => f.content),
       channel: { id: "ch-1", name: "general", description: "", is_nsfw: false, type: "text", mention: "<#ch-1>" },
     });
+    const evaluated = buildEvaluatedEntity(ewf, ctx);
 
     expect(evaluated.exprContext?.channel.name).toBe("general");
   });
@@ -629,7 +657,8 @@ describe("buildEvaluatedEntity", () => {
     setEntityConfig(entity.id, { config_model: "google:gemini-3-flash-preview" });
 
     const ewf = getEntityWithFacts(entity.id)!;
-    const evaluated = buildEvaluatedEntity(ewf);
+    const ctx = testContext({ facts: ewf.facts.map(f => f.content) });
+    const evaluated = buildEvaluatedEntity(ewf, ctx);
 
     expect(evaluated.modelSpec).toBe("google:gemini-3-flash-preview");
   });

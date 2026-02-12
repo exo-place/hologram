@@ -45,6 +45,7 @@ import {
   getDiscordConfig,
   setDiscordConfig,
   deleteDiscordConfig,
+  countUnreadMessages,
 } from "../../db/discord";
 import { parsePermissionDirectives, matchesUserEntry, isUserBlacklisted, isUserAllowed, evaluateFacts, createBaseContext } from "../../logic/expr";
 import { formatEntityDisplay } from "../../ai/context";
@@ -1884,8 +1885,28 @@ async function handleInfoPrompt(ctx: CommandContext, options: Record<string, unk
   const channelMeta = await getChannelMetadata(ctx.channelId);
   const guildMeta = ctx.guildId ? await getGuildMetadata(ctx.guildId) : undefined;
 
-  // Evaluate facts with a mock context (no triggers active)
-  const evaluated = buildEvaluatedEntity(targetEntity, { channel: channelMeta, server: guildMeta, channelId: ctx.channelId });
+  // Build expression context with real metadata (no triggers active)
+  const rawFacts = targetEntity.facts.map(f => f.content);
+  const exprCtx = createBaseContext({
+    facts: rawFacts,
+    has_fact: (pattern: string) => rawFacts.some(f => new RegExp(pattern, "i").test(f)),
+    messages: () => "",
+    response_ms: 0,
+    retry_ms: 0,
+    idle_ms: 0,
+    unread_count: countUnreadMessages(ctx.channelId, targetEntity.id),
+    mentioned: false,
+    replied: false,
+    replied_to: "",
+    is_forward: false,
+    is_self: false,
+    interaction_type: "",
+    name: targetEntity.name,
+    chars: getChannelScopedEntities(ctx.channelId).map(id => { const e = getEntity(id); return e ? e.name : ""; }).filter(Boolean),
+    channel: channelMeta,
+    server: guildMeta ?? { id: "", name: "", description: "", nsfw_level: "default" },
+  });
+  const evaluated = buildEvaluatedEntity(targetEntity, exprCtx);
 
   // Use the actual template pipeline to build messages
   const { systemPrompt } = preparePromptContext(
@@ -1894,8 +1915,6 @@ async function handleInfoPrompt(ctx: CommandContext, options: Record<string, unk
 
   await respond(ctx.bot, ctx.interaction, elideText(systemPrompt || "(no system prompt)"), true);
 }
-
-// buildEvaluatedEntity is imported from ../../debug/evaluation
 
 async function handleInfoContext(ctx: CommandContext, options: Record<string, unknown>) {
   const entityInput = options.entity as string | undefined;
@@ -1910,8 +1929,28 @@ async function handleInfoContext(ctx: CommandContext, options: Record<string, un
   const channelMeta = await getChannelMetadata(ctx.channelId);
   const guildMeta = ctx.guildId ? await getGuildMetadata(ctx.guildId) : undefined;
 
-  // Evaluate facts with a mock context (no triggers active)
-  const evaluated = buildEvaluatedEntity(targetEntity, { channel: channelMeta, server: guildMeta, channelId: ctx.channelId });
+  // Build expression context with real metadata (no triggers active)
+  const rawFacts = targetEntity.facts.map(f => f.content);
+  const exprCtx = createBaseContext({
+    facts: rawFacts,
+    has_fact: (pattern: string) => rawFacts.some(f => new RegExp(pattern, "i").test(f)),
+    messages: () => "",
+    response_ms: 0,
+    retry_ms: 0,
+    idle_ms: 0,
+    unread_count: countUnreadMessages(ctx.channelId, targetEntity.id),
+    mentioned: false,
+    replied: false,
+    replied_to: "",
+    is_forward: false,
+    is_self: false,
+    interaction_type: "",
+    name: targetEntity.name,
+    chars: getChannelScopedEntities(ctx.channelId).map(id => { const e = getEntity(id); return e ? e.name : ""; }).filter(Boolean),
+    channel: channelMeta,
+    server: guildMeta ?? { id: "", name: "", description: "", nsfw_level: "default" },
+  });
+  const evaluated = buildEvaluatedEntity(targetEntity, exprCtx);
 
   // Use the actual template pipeline to build structured messages
   const { messages } = preparePromptContext(
@@ -2032,9 +2071,20 @@ registerCommand({
         filter
           ? formatMessagesForContext(getFilteredMessages(ctx.channelId, n, filter), format)
           : formatMessagesForContext(getMessages(ctx.channelId, n), format),
+      response_ms: 0,
+      retry_ms: 0,
+      idle_ms: 0,
+      unread_count: 0,
       mentioned: true, // Treat as mentioned for fact evaluation
+      replied: false,
+      replied_to: "",
+      is_forward: false,
+      is_self: false,
+      interaction_type: "",
       name: entity.name,
       chars: [entity.name],
+      channel: { id: ctx.channelId, name: "", description: "", is_nsfw: false, type: "text", mention: "" },
+      server: { id: ctx.guildId ?? "", name: "", description: "", nsfw_level: "default" },
     });
 
     let result;

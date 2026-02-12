@@ -24,6 +24,21 @@ function makeContext(overrides: Partial<ExprContext> = {}): ExprContext {
   return createBaseContext({
     facts: [],
     has_fact: () => false,
+    messages: () => "",
+    response_ms: 0,
+    retry_ms: 0,
+    idle_ms: 0,
+    unread_count: 0,
+    mentioned: false,
+    replied: false,
+    replied_to: "",
+    is_forward: false,
+    is_self: false,
+    interaction_type: "",
+    name: "",
+    chars: [],
+    channel: { id: "", name: "", description: "", is_nsfw: false, type: "text", mention: "" },
+    server: { id: "", name: "", description: "", nsfw_level: "default" },
     ...overrides,
   });
 }

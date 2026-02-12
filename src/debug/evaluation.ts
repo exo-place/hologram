@@ -11,6 +11,7 @@ import {
   evalExpr,
   stripComments,
   ExprError,
+  type ExprContext,
   type EvaluatedFacts,
 } from "../logic/expr";
 import type { EvaluatedEntity } from "../ai/context";
@@ -54,35 +55,21 @@ export interface ResponseSimulation {
   reason: string;
 }
 
-export interface BuildEvaluatedEntityOptions {
-  channel?: { id: string; name: string; description: string; is_nsfw: boolean; type: string; mention: string };
-  server?: { id: string; name: string; description: string; nsfw_level: string };
-  channelId?: string;
-}
-
 // =============================================================================
 // Shared: buildEvaluatedEntity
 // =============================================================================
 
 /**
- * Build an EvaluatedEntity from a raw entity using a mock expression context.
+ * Build an EvaluatedEntity from a raw entity using a pre-built expression context.
  * Shared between Discord commands and CLI debug tools.
  */
 export function buildEvaluatedEntity(
   entity: EntityWithFacts,
-  options?: BuildEvaluatedEntityOptions,
+  ctx: ExprContext,
 ): EvaluatedEntity {
   const rawFacts = entity.facts.map(f => f.content);
   const defaults = getEntityEvalDefaults(entity.id);
-  const mockContext = createBaseContext({
-    facts: rawFacts,
-    has_fact: (pattern: string) => rawFacts.some(f => new RegExp(pattern, "i").test(f)),
-    name: entity.name,
-    channel: options?.channel,
-    server: options?.server,
-    unread_count: options?.channelId ? countUnreadMessages(options.channelId, entity.id) : 0,
-  });
-  const result = evaluateFacts(rawFacts, mockContext, defaults);
+  const result = evaluateFacts(rawFacts, ctx, defaults);
   return {
     id: entity.id,
     name: entity.name,
@@ -98,7 +85,7 @@ export function buildEvaluatedEntity(
     thinkingLevel: result.thinkingLevel,
     template: entity.template,
     systemTemplate: entity.system_template,
-    exprContext: mockContext,
+    exprContext: ctx,
   };
 }
 
@@ -138,8 +125,21 @@ export function traceFacts(
   const mockContext = createBaseContext({
     facts: rawFacts,
     has_fact: (pattern: string) => rawFacts.some(f => new RegExp(pattern, "i").test(f)),
-    name: entity.name,
+    messages: () => "",
+    response_ms: 0,
+    retry_ms: 0,
+    idle_ms: 0,
     unread_count: countUnreadMessages(channelId, entityId),
+    mentioned: false,
+    replied: false,
+    replied_to: "",
+    is_forward: false,
+    is_self: false,
+    interaction_type: "",
+    name: entity.name,
+    chars: [],
+    channel: { id: channelId, name: "", description: "", is_nsfw: false, type: "text", mention: "" },
+    server: { id: "", name: "", description: "", nsfw_level: "default" },
   });
 
   const uncommented = stripComments(rawFacts);
@@ -227,8 +227,21 @@ export function simulateResponse(
     const mockContext = createBaseContext({
       facts: rawFacts,
       has_fact: (pattern: string) => rawFacts.some(f => new RegExp(pattern, "i").test(f)),
-      name: entity.name,
+      messages: () => "",
+      response_ms: 0,
+      retry_ms: 0,
+      idle_ms: 0,
       unread_count: countUnreadMessages(channelId, entityId),
+      mentioned: false,
+      replied: false,
+      replied_to: "",
+      is_forward: false,
+      is_self: false,
+      interaction_type: "",
+      name: entity.name,
+      chars: [],
+      channel: { id: channelId, name: "", description: "", is_nsfw: false, type: "text", mention: "" },
+      server: { id: "", name: "", description: "", nsfw_level: "default" },
     });
 
     const evaluated = evaluateFacts(rawFacts, mockContext, defaults);

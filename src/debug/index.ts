@@ -33,5 +33,4 @@ export {
   type FactTrace,
   type EntityTrace,
   type ResponseSimulation,
-  type BuildEvaluatedEntityOptions,
 } from "./evaluation";

@@ -563,6 +563,7 @@ bot.events.messageCreate = async (message) => {
       replied_to: repliedToWebhookEntity?.entityName ?? "",
       is_forward: isForward,
       is_self: isSelf,
+      interaction_type: "",
       name: entity.name,
       chars: channelEntities.map(e => e.name),
       channel: channelMeta,
@@ -726,6 +727,7 @@ async function processEntityRetry(
     replied_to: "",
     is_forward: false,
     is_self: false, // Retry is never self-triggered
+    interaction_type: "",
     name: entity.name,
     chars: allChannelEntities.map(e => e.name),
     channel: channelMeta,
