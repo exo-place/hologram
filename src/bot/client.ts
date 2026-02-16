@@ -1526,6 +1526,22 @@ bot.events.messageUpdate = async (message) => {
       content: content.slice(0, 50),
       hasEmbeds,
     });
+  } else if (message.channelId && message.author) {
+    // Message wasn't stored on CREATE (e.g., bot embed-only message) — insert it now
+    const authorName = message.author.globalName ?? message.author.username;
+    const authorId = message.author.id.toString();
+    const channelId = message.channelId.toString();
+    const isBot = !!message.author.toggles?.bot;
+    const msgData: MessageData = {};
+    if (isBot) msgData.is_bot = true;
+    if (newData) Object.assign(msgData, newData);
+    const hasData = Object.keys(msgData).length > 0;
+    addMessage(channelId, authorId, authorName, content, discordMessageId, hasData ? msgData : undefined);
+    debug("Created message from edit update", {
+      messageId: discordMessageId,
+      content: content.slice(0, 50),
+      hasEmbeds,
+    });
   }
 };
 
@@ -1563,6 +1579,21 @@ bot.handlers.MESSAGE_UPDATE = (bot, data, shardId) => {
       const updated = mergeMessageData(messageId, { embeds: serialized });
       if (updated) {
         debug("Embed-only update captured", { messageId, embedCount: serialized.length });
+      } else if (payload.channel_id && payload.author) {
+        // Message wasn't stored yet — bot sent embed-only message where CREATE had empty content.
+        // Insert from the raw payload so the embed isn't silently lost.
+        const authorName = payload.author.global_name ?? payload.author.username;
+        const msgData: MessageData = { embeds: serialized };
+        if (payload.author.bot) msgData.is_bot = true;
+        addMessage(
+          payload.channel_id,
+          payload.author.id,
+          authorName,
+          payload.content ?? "",
+          messageId,
+          msgData,
+        );
+        debug("Created message from embed-only update", { messageId, embedCount: serialized.length });
       }
     }
   }
