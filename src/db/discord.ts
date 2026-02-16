@@ -6,6 +6,35 @@ import { getDb } from "./index";
 
 export type DiscordType = "user" | "channel" | "guild";
 
+// =============================================================================
+// Persona Resolution Cache
+// =============================================================================
+
+/**
+ * Module-level cache for user persona resolution.
+ * Key: "userId:guildId:channelId", Value: entity ID or null.
+ * Invalidated when user-type bindings change (add/remove).
+ */
+const personaCache = new Map<string, number | null>();
+
+function personaCacheKey(userId: string, guildId?: string, channelId?: string): string {
+  return `${userId}:${guildId ?? ""}:${channelId ?? ""}`;
+}
+
+/** Resolve a user's persona binding with caching. */
+export function resolvePersona(userId: string, guildId?: string, channelId?: string): number | null {
+  const key = personaCacheKey(userId, guildId, channelId);
+  if (personaCache.has(key)) return personaCache.get(key)!;
+  const entityId = resolveDiscordEntity(userId, "user", guildId, channelId);
+  personaCache.set(key, entityId);
+  return entityId;
+}
+
+/** Clear the persona cache (called on user binding mutations). */
+export function clearPersonaCache(): void {
+  personaCache.clear();
+}
+
 export interface DiscordEntityMapping {
   id: number;
   discord_id: string;
@@ -42,6 +71,8 @@ export function addDiscordEntity(
   } catch {
     // UNIQUE constraint violation - binding already exists
     return null;
+  } finally {
+    if (discordType === "user") clearPersonaCache();
   }
 }
 
@@ -183,6 +214,7 @@ export function removeDiscordEntityBinding(
   }
 
   const result = db.prepare(query).run(...params);
+  if (result.changes > 0 && discordType === "user") clearPersonaCache();
   return result.changes > 0;
 }
 
@@ -215,6 +247,7 @@ export function removeDiscordEntity(
   }
 
   const result = db.prepare(query).run(...params);
+  if (result.changes > 0 && discordType === "user") clearPersonaCache();
   return result.changes > 0;
 }
 

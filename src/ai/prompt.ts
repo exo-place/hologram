@@ -7,7 +7,7 @@ import {
   DEFAULT_CONTEXT_EXPR,
   type EvaluatedEntity,
 } from "./context";
-import { getMessages, getWebhookMessageEntity, parseMessageData, resolveDiscordEntity, type EmbedData, type AttachmentData, type StickerData, type DiscordComponentData } from "../db/discord";
+import { getMessages, getWebhookMessageEntity, parseMessageData, resolveDiscordEntity, resolvePersona, type EmbedData, type AttachmentData, type StickerData, type DiscordComponentData } from "../db/discord";
 import { evalMacroValue, formatDuration, rollDice, compileContextExpr, parseFact, stripComments, ExprError, type ExprContext } from "../logic/expr";
 import { DEFAULT_MODEL } from "./models";
 import { DEFAULT_TEMPLATE, renderStructuredTemplate, renderSystemPrompt } from "./template";
@@ -380,15 +380,6 @@ export function buildPromptAndMessages(
   const history: HistoryEntry[] = [];
   let totalChars = 0;
 
-  // Cache persona bindings per author to avoid repeated DB lookups
-  const personaCache = new Map<string, number | null>();
-  function resolvePersona(authorId: string): number | null {
-    if (personaCache.has(authorId)) return personaCache.get(authorId)!;
-    const entityId = resolveDiscordEntity(authorId, "user", guildId, channelId);
-    personaCache.set(authorId, entityId);
-    return entityId;
-  }
-
   for (const m of rawHistory) {
     const data = parseMessageData(m.data);
     const webhookEntity = m.discord_message_id ? getWebhookMessageEntity(m.discord_message_id) : null;
@@ -425,7 +416,7 @@ export function buildPromptAndMessages(
       author_id: m.author_id,
       created_at: m.created_at,
       is_bot: data?.is_bot ?? false,
-      entity_id: webhookEntity?.entityId ?? (!(data?.is_bot) ? resolvePersona(m.author_id) : null),
+      entity_id: webhookEntity?.entityId ?? (!(data?.is_bot) ? resolvePersona(m.author_id, guildId, channelId) : null),
       embeds,
       stickers,
       attachments,
