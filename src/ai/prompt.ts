@@ -351,6 +351,7 @@ export function buildPromptAndMessages(
   stripPatterns: string[],
   systemTemplate?: string | null,
   userEntityId?: number | null,
+  guildId?: string,
 ): { systemPrompt: string; messages: StructuredMessage[] } {
   // Fetch history from DB (DESC order, newest first)
   const rawHistory = getMessages(channelId, MESSAGE_FETCH_LIMIT);
@@ -378,6 +379,15 @@ export function buildPromptAndMessages(
 
   const history: HistoryEntry[] = [];
   let totalChars = 0;
+
+  // Cache persona bindings per author to avoid repeated DB lookups
+  const personaCache = new Map<string, number | null>();
+  function resolvePersona(authorId: string): number | null {
+    if (personaCache.has(authorId)) return personaCache.get(authorId)!;
+    const entityId = resolveDiscordEntity(authorId, "user", guildId, channelId);
+    personaCache.set(authorId, entityId);
+    return entityId;
+  }
 
   for (const m of rawHistory) {
     const data = parseMessageData(m.data);
@@ -415,7 +425,7 @@ export function buildPromptAndMessages(
       author_id: m.author_id,
       created_at: m.created_at,
       is_bot: data?.is_bot ?? false,
-      entity_id: webhookEntity?.entityId ?? null,
+      entity_id: webhookEntity?.entityId ?? (!(data?.is_bot) ? resolvePersona(m.author_id) : null),
       embeds,
       stickers,
       attachments,
@@ -612,7 +622,7 @@ export function preparePromptContext(
   const template = entities[0]?.template ?? null;
   const systemTemplate = entities[0]?.systemTemplate ?? null;
   const { systemPrompt, messages } = buildPromptAndMessages(
-    entities, other, entityMemories, template, channelId, contextExpr, effectiveStripPatterns, systemTemplate, userEntityId,
+    entities, other, entityMemories, template, channelId, contextExpr, effectiveStripPatterns, systemTemplate, userEntityId, guildId,
   );
 
   return { systemPrompt, messages, other, contextExpr, effectiveStripPatterns };
