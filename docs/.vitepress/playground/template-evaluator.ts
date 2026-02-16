@@ -73,6 +73,7 @@ export function evaluateTemplate(input: TemplateInput): TemplateEvalResult {
       embeds: [],
       stickers: [],
       attachments: [],
+      components: [],
     }))
 
     const char = entities[0] ?? { id: 0, name: 'Entity', facts: makeFactsArray(''), toString: () => 'Entity' }

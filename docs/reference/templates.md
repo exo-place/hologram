@@ -92,7 +92,7 @@ All standard expression context variables are available (see `ExprContext`), plu
 | `memories` | `Record<number, string[]>` | Entity ID to memory strings (arrays have `toString() → join('\n')`) |
 | `entity_names` | `string` | Comma-separated names of responding entities |
 | `freeform` | `boolean` | True if any entity has `$freeform` |
-| `history` | `Array<{author, content, author_id, created_at, is_bot, role, embeds, stickers, attachments}>` | Structured message history (chronological) |
+| `history` | `Array<{author, content, author_id, created_at, is_bot, role, embeds, stickers, attachments, components}>` | Structured message history (chronological) |
 | `char` | `{id, name, facts}` | First responding entity (`toString() → name`) |
 | `user` | `{id, name, facts}` | User entity from others (`toString() → name`, defaults to `{name: "user"}`) |
 | `_single_entity` | `boolean` | True when exactly one entity is responding |
@@ -114,14 +114,16 @@ The `history` variable provides the raw message history as structured objects:
 | `embeds` | `EmbedData[]` | Discord embed data (see below) |
 | `stickers` | `Array<{id, name, format_type}>` | Sticker data (format_type: 1=PNG, 2=APNG, 3=Lottie, 4=GIF) |
 | `attachments` | `AttachmentData[]` | File attachments (see below) |
+| `components` | `DiscordComponentData[]` | Discord Components v2 data (see below) |
 | `toJSON()` | `string` | JSON string of the full message object |
 
-All history entries and their `embeds`, `stickers`, and `attachments` arrays have a `toJSON()` method that returns a JSON string, for use in templates:
+All history entries and their `embeds`, `stickers`, `attachments`, and `components` arrays have a `toJSON()` method that returns a JSON string, for use in templates:
 
 ```
-{{ msg.toJSON() }}              {# Full message as JSON #}
-{{ msg.embeds.toJSON() }}       {# Just embeds as JSON #}
-{{ msg.attachments.toJSON() }}  {# Just attachments as JSON #}
+{{ msg.toJSON() }}               {# Full message as JSON #}
+{{ msg.embeds.toJSON() }}        {# Just embeds as JSON #}
+{{ msg.attachments.toJSON() }}   {# Just attachments as JSON #}
+{{ msg.components.toJSON() }}    {# Just components as JSON #}
 ```
 
 #### Embed Fields
@@ -156,6 +158,25 @@ All history entries and their `embeds`, `stickers`, and `attachments` arrays hav
 | `width` | `number?` | Image/video width in pixels |
 | `ephemeral` | `boolean?` | Whether the attachment is ephemeral |
 | `duration_secs` | `number?` | Audio duration for voice messages |
+
+#### Component Fields (Components v2)
+
+Bots using Discord's Components v2 system (`flags: 32768`) send visual content via a recursive component tree instead of embeds. The raw component data is stored as-is from the gateway.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `type` | `number` | Component type (9=Section, 10=TextDisplay, 12=MediaGallery, 14=Separator, 17=Container, etc.) |
+| `content` | `string?` | Text content (for TextDisplay) |
+| `components` | `DiscordComponentData[]?` | Nested child components |
+| `items` | `DiscordComponentData[]?` | Items array (for MediaGallery, etc.) |
+| `media` | `{url}?` | Media reference |
+| `accent_color` | `number?` | Container accent color |
+| `spoiler` | `boolean?` | Whether content is spoilered |
+| `label` | `string?` | Button/option label |
+| `url` | `string?` | Link URL |
+| `style` | `number?` | Button style |
+
+Components are best accessed via `toJSON()` since the structure is recursive and varies by type.
 
 ### `send_as` Macro
 
