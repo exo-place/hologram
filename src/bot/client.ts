@@ -1,6 +1,6 @@
 import { createBot, Intents } from "@discordeno/bot";
 import type { DiscordMessage, DiscordEmbed } from "@discordeno/types";
-import type { EmbedData } from "../db/discord";
+import type { EmbedData, DiscordComponentData } from "../db/discord";
 import { info, debug, warn, error } from "../logger";
 import { registerCommands, handleInteraction } from "./commands";
 import { handleMessage } from "../ai/handler";
@@ -298,6 +298,10 @@ function retryKey(channelId: string, entityId: number): string {
   return `${channelId}:${entityId}`;
 }
 
+// Stash raw components from gateway before Discordeno transforms them
+// (Components v2 fields aren't covered by desiredProperties)
+const rawComponentsStash = new Map<string, DiscordComponentData[]>();
+
 // Message deduplication
 const processedMessages = new Set<string>();
 const MAX_PROCESSED = 1000;
@@ -361,8 +365,9 @@ bot.events.messageCreate = async (message) => {
   const hasAttachments = (message.attachments?.length ?? 0) > 0;
   const hasSnapshots = (message.messageSnapshots?.length ?? 0) > 0;
   const isBot = !!message.author.toggles?.bot;
+  const hasComponents = rawComponentsStash.has(message.id.toString());
   // Always store bot messages — embeds often arrive late via MESSAGE_UPDATE
-  if (!isBot && !message.content && !message.stickerItems?.length && !hasEmbeds && !hasAttachments && !hasSnapshots) return;
+  if (!isBot && !hasComponents && !message.content && !message.stickerItems?.length && !hasEmbeds && !hasAttachments && !hasSnapshots) return;
   if (!markProcessed(message.id)) return;
 
   // Store raw content — sticker/embed/attachment serialization happens at prompt time
@@ -449,6 +454,8 @@ bot.events.messageCreate = async (message) => {
     mentioned: isMentioned,
     replied: isReplied,
     is_forward: isForward,
+    embedCount: message.embeds?.length ?? 0,
+    isBot,
   });
 
   // Build structured message data blob
@@ -483,6 +490,13 @@ bot.events.messageCreate = async (message) => {
       ...(a.duration_secs != null && { duration_secs: a.duration_secs }),
     }));
   }
+  // Pick up raw components stashed from gateway (before Discordeno transforms them)
+  const rawComponents = rawComponentsStash.get(message.id.toString());
+  if (rawComponents) {
+    rawComponentsStash.delete(message.id.toString());
+    msgData.components = rawComponents;
+  }
+
   const hasData = Object.keys(msgData).length > 0;
 
   // Store message in history (before response decision so context builds up)
@@ -1558,7 +1572,19 @@ bot.events.interactionCreate = async (interaction) => {
   await handleInteraction(bot, interaction);
 };
 
-// Override MESSAGE_UPDATE gateway handler to also capture embed-only updates.
+// Override MESSAGE_CREATE to stash raw components before Discordeno transforms them
+const origMessageCreateHandler = bot.handlers.MESSAGE_CREATE;
+bot.handlers.MESSAGE_CREATE = (bot, data, shardId) => {
+  const payload = data.d as DiscordMessage;
+  // DiscordMessage type doesn't include components (newer API feature), access via raw object
+  const raw = payload as unknown as { components?: DiscordComponentData[] };
+  if (Array.isArray(raw.components) && raw.components.length > 0 && payload.id) {
+    rawComponentsStash.set(payload.id, raw.components);
+  }
+  return origMessageCreateHandler(bot, data, shardId);
+};
+
+// Override MESSAGE_UPDATE gateway handler to also capture embed/component-only updates.
 // Discordeno's default handler filters out events without edited_timestamp,
 // which silently drops embeds added by Discord (URL previews, late bot embeds).
 const origMessageUpdateHandler = bot.handlers.MESSAGE_UPDATE;
@@ -1570,32 +1596,40 @@ bot.handlers.MESSAGE_UPDATE = (bot, data, shardId) => {
     return origMessageUpdateHandler(bot, data, shardId);
   }
 
-  // For non-edit updates: capture embed data directly from the raw payload
-  if (payload.embeds?.length && payload.id) {
+  // For non-edit updates: capture embed/component data directly from the raw payload
+  const hasEmbeds = (payload.embeds?.length ?? 0) > 0;
+  const rawComponents = (payload as unknown as { components?: DiscordComponentData[] }).components;
+  const hasComponents = Array.isArray(rawComponents) && rawComponents.length > 0;
+
+  if ((hasEmbeds || hasComponents) && payload.id) {
     const messageId = payload.id;
     if (isOwnWebhookMessage(messageId)) return;
 
-    const serialized = payload.embeds.map(serializeDiscordEmbed);
-    if (serialized.length > 0) {
-      const updated = mergeMessageData(messageId, { embeds: serialized });
-      if (updated) {
-        debug("Embed-only update captured", { messageId, embedCount: serialized.length });
-      } else if (payload.channel_id && payload.author) {
-        // Message wasn't stored yet — bot sent embed-only message where CREATE had empty content.
-        // Insert from the raw payload so the embed isn't silently lost.
-        const authorName = payload.author.global_name ?? payload.author.username;
-        const msgData: MessageData = { embeds: serialized };
-        if (payload.author.bot) msgData.is_bot = true;
-        addMessage(
-          payload.channel_id,
-          payload.author.id,
-          authorName,
-          payload.content ?? "",
-          messageId,
-          msgData,
-        );
-        debug("Created message from embed-only update", { messageId, embedCount: serialized.length });
-      }
+    const newData: MessageData = {};
+    if (hasEmbeds) {
+      newData.embeds = payload.embeds!.map(serializeDiscordEmbed);
+    }
+    if (hasComponents) {
+      newData.components = rawComponents;
+    }
+
+    const updated = mergeMessageData(messageId, newData);
+    if (updated) {
+      debug("Non-edit update captured", { messageId, embedCount: payload.embeds?.length ?? 0, componentCount: rawComponents?.length ?? 0 });
+    } else if (payload.channel_id && payload.author) {
+      // Message wasn't stored yet — insert from the raw payload
+      const authorName = payload.author.global_name ?? payload.author.username;
+      const msgData: MessageData = { ...newData };
+      if (payload.author.bot) msgData.is_bot = true;
+      addMessage(
+        payload.channel_id,
+        payload.author.id,
+        authorName,
+        payload.content ?? "",
+        messageId,
+        msgData,
+      );
+      debug("Created message from non-edit update", { messageId, embedCount: payload.embeds?.length ?? 0, componentCount: rawComponents?.length ?? 0 });
     }
   }
 };

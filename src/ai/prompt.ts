@@ -7,7 +7,7 @@ import {
   DEFAULT_CONTEXT_EXPR,
   type EvaluatedEntity,
 } from "./context";
-import { getMessages, getWebhookMessageEntity, parseMessageData, resolveDiscordEntity, type EmbedData, type AttachmentData, type StickerData } from "../db/discord";
+import { getMessages, getWebhookMessageEntity, parseMessageData, resolveDiscordEntity, type EmbedData, type AttachmentData, type StickerData, type DiscordComponentData } from "../db/discord";
 import { evalMacroValue, formatDuration, rollDice, compileContextExpr, parseFact, stripComments, ExprError, type ExprContext } from "../logic/expr";
 import { DEFAULT_MODEL } from "./models";
 import { DEFAULT_TEMPLATE, renderStructuredTemplate, renderSystemPrompt } from "./template";
@@ -372,6 +372,7 @@ export function buildPromptAndMessages(
     embeds: EmbedData[] & { toJSON(): string };
     stickers: StickerData[] & { toJSON(): string };
     attachments: AttachmentData[] & { toJSON(): string };
+    components: DiscordComponentData[] & { toJSON(): string };
     toJSON(): string;
   }
 
@@ -407,6 +408,7 @@ export function buildPromptAndMessages(
     const embeds = withToJSON(withEmbedDefaults(data?.embeds ?? []));
     const stickers = withToJSON(data?.stickers ?? []);
     const attachments = withToJSON(withAttachmentDefaults(data?.attachments ?? []));
+    const components = withToJSON(data?.components ?? []);
     const entry: HistoryEntry = {
       author: m.author_name,
       content,
@@ -417,7 +419,8 @@ export function buildPromptAndMessages(
       embeds,
       stickers,
       attachments,
-      toJSON: () => JSON.stringify({ author: entry.author, content: entry.content, author_id: entry.author_id, created_at: entry.created_at, is_bot: entry.is_bot, entity_id: entry.entity_id, embeds: data?.embeds ?? [], stickers: data?.stickers ?? [], attachments: data?.attachments ?? [] }),
+      components,
+      toJSON: () => JSON.stringify({ author: entry.author, content: entry.content, author_id: entry.author_id, created_at: entry.created_at, is_bot: entry.is_bot, entity_id: entry.entity_id, embeds: data?.embeds ?? [], stickers: data?.stickers ?? [], attachments: data?.attachments ?? [], components: data?.components ?? [] }),
     };
     history.push(entry);
     totalChars += len;

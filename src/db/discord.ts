@@ -458,12 +458,36 @@ export interface AttachmentData {
   duration_secs?: number;
 }
 
+/** Raw Discord component data (recursive, matches gateway snake_case format) */
+export interface DiscordComponentData {
+  type: number;
+  id?: number;
+  content?: string;
+  accent_color?: number;
+  spoiler?: boolean;
+  components?: DiscordComponentData[];
+  items?: DiscordComponentData[];
+  media?: { url: string };
+  description?: string;
+  url?: string;
+  label?: string;
+  style?: number;
+  custom_id?: string;
+  disabled?: boolean;
+  emoji?: { id?: string; name?: string; animated?: boolean };
+  placeholder?: string;
+  min_values?: number;
+  max_values?: number;
+  options?: Array<{ label: string; value: string; description?: string; emoji?: { id?: string; name?: string; animated?: boolean }; default?: boolean }>;
+}
+
 export interface MessageData {
   is_bot?: boolean;
   is_forward?: boolean;
   embeds?: EmbedData[];
   stickers?: StickerData[];
   attachments?: AttachmentData[];
+  components?: DiscordComponentData[];
 }
 
 export function parseMessageData(raw: string | null): MessageData | null {

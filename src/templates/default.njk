@@ -50,6 +50,9 @@ Not everyone needs to respond to every message. Only respond as those who would 
       {%- for sticker in msg.stickers %}
       [sticker: {{ sticker.name }}]
       {%- endfor %}
+      {%- for component in msg.components %}
+      <component>{{ component.toJSON() }}</component>
+      {%- endfor %}
     {%- endcall %}
   {% endfor %}
 {% endblock history %}
