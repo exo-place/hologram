@@ -159,6 +159,18 @@ export function resolveDiscordEntity(
 }
 
 /**
+ * Get all unique channel IDs that have entity bindings.
+ * Used for startup catch-up to enumerate channels to backfill.
+ */
+export function getAllBoundChannelIds(): string[] {
+  const db = getDb();
+  const rows = db.prepare(`
+    SELECT DISTINCT discord_id FROM discord_entities WHERE discord_type = 'channel'
+  `).all() as { discord_id: string }[];
+  return rows.map(r => r.discord_id);
+}
+
+/**
  * Get channel-bound entities directly.
  * For channel bindings, discord_id is the channel ID itself, so no scope check needed.
  */
@@ -533,6 +545,21 @@ export function parseMessageData(raw: string | null): MessageData | null {
   if (!raw) return null;
   try { return JSON.parse(raw) as MessageData; }
   catch { return null; }
+}
+
+/**
+ * Get the highest discord_message_id stored for a channel, as a bigint.
+ * Returns null if the channel has no messages with a discord_message_id.
+ * Used as a catch-up cursor on startup to fetch only missed messages.
+ */
+export function getLastMessageSnowflake(channelId: string): bigint | null {
+  const db = getDb();
+  // CAST to INTEGER is safe: Discord snowflakes fit in SQLite's signed 64-bit int
+  const row = db.prepare(`
+    SELECT MAX(CAST(discord_message_id AS INTEGER)) as last_id
+    FROM messages WHERE channel_id = ? AND discord_message_id IS NOT NULL
+  `).get(channelId) as { last_id: number | null };
+  return row.last_id !== null ? BigInt(row.last_id) : null;
 }
 
 export function addMessage(

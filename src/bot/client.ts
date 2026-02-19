@@ -9,7 +9,7 @@ import { InferenceError } from "../ai/models";
 import type { EvaluatedEntity } from "../ai/context";
 import { isModelAllowed } from "../ai/models";
 import { retrieveRelevantMemories, type MemoryScope } from "../db/memories";
-import { resolveDiscordEntity, resolveDiscordEntities, isNewUser, markUserWelcomed, addMessage, updateMessageByDiscordId, mergeMessageData, deleteMessageByDiscordId, trackWebhookMessage, getWebhookMessageEntity, getMessages, getFilteredMessages, formatMessagesForContext, recordEvalError, isOurWebhookUserId, countUnreadMessages, type MessageData } from "../db/discord";
+import { resolveDiscordEntity, resolveDiscordEntities, isNewUser, markUserWelcomed, addMessage, updateMessageByDiscordId, mergeMessageData, deleteMessageByDiscordId, trackWebhookMessage, getWebhookMessageEntity, getMessages, getFilteredMessages, formatMessagesForContext, recordEvalError, isOurWebhookUserId, countUnreadMessages, getLastMessageSnowflake, getAllBoundChannelIds, type MessageData } from "../db/discord";
 import { getEntity, getEntityWithFacts, getEntityConfig, getSystemEntity, getFactsForEntity, type EntityWithFacts } from "../db/entities";
 import { evaluateFacts, createBaseContext, parsePermissionDirectives, isUserBlacklisted, isUserAllowed, compileContextExpr, ExprError, type EvaluatedFactsDefaults, type PermissionDefaults } from "../logic/expr";
 import { DEFAULT_CONTEXT_EXPR } from "../ai/context";
@@ -21,6 +21,23 @@ import { ensureHelpEntities } from "./commands/help";
 const token = process.env.DISCORD_TOKEN;
 if (!token) {
   throw new Error("DISCORD_TOKEN environment variable is required");
+}
+
+// =============================================================================
+// Discord snowflake utilities
+// =============================================================================
+
+const DISCORD_EPOCH = 1420070400000n;
+
+/** Convert a Unix timestamp (ms) to a Discord snowflake for use as an API cursor. */
+function timestampToSnowflake(ms: number): bigint {
+  const offset = BigInt(Math.max(0, ms)) - DISCORD_EPOCH;
+  return offset > 0n ? offset << 22n : 0n;
+}
+
+/** Extract the Unix timestamp (ms) from a Discord snowflake. */
+function snowflakeToTimestamp(snowflake: bigint): number {
+  return Number((snowflake >> 22n) + DISCORD_EPOCH);
 }
 
 export const bot = createBot({
@@ -168,6 +185,76 @@ export const bot = createBot({
 
 // Initialize webhook module with bot instance
 setBot(bot);
+
+// =============================================================================
+// Message serialization helper (shared between messageCreate and catch-up)
+// =============================================================================
+
+/** Element type of the array returned by bot.helpers.getMessages. */
+type BotMessage = Awaited<ReturnType<typeof bot.helpers.getMessages>>[number];
+
+/** Extract content (with forwarded snapshot handling) and structured data from a message.
+ * Used by both messageCreate and the catch-up backfill path. */
+function buildMsgDataAndContent(message: BotMessage): { content: string; msgData: MessageData | undefined } {
+  let content = message.content ?? "";
+  const hasSnapshots = (message.messageSnapshots?.length ?? 0) > 0;
+
+  if (hasSnapshots) {
+    const snapshotParts: string[] = [];
+    for (const snap of message.messageSnapshots!) {
+      if (snap.message.content) snapshotParts.push(snap.message.content);
+    }
+    if (snapshotParts.length > 0) {
+      const forwarded = snapshotParts.join("\n");
+      content = content ? `${content}\n${forwarded}` : forwarded;
+    }
+  }
+
+  const isBot = !!message.author.toggles?.bot;
+  const isForward = hasSnapshots;
+  const allEmbeds = [
+    ...(message.embeds ?? []),
+    ...(message.messageSnapshots?.flatMap(s => s.message.embeds ?? []) ?? []),
+  ];
+  const allAttachments = [
+    ...(message.attachments ?? []),
+    ...(message.messageSnapshots?.flatMap(s => s.message.attachments ?? []) ?? []),
+  ];
+  const allStickers = [
+    ...(message.stickerItems ?? []),
+    ...(message.messageSnapshots?.flatMap(s => s.message.stickerItems ?? []) ?? []),
+  ];
+  const hasComponents = (message.components?.length ?? 0) > 0;
+
+  const msgData: MessageData = {};
+  if (isBot) msgData.is_bot = true;
+  if (isForward) msgData.is_forward = true;
+  if (allEmbeds.length > 0) msgData.embeds = allEmbeds.map(serializeEmbed);
+  if (allStickers.length > 0) {
+    msgData.stickers = allStickers.map(s => ({
+      id: s.id.toString(),
+      name: s.name,
+      format_type: s.formatType ?? 0,
+    }));
+  }
+  if (allAttachments.length > 0) {
+    msgData.attachments = allAttachments.map(a => ({
+      filename: a.filename ?? "unknown",
+      url: a.url ?? "",
+      ...(a.contentType && { content_type: a.contentType }),
+      ...(a.title && { title: a.title }),
+      ...(a.description && { description: a.description }),
+      ...(a.size != null && { size: a.size }),
+      ...(a.height != null && { height: a.height }),
+      ...(a.width != null && { width: a.width }),
+      ...(a.ephemeral != null && { ephemeral: a.ephemeral }),
+      ...(a.duration_secs != null && { duration_secs: a.duration_secs }),
+    }));
+  }
+  if (hasComponents) msgData.components = serializeComponents(message.components!);
+
+  return { content, msgData: Object.keys(msgData).length > 0 ? msgData : undefined };
+}
 
 let botUserId: bigint | null = null;
 
@@ -364,6 +451,96 @@ const MAX_BOT_MESSAGES = 1000;
 const ownWebhookMessageIds = new Set<string>();
 const MAX_OWN_WEBHOOK_IDS = 1000;
 
+// =============================================================================
+// Startup catch-up (backfill missed messages while offline)
+// =============================================================================
+
+/** Channels that have been caught up in this session (lazy mode). */
+const caughtUpChannels = new Set<string>();
+
+/** Fetch and store messages missed while the bot was offline for one channel.
+ *
+ * Cursor strategy: take MAX of (last stored snowflake, lookback cutoff).
+ * - If bot was offline briefly: uses the last stored ID → fetches only what was missed.
+ * - If channel is empty or very inactive: uses the lookback cutoff.
+ * No per-message deduplication needed: everything after the cursor is guaranteed new.
+ *
+ * CATCHUP_ON_STARTUP=all|lazy|off (default: all)
+ * CATCHUP_RESPOND=true|false (default: false) — evaluate + respond to recent missed messages
+ * CATCHUP_RESPOND_MAX_AGE_MS (default: 300000) — max age to respond to (ms)
+ * CATCHUP_LOOKBACK_MS (default: 86400000) — lookback window for empty/inactive channels (ms)
+ */
+async function catchUpChannel(channelId: string): Promise<void> {
+  if (caughtUpChannels.has(channelId)) return;
+  caughtUpChannels.add(channelId);
+
+  const lookbackMs = parseInt(process.env.CATCHUP_LOOKBACK_MS ?? "86400000", 10);
+  const lookbackSnowflake = timestampToSnowflake(Date.now() - lookbackMs);
+
+  // Use last stored message as cursor when available (fetches only the gap),
+  // capped by the lookback window so we don't over-fetch very inactive channels.
+  const lastStored = getLastMessageSnowflake(channelId);
+  let cursor = lastStored !== null && lastStored > lookbackSnowflake
+    ? lastStored
+    : lookbackSnowflake;
+
+  const shouldRespond = process.env.CATCHUP_RESPOND === "true";
+  const respondMaxAge = parseInt(process.env.CATCHUP_RESPOND_MAX_AGE_MS ?? "300000", 10);
+  const now = Date.now();
+  let totalStored = 0;
+
+  while (true) {
+    let messages: Awaited<ReturnType<typeof bot.helpers.getMessages>>;
+    try {
+      messages = await bot.helpers.getMessages(BigInt(channelId), { after: cursor, limit: 100 });
+    } catch (err) {
+      warn("Catch-up fetch failed", { channelId, error: String(err) });
+      return;
+    }
+
+    if (messages.length === 0) break;
+
+    // Sort chronologically (ascending) — Discord returns newest-first by default
+    const sorted = [...messages].sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+
+    for (const message of sorted) {
+      // Skip our own bot messages
+      if (botUserId && message.author.id === botUserId) continue;
+
+      const messageAge = now - snowflakeToTimestamp(message.id);
+
+      if (shouldRespond && messageAge < respondMaxAge) {
+        // Full pipeline: evaluate facts and respond if warranted
+        await bot.events.messageCreate?.(message);
+      } else {
+        // Store for context only — skipped by markProcessed on next messageCreate
+        const { content, msgData } = buildMsgDataAndContent(message);
+        const authorName = message.author.globalName ?? message.author.username;
+        addMessage(channelId, message.author.id.toString(), authorName, content, message.id.toString(), msgData);
+        totalStored++;
+      }
+    }
+
+    if (sorted.length < 100) break;
+    cursor = sorted[sorted.length - 1].id;
+  }
+
+  if (totalStored > 0) {
+    info("Caught up channel history", { channelId, count: totalStored });
+  }
+}
+
+/** Run catch-up for all channels with entity bindings. Errors per-channel are logged, not thrown. */
+async function catchUpAllChannels(): Promise<void> {
+  const channelIds = getAllBoundChannelIds();
+  if (channelIds.length === 0) return;
+  info("Starting startup catch-up", { channels: channelIds.length });
+  for (const channelId of channelIds) {
+    await catchUpChannel(channelId);
+  }
+  info("Startup catch-up complete");
+}
+
 function isOwnWebhookMessage(messageId: string): boolean {
   // Check in-memory first (handles race condition), then DB
   return ownWebhookMessageIds.has(messageId) || !!getWebhookMessageEntity(messageId);
@@ -405,6 +582,14 @@ bot.events.ready = async (payload) => {
   ensureHelpEntities();
 
   await registerCommands(bot);
+
+  // Start catch-up for missed messages (non-blocking — runs in background)
+  const catchupMode = process.env.CATCHUP_ON_STARTUP ?? "all";
+  if (catchupMode === "all") {
+    catchUpAllChannels().catch(err => {
+      warn("Startup catch-up encountered an error", { error: String(err) });
+    });
+  }
 };
 
 bot.events.messageCreate = async (message) => {
@@ -419,26 +604,19 @@ bot.events.messageCreate = async (message) => {
   if (!isBot && !hasComponents && !message.content && !message.stickerItems?.length && !hasEmbeds && !hasAttachments && !hasSnapshots) return;
   if (!markProcessed(message.id)) return;
 
-  // Store raw content — sticker/embed/attachment serialization happens at prompt time
-  // For forwarded messages, include snapshot content since Discord puts it in messageSnapshots, not content
-  let content = message.content ?? "";
-  if (hasSnapshots) {
-    const snapshotParts: string[] = [];
-    for (const snap of message.messageSnapshots!) {
-      if (snap.message.content) snapshotParts.push(snap.message.content);
-    }
-    if (snapshotParts.length > 0) {
-      const forwarded = snapshotParts.join("\n");
-      content = content ? `${content}\n${forwarded}` : forwarded;
-    }
+  // Lazy catch-up: on first message in a channel, backfill history before processing
+  const channelId = message.channelId.toString();
+  if ((process.env.CATCHUP_ON_STARTUP ?? "all") === "lazy") {
+    await catchUpChannel(channelId);
   }
+
+  const { content, msgData } = buildMsgDataAndContent(message);
 
   // mentionedUserIds is unreliable in Discordeno, parse from content as fallback
   const isBotMentioned = botUserId !== null && (
     message.mentionedUserIds?.includes(botUserId) ||
     content.includes(`<@${botUserId}>`)
   );
-  const channelId = message.channelId.toString();
   const guildId = message.guildId?.toString();
   const messageTime = Date.now();
 
@@ -448,8 +626,7 @@ bot.events.messageCreate = async (message) => {
   const isRepliedToBot = refMessageId ? botMessageIds.has(refMessageId) : false;
   const repliedToWebhookEntity = refMessageId ? getWebhookMessageEntity(refMessageId) : undefined;
   const isReplied = isRepliedToBot || !!repliedToWebhookEntity;
-  // Forwarded messages have messageSnapshots
-  const isForward = (message.messageSnapshots?.length ?? 0) > 0;
+  const isForward = hasSnapshots; // forwarded messages have messageSnapshots
 
   // Check if any mentioned user ID is one of our webhook IDs
   // (handles reply-with-@ping to webhook entity messages)
@@ -507,46 +684,8 @@ bot.events.messageCreate = async (message) => {
     isBot,
   });
 
-  // Build structured message data blob
-  // Merge snapshot embeds/attachments/stickers with top-level ones (same Discordeno types)
-  const allEmbeds = [...(message.embeds ?? []), ...(message.messageSnapshots?.flatMap(s => s.message.embeds ?? []) ?? [])];
-  const allAttachments = [...(message.attachments ?? []), ...(message.messageSnapshots?.flatMap(s => s.message.attachments ?? []) ?? [])];
-  const allStickers = [...(message.stickerItems ?? []), ...(message.messageSnapshots?.flatMap(s => s.message.stickerItems ?? []) ?? [])];
-  const msgData: MessageData = {};
-  if (isBot) msgData.is_bot = true;
-  if (isForward) msgData.is_forward = true;
-  if (allEmbeds.length > 0) {
-    msgData.embeds = allEmbeds.map(serializeEmbed);
-  }
-  if (allStickers.length > 0) {
-    msgData.stickers = allStickers.map(s => ({
-      id: s.id.toString(),
-      name: s.name,
-      format_type: s.formatType ?? 0,
-    }));
-  }
-  if (allAttachments.length > 0) {
-    msgData.attachments = allAttachments.map(a => ({
-      filename: a.filename ?? "unknown",
-      url: a.url ?? "",
-      ...(a.contentType && { content_type: a.contentType }),
-      ...(a.title && { title: a.title }),
-      ...(a.description && { description: a.description }),
-      ...(a.size != null && { size: a.size }),
-      ...(a.height != null && { height: a.height }),
-      ...(a.width != null && { width: a.width }),
-      ...(a.ephemeral != null && { ephemeral: a.ephemeral }),
-      ...(a.duration_secs != null && { duration_secs: a.duration_secs }),
-    }));
-  }
-  if (hasComponents) {
-    msgData.components = serializeComponents(message.components!);
-  }
-
-  const hasData = Object.keys(msgData).length > 0;
-
   // Store message in history (before response decision so context builds up)
-  addMessage(channelId, authorId, authorName, content, message.id.toString(), hasData ? msgData : undefined);
+  addMessage(channelId, authorId, authorName, content, message.id.toString(), msgData);
 
   // Get ALL channel entities (supports multiple characters)
   const channelEntityIds = resolveDiscordEntities(channelId, "channel", guildId, channelId);
