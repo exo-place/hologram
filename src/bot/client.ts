@@ -29,12 +29,6 @@ if (!token) {
 
 const DISCORD_EPOCH = 1420070400000n;
 
-/** Convert a Unix timestamp (ms) to a Discord snowflake for use as an API cursor. */
-function timestampToSnowflake(ms: number): bigint {
-  const offset = BigInt(Math.max(0, ms)) - DISCORD_EPOCH;
-  return offset > 0n ? offset << 22n : 0n;
-}
-
 /** Extract the Unix timestamp (ms) from a Discord snowflake. */
 function snowflakeToTimestamp(snowflake: bigint): number {
   return Number((snowflake >> 22n) + DISCORD_EPOCH);
@@ -460,39 +454,35 @@ const caughtUpChannels = new Set<string>();
 
 /** Fetch and store messages missed while the bot was offline for one channel.
  *
- * Cursor strategy: take MAX of (last stored snowflake, lookback cutoff).
- * - If bot was offline briefly: uses the last stored ID → fetches only what was missed.
- * - If channel is empty or very inactive: uses the lookback cutoff.
- * No per-message deduplication needed: everything after the cursor is guaranteed new.
+ * Cursor: last stored discord_message_id for the channel, if any.
+ * Everything Discord returns after that ID is guaranteed new — no deduplication needed.
+ * For channels with no history, fetches without a cursor (gets latest 100 messages).
  *
  * CATCHUP_ON_STARTUP=all|lazy|off (default: all)
  * CATCHUP_RESPOND=true|false (default: false) — evaluate + respond to recent missed messages
- * CATCHUP_RESPOND_MAX_AGE_MS (default: 300000) — max age to respond to (ms)
- * CATCHUP_LOOKBACK_MS (default: 86400000) — lookback window for empty/inactive channels (ms)
+ * CATCHUP_RESPOND_MAX_AGE_MS (default: 300000ms / 5 min) — max age to respond to
  */
 async function catchUpChannel(channelId: string): Promise<void> {
   if (caughtUpChannels.has(channelId)) return;
   caughtUpChannels.add(channelId);
 
-  const lookbackMs = parseInt(process.env.CATCHUP_LOOKBACK_MS ?? "86400000", 10);
-  const lookbackSnowflake = timestampToSnowflake(Date.now() - lookbackMs);
-
-  // Use last stored message as cursor when available (fetches only the gap),
-  // capped by the lookback window so we don't over-fetch very inactive channels.
+  // Use last stored message as cursor so we fetch exactly the gap.
+  // null = no history; Discord will return the latest messages without an after cursor.
   const lastStored = getLastMessageSnowflake(channelId);
-  let cursor = lastStored !== null && lastStored > lookbackSnowflake
-    ? lastStored
-    : lookbackSnowflake;
 
   const shouldRespond = process.env.CATCHUP_RESPOND === "true";
   const respondMaxAge = parseInt(process.env.CATCHUP_RESPOND_MAX_AGE_MS ?? "300000", 10);
   const now = Date.now();
   let totalStored = 0;
+  let cursor = lastStored;
 
   while (true) {
     let messages: Awaited<ReturnType<typeof bot.helpers.getMessages>>;
     try {
-      messages = await bot.helpers.getMessages(BigInt(channelId), { after: cursor, limit: 100 });
+      messages = await bot.helpers.getMessages(BigInt(channelId), {
+        ...(cursor !== null && { after: cursor }),
+        limit: 100,
+      });
     } catch (err) {
       warn("Catch-up fetch failed", { channelId, error: String(err) });
       return;

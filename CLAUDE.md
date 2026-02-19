@@ -217,7 +217,6 @@ MAX_RESPONSE_CHAIN=  # Max consecutive self-response chain depth (default: 3, 0 
 CATCHUP_ON_STARTUP=  # all (default) | lazy | off — backfill missed messages on startup
 CATCHUP_RESPOND=     # true | false (default) — respond to recent missed messages
 CATCHUP_RESPOND_MAX_AGE_MS=  # Max age to respond to (default: 300000 = 5 min)
-CATCHUP_LOOKBACK_MS= # How far back to look for missed messages (default: 86400000 = 24h)
 LOG_LEVEL=           # debug, info (default), warn, error
 ```
 
