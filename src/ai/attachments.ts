@@ -1,4 +1,4 @@
-import { fetchAndCacheAttachment, tryFetchExternalImage } from "../db/attachment-cache";
+import { fetchAndCacheAttachment } from "../db/attachment-cache";
 import { recordEvalError } from "../db/discord";
 import { warn } from "../logger";
 import { supportsVision, supportsDocumentType } from "./models";
@@ -120,15 +120,10 @@ async function resolveAttachment(
   if (isImage && supportsVision(providerName)) {
     if (isDiscordCdnUrl(url)) {
       const { data, contentType } = await fetchAndCacheAttachment(url);
-      return { type: "image", image: data, mimeType: contentType };
+      return { type: "image", image: data.toString("base64"), mimeType: contentType };
     }
-    // For external image URLs (e.g. Tenor thumbnails), try fetching through our
-    // server so LLMs that can't reach the URL directly can still see the image.
-    // Falls back to passing the URL if the fetch fails (host blocked, timeout, etc.)
-    const fetched = await tryFetchExternalImage(url);
-    if (fetched) {
-      return { type: "image", image: fetched.data, mimeType: fetched.contentType };
-    }
+    // External image URLs (e.g. Tenor thumbnails): pass URL directly.
+    // Most providers can fetch public URLs themselves.
     return { type: "image", image: url };
   }
 

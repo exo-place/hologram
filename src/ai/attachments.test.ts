@@ -13,7 +13,6 @@ mock.module("../db/attachment-cache", () => ({
   fetchAndCacheAttachment: async (_url: string) => {
     throw new Error("fetchAndCacheAttachment not expected in these tests");
   },
-  tryFetchExternalImage: async (_url: string) => null,
 }));
 
 // =============================================================================
