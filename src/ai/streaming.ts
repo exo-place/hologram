@@ -15,6 +15,7 @@ import {
   namePrefixSource,
   NAME_BOUNDARY,
 } from "./parsing";
+import type { GeneratedFile } from "./handler";
 
 // =============================================================================
 // Types
@@ -43,6 +44,7 @@ export type StreamEvent =
   | { type: "char_line_delta"; name: string; delta: string; content: string }  // lines full: delta within current line
   | { type: "char_line_end"; name: string; content: string }  // lines full: line complete for entity
   | { type: "char_end"; name: string; content: string }
+  | { type: "files"; files: GeneratedFile[] }
   | { type: "done"; fullText: string };
 
 // =============================================================================
@@ -151,6 +153,16 @@ export async function* handleMessageStreaming(
     const trimmedAccumulated = accumulatedText.trim();
     if (!trimmedAccumulated) {
       throw new InferenceError("Empty response from model", modelSpec);
+    }
+
+    // Collect generated image files (e.g. from gemini-2.0-flash-image-generation)
+    const rawFiles = await result.files;
+    const generatedFiles: GeneratedFile[] = (rawFiles ?? [])
+      .filter(f => f.mediaType.startsWith("image/"))
+      .map(f => ({ data: f.uint8Array, mediaType: f.mediaType }));
+
+    if (generatedFiles.length > 0) {
+      yield { type: "files", files: generatedFiles };
     }
 
     // Yield done event with accumulated text

@@ -1,5 +1,6 @@
 import { getDb } from "../db";
 import { debug, error } from "../logger";
+import type { GeneratedFile } from "../ai/handler";
 
 interface CachedWebhook {
   webhookId: string;
@@ -194,19 +195,22 @@ function splitContent(content: string): string[] {
  * Execute webhook with custom username and avatar.
  * Returns array of sent message IDs on success, null on failure.
  * Automatically splits long messages into multiple webhook calls.
+ * Files (if provided) are attached to the first chunk only.
  */
 export async function executeWebhook(
   channelId: string,
   content: string,
   username: string,
-  avatarUrl?: string
+  avatarUrl?: string,
+  files?: GeneratedFile[]
 ): Promise<string[] | null> {
   if (!bot) {
     error("Bot not initialized for webhooks");
     return null;
   }
 
-  if (!content.trim()) {
+  const hasFiles = files && files.length > 0;
+  if (!content.trim() && !hasFiles) {
     debug("Skipping webhook execution for blank content");
     return null;
   }
@@ -223,8 +227,17 @@ export async function executeWebhook(
   // Sanitize username (Discord forbids "discord" in webhook usernames)
   const safeUsername = sanitizeUsername(username);
 
-  // Split content if too long
-  const chunks = splitContent(content);
+  // Split content if too long (empty content treated as single empty chunk for files-only)
+  const chunks = content.trim() ? splitContent(content) : [""];
+
+  // Convert GeneratedFile[] to Discordeno FileContent[]
+  const discordFiles = files?.map((f, i) => {
+    const ext = f.mediaType.split("/")[1] ?? "png";
+    return {
+      blob: new Blob([f.data], { type: f.mediaType }),
+      name: `image_${i + 1}.${ext}`,
+    };
+  });
 
   debug("Executing webhook", {
     webhookId: webhook.webhookId,
@@ -235,6 +248,7 @@ export async function executeWebhook(
     chunks: chunks.length,
     hasAvatar: !!avatarUrl,
     avatarUrl: avatarUrl ?? DEFAULT_AVATAR,
+    fileCount: discordFiles?.length ?? 0,
     contentPreview: content.slice(0, 100) + (content.length > 100 ? "..." : ""),
   });
 
@@ -242,16 +256,21 @@ export async function executeWebhook(
     const messageIds: string[] = [];
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i];
+      // Attach files to first chunk only
+      const chunkFiles = i === 0 && discordFiles?.length ? discordFiles : undefined;
+      const payload: Record<string, unknown> = {
+        username: safeUsername,
+        avatarUrl: avatarUrl ?? DEFAULT_AVATAR,
+        wait: true,
+        ...(threadId ? { threadId: BigInt(threadId) } : {}),
+        ...(chunkFiles ? { file: chunkFiles } : {}),
+      };
+      // Only include content if non-empty (files-only sends have empty content)
+      if (chunk) payload.content = chunk;
       const result = await bot!.helpers.executeWebhook(
         BigInt(webhook.webhookId),
         webhook.webhookToken,
-        {
-          content: chunk,
-          username: safeUsername,
-          avatarUrl: avatarUrl ?? DEFAULT_AVATAR,
-          wait: true,
-          ...(threadId ? { threadId: BigInt(threadId) } : {}),
-        }
+        payload
       );
       if (result?.id) {
         messageIds.push(result.id.toString());

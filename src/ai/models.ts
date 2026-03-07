@@ -124,6 +124,17 @@ export function supportsVision(providerName: string): boolean {
   return VISION_CAPABLE_PROVIDERS.has(providerName);
 }
 
+/** Model names known to support inline image output via generateText().files */
+const IMAGE_OUTPUT_MODEL_NAMES = new Set([
+  "gemini-2.5-flash-image",
+  "gemini-2.0-flash-image-generation",
+]);
+
+/** Returns true if the model is known to support inline image generation output */
+export function supportsImageOutput(modelName: string): boolean {
+  return IMAGE_OUTPUT_MODEL_NAMES.has(modelName);
+}
+
 /** Returns true if the provider accepts this MIME type as a document/file part */
 export function supportsDocumentType(providerName: string, mimeType: string): boolean {
   return DOCUMENT_CAPABLE[providerName]?.has(mimeType) ?? false;

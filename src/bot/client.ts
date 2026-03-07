@@ -4,6 +4,7 @@ import type { EmbedData, DiscordComponentData } from "../db/discord";
 import { info, debug, warn, error } from "../logger";
 import { registerCommands, handleInteraction } from "./commands";
 import { handleMessage } from "../ai/handler";
+import type { GeneratedFile } from "../ai/handler";
 import { handleMessageStreaming } from "../ai/streaming";
 import { InferenceError } from "../ai/models";
 import type { EvaluatedEntity } from "../ai/context";
@@ -1118,6 +1119,8 @@ async function handleStreamingResponse(
   }
 ): Promise<void> {
   const allMessageIds: string[] = [];
+  // Stash files yielded by the "files" event; sent after streaming completes
+  let streamingFiles: GeneratedFile[] | undefined;
 
   // Track current message per entity (for editing in full mode)
   const entityMessages = new Map<string, { messageId: string; content: string }>();
@@ -1314,10 +1317,35 @@ async function handleStreamingResponse(
         break;
       }
 
+      case "files": {
+        // Stash generated files to send after streaming completes
+        streamingFiles = event.files;
+        break;
+      }
+
       case "done": {
         // Update single-entity full mode message with final content
         if (fullMessage) {
           updateMessageByDiscordId(fullMessage.messageId, fullMessage.content);
+        }
+        // Send stashed files as a separate webhook message attached to first entity
+        if (streamingFiles && streamingFiles.length > 0) {
+          const fileEntity = entity ?? entities[0];
+          if (fileEntity) {
+            const ids = await executeWebhook(
+              channelId,
+              "",
+              fileEntity.name,
+              fileEntity.avatarUrl ?? undefined,
+              streamingFiles
+            );
+            if (ids) {
+              for (const id of ids) {
+                trackOwnWebhookMessage(id, fileEntity.id, fileEntity.name);
+                allMessageIds.push(id);
+              }
+            }
+          }
         }
         debug("Streaming complete", { fullTextLength: event.fullText.length });
         break;
@@ -1505,14 +1533,17 @@ export async function sendResponse(
     if (respondingEntities && respondingEntities.length > 0) {
       if (result.entityResponses && result.entityResponses.length > 0) {
         // Multiple entities: send separate webhook message for each
-        for (const entityResponse of result.entityResponses) {
+        // Files go on the first entity's message only
+        for (let i = 0; i < result.entityResponses.length; i++) {
+          const entityResponse = result.entityResponses[i];
           // Find the entity for this response
           const entity = respondingEntities.find(e => e.name === entityResponse.name);
           const messageIds = await executeWebhook(
             channelId,
             entityResponse.content,
             entityResponse.name,
-            entityResponse.avatarUrl
+            entityResponse.avatarUrl,
+            i === 0 ? result.files : undefined
           );
           if (messageIds && entity) {
             trackWebhookMessages(messageIds, entity.id, entity.name);
@@ -1527,7 +1558,8 @@ export async function sendResponse(
           channelId,
           result.response,
           entity.name,
-          entity.avatarUrl ?? undefined
+          entity.avatarUrl ?? undefined,
+          result.files
         );
         if (messageIds) {
           trackWebhookMessages(messageIds, entity.id, entity.name);

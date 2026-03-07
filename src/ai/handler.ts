@@ -16,8 +16,14 @@ import { stripNamePrefix, parseNamePrefixResponse, type EntityResponse } from ".
 // Types
 // =============================================================================
 
+export interface GeneratedFile {
+  data: Uint8Array;
+  mediaType: string; // e.g. "image/png"
+}
+
 export interface ResponseResult {
   response: string;
+  files?: GeneratedFile[];
   entityResponses?: EntityResponse[];
   factsAdded: number;
   factsUpdated: number;
@@ -110,6 +116,11 @@ export async function handleMessage(ctx: MessageContext): Promise<ResponseResult
       memoriesRemoved,
     });
 
+    // Collect generated image files (e.g. from gemini-2.0-flash-image-generation)
+    const generatedFiles: GeneratedFile[] = (result.files ?? [])
+      .filter(f => f.mediaType.startsWith("image/"))
+      .map(f => ({ data: f.uint8Array, mediaType: f.mediaType }));
+
     // Check for <none/> or "none" sentinel (LLM decided none should respond)
     const trimmedText = result.text.trim().toLowerCase();
     if (trimmedText === "<none/>" || trimmedText === "none") {
@@ -135,6 +146,7 @@ export async function handleMessage(ctx: MessageContext): Promise<ResponseResult
 
     return {
       response: responseText,
+      files: generatedFiles.length > 0 ? generatedFiles : undefined,
       entityResponses,
       factsAdded,
       factsUpdated,

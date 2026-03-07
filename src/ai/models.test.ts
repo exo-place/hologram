@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseModelSpec, InferenceError } from "./models";
+import { parseModelSpec, InferenceError, supportsImageOutput } from "./models";
 
 describe("parseModelSpec", () => {
   test("parses provider:model format", () => {
@@ -65,5 +65,23 @@ describe("InferenceError", () => {
     const err = new InferenceError("Failed", "anthropic:claude-3");
     expect(err).toBeInstanceOf(Error);
     expect(err).toBeInstanceOf(InferenceError);
+  });
+});
+
+describe("supportsImageOutput", () => {
+  test("returns true for gemini-2.0-flash-image-generation", () => {
+    expect(supportsImageOutput("gemini-2.0-flash-image-generation")).toBe(true);
+  });
+
+  test("returns true for gemini-2.5-flash-image", () => {
+    expect(supportsImageOutput("gemini-2.5-flash-image")).toBe(true);
+  });
+
+  test("returns false for regular gemini model", () => {
+    expect(supportsImageOutput("gemini-2.0-flash")).toBe(false);
+  });
+
+  test("returns false for unknown model", () => {
+    expect(supportsImageOutput("gpt-4o")).toBe(false);
   });
 });
