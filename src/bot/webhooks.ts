@@ -1,6 +1,7 @@
 import { getDb } from "../db";
 import { debug, error } from "../logger";
 import type { GeneratedFile } from "../ai/handler";
+import type { bot as botInstance } from "./client";
 
 interface CachedWebhook {
   webhookId: string;
@@ -14,11 +15,9 @@ const webhookCache = new Map<string, CachedWebhook>();
 const DEFAULT_AVATAR = "https://cdn.discordapp.com/embed/avatars/0.png";
 
 // Bot instance set by client.ts to avoid circular import
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let bot: any = null;
+let bot: typeof botInstance | null = null;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function setBot(b: any): void {
+export function setBot(b: typeof botInstance): void {
   bot = b;
 }
 
@@ -36,6 +35,7 @@ const THREAD_TYPES = new Set([
 async function resolveWebhookChannel(
   channelId: string
 ): Promise<{ webhookChannelId: string; threadId: string | null } | null> {
+  if (!bot) return null;
   try {
     const channel = await bot.helpers.getChannel(BigInt(channelId));
     debug("Resolving webhook channel", {
@@ -267,7 +267,7 @@ export async function executeWebhook(
       // Only include content if non-empty (files-only sends have empty content)
       if (chunk) payload.content = chunk;
 
-      let result;
+      let messageId: string | undefined;
       if (chunkFiles) {
         // Discordeno's helpers.executeWebhook doesn't pass files at the request level,
         // so multipart form data is never used. Use bot.rest.post directly so files
@@ -277,22 +277,23 @@ export async function executeWebhook(
           webhook.webhookToken,
           { wait: true, ...(threadId ? { threadId: BigInt(threadId) } : {}) },
         );
-        result = await bot!.rest.post(route, { body: payload, files: chunkFiles, unauthorized: true });
-        // bot.rest.post returns the raw Discord response (not transformed); extract id
-        if (result && typeof result === "object" && "id" in result) {
-          result = { id: result.id };
+        // bot.rest.post is typed as void but actually returns the raw Discord response
+        const rawResult: unknown = await bot!.rest.post(route, { body: payload, files: chunkFiles, unauthorized: true });
+        if (rawResult && typeof rawResult === "object" && "id" in rawResult) {
+          messageId = String((rawResult as { id: unknown }).id);
         }
       } else {
-        result = await bot!.helpers.executeWebhook(
+        const result = await bot!.helpers.executeWebhook(
           BigInt(webhook.webhookId),
           webhook.webhookToken,
           payload
         );
+        if (result?.id) messageId = result.id.toString();
       }
-      if (result?.id) {
-        messageIds.push(result.id.toString());
+      if (messageId) {
+        messageIds.push(messageId);
       }
-      debug("Webhook chunk sent", { chunk: i + 1, of: chunks.length, messageId: result?.id?.toString() });
+      debug("Webhook chunk sent", { chunk: i + 1, of: chunks.length, messageId });
     }
     debug("Webhook executed successfully", { messageIds });
     return messageIds;
