@@ -148,10 +148,21 @@ export async function* handleMessageStreaming(
     // Use different streaming logic based on single vs multiple entities
     // In freeform mode, treat multi-entity like single (no Name: prefix parsing)
     const isFreeform = entities.some(e => e.isFreeform);
-    if (entities.length === 1 || isFreeform) {
-      yield* streamSingleEntity(trackedStream, streamMode, delimiter, entities[0]?.name);
-    } else {
-      yield* streamMultiEntityNamePrefix(trackedStream, entities, streamMode, delimiter);
+    let streamNoOutput = false;
+    try {
+      if (entities.length === 1 || isFreeform) {
+        yield* streamSingleEntity(trackedStream, streamMode, delimiter, entities[0]?.name);
+      } else {
+        yield* streamMultiEntityNamePrefix(trackedStream, entities, streamMode, delimiter);
+      }
+    } catch (streamErr) {
+      // AI_NoOutputGeneratedError is thrown when the stream produces no text (e.g. image-only response).
+      // Don't rethrow yet — check if files were generated before deciding it's an error.
+      if (streamErr instanceof Error && streamErr.name === "AI_NoOutputGeneratedError") {
+        streamNoOutput = true;
+      } else {
+        throw streamErr;
+      }
     }
 
     // Collect generated image files (e.g. from gemini-2.0-flash-image-generation)
@@ -167,7 +178,10 @@ export async function* handleMessageStreaming(
     // Empty/whitespace-only response is an error unless the model returned image files
     const trimmedAccumulated = accumulatedText.trim();
     if (!trimmedAccumulated && generatedFiles.length === 0) {
-      throw new InferenceError("Empty response from model", modelSpec);
+      throw new InferenceError(
+        streamNoOutput ? "No output generated" : "Empty response from model",
+        modelSpec,
+      );
     }
 
     // Yield done event with accumulated text

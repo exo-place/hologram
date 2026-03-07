@@ -56,6 +56,17 @@ export function configureLogger(options: Partial<LoggerConfig>): void {
   Object.assign(config, options);
 }
 
+/**
+ * JSON.stringify replacer that converts binary data (Uint8Array, Buffer) to a
+ * compact `[Uint8Array: N bytes]` summary instead of a giant number array.
+ */
+function binaryRedactReplacer(_key: string, value: unknown): unknown {
+  if (value instanceof Uint8Array) {
+    return `[Uint8Array: ${value.byteLength} bytes]`;
+  }
+  return value;
+}
+
 /** Format a log entry */
 function formatEntry(
   level: LogLevel,
@@ -68,7 +79,7 @@ function formatEntry(
       message,
       ...(config.timestamps && { timestamp: new Date().toISOString() }),
       ...context,
-    });
+    }, binaryRedactReplacer);
   }
 
   // Pretty format for dev
@@ -80,7 +91,7 @@ function formatEntry(
   const reset = c ? COLORS.reset : "";
   const levelTag = `${color}[${level.toUpperCase().padEnd(5)}]${reset}`;
   const contextStr = context
-    ? ` ${c ? COLORS.dim : ""}${JSON.stringify(context)}${reset}`
+    ? ` ${c ? COLORS.dim : ""}${JSON.stringify(context, binaryRedactReplacer)}${reset}`
     : "";
 
   return `${timestamp}${levelTag} ${message}${contextStr}`;
@@ -126,7 +137,7 @@ export function error(
     } else if (err !== undefined) {
       // Try to serialize objects properly
       try {
-        errorContext.error = typeof err === "object" ? JSON.stringify(err) : String(err);
+        errorContext.error = typeof err === "object" ? JSON.stringify(err, binaryRedactReplacer) : String(err);
       } catch {
         errorContext.error = String(err);
       }
