@@ -69,7 +69,7 @@ const HELP_ENTITY_FACTS: Record<string, string[]> = {
     "**Directives:**",
     "• `$respond` / `$respond false` - control response",
     "• `$retry <ms>` - re-evaluate after delay",
-    "• `$stream` / `$model` / `$context` / `$strip` - see `/view help:output`",
+    "• `$stream` / `$model` / `$context` / `$strip` / `$collapse` - see `/view help:output`",
     "---",
     "**Operators:**",
     "`&&` `||` `!` `==` `!=` `<` `>` `<=` `>=`",
@@ -270,6 +270,11 @@ const HELP_ENTITY_FACTS: Record<string, string[]> = {
     "---",
     "**`$freeform`** - Allow natural multi-character prose",
     "Disables per-character message splitting in multi-char channels.",
+    "---",
+    "**`$collapse false`** - Disable adjacent same-role message merging",
+    "By default, consecutive user or assistant messages are merged into one.",
+    "`$collapse false` - keep them as separate messages (e.g. for models sensitive to turn structure).",
+    "`$collapse` - explicitly re-enable (same as default).",
   ],
 };
 

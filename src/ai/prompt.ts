@@ -290,7 +290,7 @@ const MESSAGE_FETCH_LIMIT = 100;
  * Content is joined with newline. Empty messages are preserved (they may
  * carry structural meaning to the template author).
  */
-function collapseMessages(messages: StructuredMessage[]): StructuredMessage[] {
+function collapseAdjacentMessages(messages: StructuredMessage[]): StructuredMessage[] {
   if (messages.length <= 1) return messages;
   const result: StructuredMessage[] = [messages[0]];
   for (let i = 1; i < messages.length; i++) {
@@ -320,7 +320,7 @@ export function processRawFacts(rawFacts: string[]): string[] {
       parsed.isRespond || parsed.isRetry || parsed.isAvatar ||
       parsed.isLockedDirective || parsed.isStream || parsed.isMemory ||
       parsed.isContext || parsed.isFreeform || parsed.isModel || parsed.isStrip ||
-      parsed.isThinking
+      parsed.isThinking || parsed.isCollapse
     ) {
       continue;
     }
@@ -352,6 +352,7 @@ export function buildPromptAndMessages(
   systemTemplate?: string | null,
   userEntityId?: number | null,
   guildId?: string,
+  collapseMessages?: boolean | null,
 ): { systemPrompt: string; messages: StructuredMessage[] } {
   // Fetch history from DB (DESC order, newest first)
   const rawHistory = getMessages(channelId, MESSAGE_FETCH_LIMIT);
@@ -534,8 +535,10 @@ export function buildPromptAndMessages(
     messages.push({ role: "user", content: latestContent });
   }
 
-  // Collapse consecutive same-role messages into one
-  messages = collapseMessages(messages);
+  // Collapse consecutive same-role messages into one (default: enabled)
+  if (collapseMessages !== false) {
+    messages = collapseAdjacentMessages(messages);
+  }
 
   // AI SDK requires first non-system message to be user role
   const firstNonSystem = messages.findIndex(m => m.role !== "system");
@@ -612,8 +615,9 @@ export function preparePromptContext(
   // Build messages via template engine
   const template = entities[0]?.template ?? null;
   const systemTemplate = entities[0]?.systemTemplate ?? null;
+  const collapseMessages = entities.find(e => e.collapseMessages !== null)?.collapseMessages ?? null;
   const { systemPrompt, messages } = buildPromptAndMessages(
-    entities, other, entityMemories, template, channelId, contextExpr, effectiveStripPatterns, systemTemplate, userEntityId, guildId,
+    entities, other, entityMemories, template, channelId, contextExpr, effectiveStripPatterns, systemTemplate, userEntityId, guildId, collapseMessages,
   );
 
   return { systemPrompt, messages, other, contextExpr, effectiveStripPatterns };

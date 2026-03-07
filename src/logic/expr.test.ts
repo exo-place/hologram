@@ -2031,3 +2031,57 @@ describe("$thinking directive", () => {
     expect(result.thinkingLevel).toBe("high");
   });
 });
+
+describe("$collapse directive", () => {
+  test("default collapseMessages is null", () => {
+    const facts = ["some fact"];
+    const ctx = makeContext();
+    const result = evaluateFacts(facts, ctx);
+    expect(result.collapseMessages).toBeNull();
+  });
+
+  test("$collapse false disables collapsing", () => {
+    const facts = ["$collapse false", "some fact"];
+    const ctx = makeContext();
+    const result = evaluateFacts(facts, ctx);
+    expect(result.collapseMessages).toBe(false);
+    expect(result.facts).toEqual(["some fact"]);
+  });
+
+  test("bare $collapse enables collapsing explicitly", () => {
+    const facts = ["$collapse", "some fact"];
+    const ctx = makeContext();
+    const result = evaluateFacts(facts, ctx);
+    expect(result.collapseMessages).toBe(true);
+    expect(result.facts).toEqual(["some fact"]);
+  });
+
+  test("last $collapse wins", () => {
+    const facts = ["$collapse", "$collapse false"];
+    const ctx = makeContext();
+    const result = evaluateFacts(facts, ctx);
+    expect(result.collapseMessages).toBe(false);
+  });
+
+  test("conditional $collapse false", () => {
+    const facts = ["$if mentioned: $collapse false", "some fact"];
+    const ctx = makeContext({ mentioned: true });
+    const result = evaluateFacts(facts, ctx);
+    expect(result.collapseMessages).toBe(false);
+  });
+
+  test("conditional $collapse not triggered", () => {
+    const facts = ["$if mentioned: $collapse false", "some fact"];
+    const ctx = makeContext({ mentioned: false });
+    const result = evaluateFacts(facts, ctx);
+    expect(result.collapseMessages).toBeNull();
+  });
+
+  test("$collapse is stripped from LLM context", () => {
+    const facts = ["$collapse false", "some fact"];
+    const ctx = makeContext();
+    const result = evaluateFacts(facts, ctx);
+    expect(result.facts).not.toContain("$collapse false");
+    expect(result.facts).toEqual(["some fact"]);
+  });
+});

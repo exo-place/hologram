@@ -83,6 +83,7 @@ export function buildEvaluatedEntity(
     modelSpec: result.modelSpec,
     stripPatterns: result.stripPatterns,
     thinkingLevel: result.thinkingLevel,
+    collapseMessages: result.collapseMessages,
     template: entity.template,
     systemTemplate: entity.system_template,
     exprContext: ctx,
@@ -106,6 +107,7 @@ function categorize(raw: string): string {
   if (parsed.isModel) return "$model";
   if (parsed.isStrip) return "$strip";
   if (parsed.isThinking) return "$thinking";
+  if (parsed.isCollapse) return "$collapse";
   return "fact";
 }
 
@@ -194,6 +196,7 @@ export function traceFacts(
       modelSpec: null,
       stripPatterns: null,
       thinkingLevel: null,
+      collapseMessages: null,
     };
   }
 

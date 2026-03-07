@@ -854,6 +854,7 @@ const FREEFORM_SIGIL = "$freeform";
 const MODEL_SIGIL = "$model ";
 const STRIP_SIGIL = "$strip";
 const THINKING_SIGIL = "$thinking";
+const COLLAPSE_SIGIL = "$collapse";
 
 /** Memory retrieval scope */
 export type MemoryScope = "none" | "channel" | "guild" | "global";
@@ -909,6 +910,10 @@ export interface ProcessedFact {
   isThinking: boolean;
   /** For $thinking directives, the level */
   thinkingLevel?: ThinkingLevel;
+  /** True if this fact is a $collapse directive */
+  isCollapse: boolean;
+  /** For $collapse directives, whether to collapse adjacent same-role messages */
+  collapseEnabled?: boolean;
 }
 
 /** Parse expression, expect ':', return position after ':' */
@@ -951,6 +956,7 @@ export function parseFact(fact: string): ProcessedFact {
         isModel: false,
         isStrip: false,
         isThinking: false,
+        isCollapse: false,
       };
     } else {
       // $locked prefix - recursively parse the rest, then mark as locked
@@ -986,6 +992,7 @@ export function parseFact(fact: string): ProcessedFact {
         isModel: false,
         isStrip: false,
         isThinking: false,
+        isCollapse: false,
       };
     }
 
@@ -1009,6 +1016,7 @@ export function parseFact(fact: string): ProcessedFact {
         isModel: false,
         isStrip: false,
         isThinking: false,
+        isCollapse: false,
       };
     }
 
@@ -1033,6 +1041,7 @@ export function parseFact(fact: string): ProcessedFact {
         isModel: false,
         isStrip: false,
         isThinking: false,
+        isCollapse: false,
       };
     }
 
@@ -1056,6 +1065,7 @@ export function parseFact(fact: string): ProcessedFact {
         isModel: false,
         isStrip: false,
         isThinking: false,
+        isCollapse: false,
       };
     }
 
@@ -1079,6 +1089,7 @@ export function parseFact(fact: string): ProcessedFact {
         isModel: false,
         isStrip: false,
         isThinking: false,
+        isCollapse: false,
       };
     }
 
@@ -1100,6 +1111,7 @@ export function parseFact(fact: string): ProcessedFact {
         isModel: false,
         isStrip: false,
         isThinking: false,
+        isCollapse: false,
       };
     }
 
@@ -1123,6 +1135,7 @@ export function parseFact(fact: string): ProcessedFact {
         modelSpec: modelResultCond,
         isStrip: false,
         isThinking: false,
+        isCollapse: false,
       };
     }
 
@@ -1146,6 +1159,7 @@ export function parseFact(fact: string): ProcessedFact {
         isStrip: true,
         stripPatterns: stripResultCond,
         isThinking: false,
+        isCollapse: false,
       };
     }
 
@@ -1168,11 +1182,36 @@ export function parseFact(fact: string): ProcessedFact {
         isModel: false,
         isStrip: false,
         isThinking: true,
+        isCollapse: false,
         thinkingLevel: thinkingResultCond,
       };
     }
 
-    return { content, conditional: true, expression, isRespond: false, isRetry: false, isAvatar: false, isLockedDirective: false, isLockedFact: false, isStream: false, isMemory: false, isContext: false, isFreeform: false, isModel: false, isStrip: false, isThinking: false };
+    // Check if content is a $collapse directive
+    const collapseResultCond = parseCollapseDirective(content);
+    if (collapseResultCond !== null) {
+      return {
+        content,
+        conditional: true,
+        expression,
+        isRespond: false,
+        isRetry: false,
+        isAvatar: false,
+        isLockedDirective: false,
+        isLockedFact: false,
+        isStream: false,
+        isMemory: false,
+        isContext: false,
+        isFreeform: false,
+        isModel: false,
+        isStrip: false,
+        isThinking: false,
+        isCollapse: true,
+        collapseEnabled: collapseResultCond,
+      };
+    }
+
+    return { content, conditional: true, expression, isRespond: false, isRetry: false, isAvatar: false, isLockedDirective: false, isLockedFact: false, isStream: false, isMemory: false, isContext: false, isFreeform: false, isModel: false, isStrip: false, isCollapse: false, isThinking: false };
   }
 
   // Check for unconditional $respond
@@ -1194,6 +1233,7 @@ export function parseFact(fact: string): ProcessedFact {
       isModel: false,
       isStrip: false,
       isThinking: false,
+      isCollapse: false,
     };
   }
 
@@ -1216,6 +1256,7 @@ export function parseFact(fact: string): ProcessedFact {
       isModel: false,
       isStrip: false,
       isThinking: false,
+      isCollapse: false,
     };
   }
 
@@ -1238,6 +1279,7 @@ export function parseFact(fact: string): ProcessedFact {
       isModel: false,
       isStrip: false,
       isThinking: false,
+      isCollapse: false,
     };
   }
 
@@ -1261,6 +1303,7 @@ export function parseFact(fact: string): ProcessedFact {
       isModel: false,
       isStrip: false,
       isThinking: false,
+      isCollapse: false,
     };
   }
 
@@ -1283,6 +1326,7 @@ export function parseFact(fact: string): ProcessedFact {
       isModel: false,
       isStrip: false,
       isThinking: false,
+      isCollapse: false,
     };
   }
 
@@ -1305,6 +1349,7 @@ export function parseFact(fact: string): ProcessedFact {
       isModel: false,
       isStrip: false,
       isThinking: false,
+      isCollapse: false,
     };
   }
 
@@ -1325,6 +1370,7 @@ export function parseFact(fact: string): ProcessedFact {
         isModel: false,
         isStrip: false,
         isThinking: false,
+        isCollapse: false,
       };
   }
 
@@ -1347,6 +1393,7 @@ export function parseFact(fact: string): ProcessedFact {
       modelSpec: modelResult,
       isStrip: false,
       isThinking: false,
+      isCollapse: false,
     };
   }
 
@@ -1369,6 +1416,7 @@ export function parseFact(fact: string): ProcessedFact {
       isStrip: true,
       stripPatterns: stripResult,
       isThinking: false,
+      isCollapse: false,
     };
   }
 
@@ -1390,11 +1438,35 @@ export function parseFact(fact: string): ProcessedFact {
       isModel: false,
       isStrip: false,
       isThinking: true,
+      isCollapse: false,
       thinkingLevel: thinkingResult,
     };
   }
 
-  return { content: trimmed, conditional: false, isRespond: false, isRetry: false, isAvatar: false, isLockedDirective: false, isLockedFact: false, isStream: false, isMemory: false, isContext: false, isFreeform: false, isModel: false, isStrip: false, isThinking: false };
+  // Check for unconditional $collapse
+  const collapseResult = parseCollapseDirective(trimmed);
+  if (collapseResult !== null) {
+    return {
+      content: trimmed,
+      conditional: false,
+      isRespond: false,
+      isRetry: false,
+      isAvatar: false,
+      isLockedDirective: false,
+      isLockedFact: false,
+      isStream: false,
+      isMemory: false,
+      isContext: false,
+      isFreeform: false,
+      isModel: false,
+      isStrip: false,
+      isThinking: false,
+      isCollapse: true,
+      collapseEnabled: collapseResult,
+    };
+  }
+
+  return { content: trimmed, conditional: false, isRespond: false, isRetry: false, isAvatar: false, isLockedDirective: false, isLockedFact: false, isStream: false, isMemory: false, isContext: false, isFreeform: false, isModel: false, isStrip: false, isCollapse: false, isThinking: false };
 }
 
 /**
@@ -1621,6 +1693,29 @@ function parseThinkingDirective(content: string): ThinkingLevel | null {
 }
 
 /**
+ * Parse a $collapse directive.
+ * Returns null if not a collapse directive, or a boolean indicating whether to collapse.
+ *
+ * Syntax:
+ * - $collapse → enable collapsing (explicit true, same as default)
+ * - $collapse false → disable collapsing adjacent same-role messages
+ */
+function parseCollapseDirective(content: string): boolean | null {
+  if (!content.startsWith(COLLAPSE_SIGIL)) {
+    return null;
+  }
+  const rest = content.slice(COLLAPSE_SIGIL.length);
+  // Must be bare $collapse or $collapse followed by space
+  if (rest !== "" && !rest.startsWith(" ")) {
+    return null;
+  }
+  const trimmed = rest.trim().toLowerCase();
+  if (trimmed === "") return true;
+  if (trimmed === "false") return false;
+  return null; // Has unrecognized content → not a valid directive
+}
+
+/**
  * Parse a $memory directive.
  * Returns null if not a memory directive, or the scope.
  *
@@ -1767,6 +1862,8 @@ export interface EvaluatedFacts {
   stripPatterns: string[] | null;
   /** Thinking level from $thinking directive. null = no directive (use default minimal for Google) */
   thinkingLevel: ThinkingLevel | null;
+  /** Whether to collapse adjacent same-role messages. null = no directive (default: true) */
+  collapseMessages: boolean | null;
 }
 
 /**
@@ -1792,6 +1889,7 @@ export interface EvaluatedFactsDefaults {
   stripPatterns?: string[] | null;
   shouldRespond?: boolean | null;
   thinkingLevel?: ThinkingLevel | null;
+  collapseMessages?: boolean | null;
 }
 
 export function evaluateFacts(
@@ -1814,6 +1912,7 @@ export function evaluateFacts(
   let modelSpec: string | null = defaults?.modelSpec ?? null;
   let stripPatterns: string[] | null = defaults?.stripPatterns ?? null;
   let thinkingLevel: ThinkingLevel | null = defaults?.thinkingLevel ?? null;
+  let collapseMessages: boolean | null = defaults?.collapseMessages ?? null;
 
   // Strip comments first
   const uncommented = stripComments(facts);
@@ -1904,10 +2003,16 @@ export function evaluateFacts(
       continue;
     }
 
+    // Handle $collapse directives - last one wins, strip from LLM context
+    if (parsed.isCollapse) {
+      collapseMessages = parsed.collapseEnabled ?? true;
+      continue;
+    }
+
     results.push(parsed.content);
   }
 
-  return { facts: results, shouldRespond, respondSource, retryMs, avatarUrl, isLocked, lockedFacts, streamMode, streamDelimiter, memoryScope, contextExpr, isFreeform, modelSpec, stripPatterns, thinkingLevel };
+  return { facts: results, shouldRespond, respondSource, retryMs, avatarUrl, isLocked, lockedFacts, streamMode, streamDelimiter, memoryScope, contextExpr, isFreeform, modelSpec, stripPatterns, thinkingLevel, collapseMessages };
 }
 
 // =============================================================================

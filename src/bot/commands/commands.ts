@@ -2122,6 +2122,7 @@ registerCommand({
       modelSpec: result.modelSpec,
       stripPatterns: result.stripPatterns,
       thinkingLevel: result.thinkingLevel,
+      collapseMessages: result.collapseMessages,
       template: entity.template,
       systemTemplate: entity.system_template,
       exprContext: ctx2,

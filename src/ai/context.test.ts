@@ -20,6 +20,7 @@ function makeEntity(overrides: Partial<EvaluatedEntity> & { name: string; id: nu
     modelSpec: null,
     stripPatterns: null,
     thinkingLevel: null,
+    collapseMessages: null,
     template: null,
     systemTemplate: null,
     ...overrides,
