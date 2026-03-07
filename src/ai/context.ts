@@ -100,8 +100,8 @@ export interface StructuredMessage {
 // =============================================================================
 
 export type TextPart = { type: "text"; text: string };
-/** Image passed by URL; the AI SDK handles provider-specific encoding */
-export type ImagePart = { type: "image"; image: string };
+/** Image passed by URL (public CDN) or raw bytes (Discord CDN, fetched + cached) */
+export type ImagePart = { type: "image"; image: string | Buffer; mimeType?: string };
 /** Document passed as base64-encoded bytes */
 export type FilePart = { type: "file"; data: string; mimeType: string };
 export type ContentPart = TextPart | ImagePart | FilePart;

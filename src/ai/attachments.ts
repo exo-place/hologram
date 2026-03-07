@@ -91,6 +91,20 @@ export async function resolveAttachmentMarkers(
 }
 
 // =============================================================================
+// Helpers
+// =============================================================================
+
+const DISCORD_CDN_HOSTS = new Set(["cdn.discordapp.com", "media.discordapp.net"]);
+
+function isDiscordCdnUrl(url: string): boolean {
+  try {
+    return DISCORD_CDN_HOSTS.has(new URL(url).hostname);
+  } catch {
+    return false;
+  }
+}
+
+// =============================================================================
 // Per-Attachment Routing
 // =============================================================================
 
@@ -104,6 +118,10 @@ async function resolveAttachment(
   const isImage = mimeType.startsWith("image/");
 
   if (isImage && supportsVision(providerName)) {
+    if (isDiscordCdnUrl(url)) {
+      const { data, contentType } = await fetchAndCacheAttachment(url);
+      return { type: "image", image: data, mimeType: contentType };
+    }
     return { type: "image", image: url };
   }
 
