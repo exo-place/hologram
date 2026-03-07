@@ -43,6 +43,12 @@ Not everyone needs to respond to every message. Only respond as those who would 
       {{ msg.author }}: {{ msg.content }}
       {%- for embed in msg.embeds %}
       <embed>{{ embed.toJSON() }}</embed>
+      {%- if embed.image and embed.image.url %}
+      {{ attach(embed.image.url, "image/jpeg") }}
+      {%- endif %}
+      {%- if embed.thumbnail and embed.thumbnail.url %}
+      {{ attach(embed.thumbnail.url, "image/jpeg") }}
+      {%- endif %}
       {%- endfor %}
       {%- for attachment in msg.attachments %}
       {{ attach(attachment.url, attachment.content_type) }}
