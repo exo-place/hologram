@@ -57,12 +57,25 @@ export function configureLogger(options: Partial<LoggerConfig>): void {
 }
 
 /**
- * JSON.stringify replacer that converts binary data (Uint8Array, Buffer) to a
- * compact `[Uint8Array: N bytes]` summary instead of a giant number array.
+ * JSON.stringify replacer that converts binary data to a compact summary.
+ *
+ * Uint8Array → "[Uint8Array: N bytes]"
+ * Buffer.toJSON() output ({ type:"Buffer", data:[...] }) → "[Buffer: N bytes]"
+ * The Buffer case must be handled separately because Buffer.prototype.toJSON()
+ * converts the Buffer to a plain object *before* the replacer is called.
  */
 function binaryRedactReplacer(_key: string, value: unknown): unknown {
   if (value instanceof Uint8Array) {
     return `[Uint8Array: ${value.byteLength} bytes]`;
+  }
+  // Buffer.toJSON() returns { type: 'Buffer', data: number[] } — replacer sees this, not the Buffer
+  if (
+    value !== null &&
+    typeof value === "object" &&
+    (value as Record<string, unknown>).type === "Buffer" &&
+    Array.isArray((value as Record<string, unknown>).data)
+  ) {
+    return `[Buffer: ${((value as Record<string, unknown>).data as unknown[]).length} bytes]`;
   }
   return value;
 }

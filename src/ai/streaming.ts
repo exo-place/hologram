@@ -135,6 +135,18 @@ export async function* handleMessageStreaming(
       stopWhen: stepCountIs(5),
     });
 
+    // Attach early .catch() to result.text to prevent unhandled promise rejection.
+    // AI_NoOutputGeneratedError is stored in the text promise (not thrown through textStream),
+    // so without this it surfaces as an unhandled rejection even when we handle it elsewhere.
+    let textPromiseError: Error | null = null;
+    const handledTextPromise = Promise.resolve(result.text).catch((err: unknown) => {
+      if (err instanceof Error && err.name === "AI_NoOutputGeneratedError") {
+        textPromiseError = err;
+        return ""; // normalise to empty so we can check generatedFiles below
+      }
+      throw err; // real errors still propagate
+    });
+
     // Wrap textStream to accumulate full text (avoids ReadableStream locked
     // error when accessing result.text after consuming textStream)
     let accumulatedText = "";
@@ -148,28 +160,27 @@ export async function* handleMessageStreaming(
     // Use different streaming logic based on single vs multiple entities
     // In freeform mode, treat multi-entity like single (no Name: prefix parsing)
     const isFreeform = entities.some(e => e.isFreeform);
-    let streamNoOutput = false;
-    try {
-      if (entities.length === 1 || isFreeform) {
-        yield* streamSingleEntity(trackedStream, streamMode, delimiter, entities[0]?.name);
-      } else {
-        yield* streamMultiEntityNamePrefix(trackedStream, entities, streamMode, delimiter);
-      }
-    } catch (streamErr) {
-      // AI_NoOutputGeneratedError is thrown when the stream produces no text (e.g. image-only response).
-      // Don't rethrow yet — check if files were generated before deciding it's an error.
-      if (streamErr instanceof Error && streamErr.name === "AI_NoOutputGeneratedError") {
-        streamNoOutput = true;
-      } else {
-        throw streamErr;
-      }
+    if (entities.length === 1 || isFreeform) {
+      yield* streamSingleEntity(trackedStream, streamMode, delimiter, entities[0]?.name);
+    } else {
+      yield* streamMultiEntityNamePrefix(trackedStream, entities, streamMode, delimiter);
     }
 
-    // Collect generated image files (e.g. from gemini-2.0-flash-image-generation)
-    const rawFiles = await result.files;
-    const generatedFiles: GeneratedFile[] = (rawFiles ?? [])
-      .filter(f => f.mediaType.startsWith("image/"))
-      .map(f => ({ data: f.uint8Array, mediaType: f.mediaType }));
+    // Wait for text promise to settle (catches AI_NoOutputGeneratedError from flush)
+    await handledTextPromise;
+    const streamNoOutput = textPromiseError !== null;
+
+    // Collect generated image files (e.g. from gemini-2.0-flash-image-generation).
+    // When streamNoOutput is true, _steps was rejected so result.files also rejects — skip it.
+    const generatedFiles: GeneratedFile[] = [];
+    if (!streamNoOutput) {
+      const rawFiles = await result.files;
+      for (const f of rawFiles ?? []) {
+        if (f.mediaType.startsWith("image/")) {
+          generatedFiles.push({ data: f.uint8Array, mediaType: f.mediaType });
+        }
+      }
+    }
 
     if (generatedFiles.length > 0) {
       yield { type: "files", files: generatedFiles };
