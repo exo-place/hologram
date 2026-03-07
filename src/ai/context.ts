@@ -44,6 +44,8 @@ export interface EvaluatedEntity {
   thinkingLevel: ThinkingLevel | null;
   /** Which roles to collapse adjacent messages for. null = no directive (default: all roles) */
   collapseMessages: CollapseRoles | null;
+  /** Whether provider safety filters should be relaxed (from $nsfw directive or channel.is_nsfw default) */
+  nsfwRelaxed: boolean;
   /** Custom system prompt template (null = use default formatting) */
   template: string | null;
   /** Custom system prompt for AI SDK `system` parameter (null = use global default) */

@@ -2145,3 +2145,78 @@ describe("$collapse directive", () => {
     expect(result.facts).toContain("$collapse badvalue");
   });
 });
+
+describe("$nsfw directive", () => {
+  test("$nsfw (bare) → nsfwRelaxed: true", () => {
+    const ctx = testContext({ channel: { id: "", name: "", description: "", is_nsfw: false, type: "text", mention: "" } });
+    const result = evaluateFacts(["$nsfw", "some fact"], ctx);
+    expect(result.nsfwRelaxed).toBe(true);
+  });
+
+  test("$nsfw true → nsfwRelaxed: true", () => {
+    const ctx = testContext({ channel: { id: "", name: "", description: "", is_nsfw: false, type: "text", mention: "" } });
+    const result = evaluateFacts(["$nsfw true", "some fact"], ctx);
+    expect(result.nsfwRelaxed).toBe(true);
+  });
+
+  test("$nsfw false → nsfwRelaxed: false", () => {
+    const ctx = testContext({ channel: { id: "", name: "", description: "", is_nsfw: true, type: "text", mention: "" } });
+    const result = evaluateFacts(["$nsfw false", "some fact"], ctx);
+    expect(result.nsfwRelaxed).toBe(false);
+  });
+
+  test("$nsfw channel.is_nsfw with NSFW channel → nsfwRelaxed: true", () => {
+    const ctx = testContext({ channel: { id: "", name: "", description: "", is_nsfw: true, type: "text", mention: "" } });
+    const result = evaluateFacts(["$nsfw channel.is_nsfw", "some fact"], ctx);
+    expect(result.nsfwRelaxed).toBe(true);
+  });
+
+  test("$nsfw channel.is_nsfw with non-NSFW channel → nsfwRelaxed: false", () => {
+    const ctx = testContext({ channel: { id: "", name: "", description: "", is_nsfw: false, type: "text", mention: "" } });
+    const result = evaluateFacts(["$nsfw channel.is_nsfw", "some fact"], ctx);
+    expect(result.nsfwRelaxed).toBe(false);
+  });
+
+  test("no directive, NSFW channel → nsfwRelaxed: true (implicit default)", () => {
+    const ctx = testContext({ channel: { id: "", name: "", description: "", is_nsfw: true, type: "text", mention: "" } });
+    const result = evaluateFacts(["some fact"], ctx);
+    expect(result.nsfwRelaxed).toBe(true);
+  });
+
+  test("no directive, non-NSFW channel → nsfwRelaxed: false (implicit default)", () => {
+    const ctx = testContext({ channel: { id: "", name: "", description: "", is_nsfw: false, type: "text", mention: "" } });
+    const result = evaluateFacts(["some fact"], ctx);
+    expect(result.nsfwRelaxed).toBe(false);
+  });
+
+  test("$nsfw fact is stripped from LLM-visible facts", () => {
+    const ctx = testContext();
+    const result = evaluateFacts(["$nsfw true", "some fact"], ctx);
+    expect(result.facts).not.toContain("$nsfw true");
+    expect(result.facts).toEqual(["some fact"]);
+  });
+
+  test("last $nsfw directive wins", () => {
+    const ctx = testContext({ channel: { id: "", name: "", description: "", is_nsfw: false, type: "text", mention: "" } });
+    const result = evaluateFacts(["$nsfw true", "$nsfw false"], ctx);
+    expect(result.nsfwRelaxed).toBe(false);
+  });
+
+  test("conditional $nsfw triggered → nsfwRelaxed: true", () => {
+    const result = evaluateFacts(["$if mentioned: $nsfw true", "some fact"], makeContext({ mentioned: true }));
+    expect(result.nsfwRelaxed).toBe(true);
+  });
+
+  test("conditional $nsfw not triggered → falls back to implicit default (false)", () => {
+    const result = evaluateFacts(["$if mentioned: $nsfw true", "some fact"], makeContext({ mentioned: false }));
+    // No directive triggered; channel.is_nsfw not set in makeContext → false
+    expect(result.nsfwRelaxed).toBe(false);
+  });
+
+  test("$nsfwfoo is not treated as $nsfw directive", () => {
+    const ctx = testContext();
+    const result = evaluateFacts(["$nsfwfoo", "some fact"], ctx);
+    expect(result.nsfwRelaxed).toBe(false);
+    expect(result.facts).toContain("$nsfwfoo");
+  });
+});

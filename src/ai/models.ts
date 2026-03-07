@@ -246,6 +246,39 @@ export function buildThinkingOptions(
 }
 
 // =============================================================================
+// NSFW / Content Safety
+// =============================================================================
+
+const GOOGLE_NSFW_SAFETY_SETTINGS: JSONObject[] = [
+  { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "OFF" },
+  { category: "HARM_CATEGORY_HATE_SPEECH",       threshold: "OFF" },
+  { category: "HARM_CATEGORY_HARASSMENT",        threshold: "OFF" },
+  { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "OFF" },
+  { category: "HARM_CATEGORY_CIVIC_INTEGRITY",   threshold: "OFF" },
+];
+
+/**
+ * Build provider-specific options to relax content safety filters.
+ * Returns undefined if not relaxed or provider doesn't support safetySettings.
+ * Currently only Google and Google Vertex expose safetySettings in the AI SDK.
+ */
+export function buildNsfwOptions(
+  providerName: string,
+  relaxed: boolean,
+): Record<string, JSONObject> | undefined {
+  if (!relaxed) return undefined;
+  switch (providerName) {
+    case "google":
+    case "google-vertex": {
+      const key = providerName === "google-vertex" ? "vertex" : "google";
+      return { [key]: { safetySettings: GOOGLE_NSFW_SAFETY_SETTINGS } };
+    }
+    default:
+      return undefined;
+  }
+}
+
+// =============================================================================
 // Inference Error
 // =============================================================================
 

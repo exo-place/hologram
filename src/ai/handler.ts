@@ -1,5 +1,5 @@
 import { generateText, stepCountIs } from "ai";
-import { getLanguageModel, DEFAULT_MODEL, InferenceError, parseModelSpec, buildThinkingOptions } from "./models";
+import { getLanguageModel, DEFAULT_MODEL, InferenceError, parseModelSpec, buildThinkingOptions, buildNsfwOptions } from "./models";
 import { debug, error } from "../logger";
 import {
   type EvaluatedEntity,
@@ -72,6 +72,7 @@ export async function handleMessage(ctx: MessageContext): Promise<ResponseResult
   const modelSpec = evaluated[0]?.modelSpec ?? DEFAULT_MODEL;
   const { providerName, modelName } = parseModelSpec(modelSpec);
   const thinkingLevel = evaluated[0]?.thinkingLevel;
+  const nsfwRelaxed = evaluated[0]?.nsfwRelaxed ?? false;
 
   try {
     const model = getLanguageModel(modelSpec);
@@ -85,7 +86,11 @@ export async function handleMessage(ctx: MessageContext): Promise<ResponseResult
     // Normalize messages for provider-specific restrictions (e.g., Google doesn't have system role)
     const normalizedMessages = normalizeMessagesForProvider(resolvedMessages, providerName);
 
-    const providerOptions = buildThinkingOptions(providerName, modelName, thinkingLevel);
+    const thinkingOptions = buildThinkingOptions(providerName, modelName, thinkingLevel);
+    const nsfwOptions = buildNsfwOptions(providerName, nsfwRelaxed);
+    const providerOptions = (thinkingOptions || nsfwOptions)
+      ? { ...thinkingOptions, ...nsfwOptions }
+      : undefined;
 
     const result = await generateText({
       model,

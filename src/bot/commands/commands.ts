@@ -21,6 +21,7 @@ import {
   deleteEntity,
   transferOwnership,
   addFact,
+  removeFactByContent,
   setFacts,
   type EntityWithFacts,
   getPermissionDefaults,
@@ -649,6 +650,15 @@ registerCommand({
         (config?.config_collapse ?? "").split(/\s+/).filter(Boolean)
       );
 
+      // Pre-populate $nsfw from entity facts
+      const nsfwFact = entity.facts.find(f => {
+        const c = f.content.trim();
+        return c === "$nsfw" || c.startsWith("$nsfw ");
+      });
+      const nsfwValue = nsfwFact
+        ? nsfwFact.content.trim().slice("$nsfw".length).trim()
+        : "";
+
       const advancedLabels = [
         {
           type: MessageComponentTypes.Label,
@@ -680,6 +690,19 @@ registerCommand({
               { label: "Assistant messages", value: "assistant", default: currentCollapseRoles.has("assistant") },
               { label: "System messages", value: "system", default: currentCollapseRoles.has("system") },
             ],
+          },
+        },
+        {
+          type: MessageComponentTypes.Label,
+          label: "Safety Filters (NSFW)",
+          description: "Expression for relaxing provider safety filters (default: channel.is_nsfw)",
+          component: {
+            type: MessageComponentTypes.TextInput,
+            customId: "nsfw",
+            style: TextStyles.Short,
+            value: nsfwValue,
+            required: false,
+            placeholder: "channel.is_nsfw",
           },
         },
       ];
@@ -1105,6 +1128,20 @@ registerModalHandler("edit-advanced", async (bot, interaction, _textValues) => {
       ? "none"
       : collapseSelected.join(" ");
 
+  // NSFW: expression stored as $nsfw fact (empty = remove directive, use implicit default)
+  const nsfwRaw = textValues.nsfw?.trim() || null;
+  // Remove any existing $nsfw facts, then add new one if non-empty
+  const existingFacts = entity.facts.map(f => f.content);
+  for (const fc of existingFacts) {
+    const trimmed = fc.trim();
+    if (trimmed === "$nsfw" || trimmed.startsWith("$nsfw ")) {
+      removeFactByContent(entityId, fc);
+    }
+  }
+  if (nsfwRaw !== null) {
+    addFact(entityId, `$nsfw ${nsfwRaw}`);
+  }
+
   setEntityConfig(entityId, {
     config_thinking: thinking,
     config_collapse: collapseRaw,
@@ -1113,6 +1150,7 @@ registerModalHandler("edit-advanced", async (bot, interaction, _textValues) => {
   const changes: string[] = [];
   if (thinking) changes.push(`thinking: ${thinking}`);
   if (collapseRaw) changes.push(`collapse: ${collapseRaw}`);
+  if (nsfwRaw !== null) changes.push(`nsfw: ${nsfwRaw}`);
   if (changes.length === 0) changes.push("all cleared");
 
   await respond(bot, interaction, `Updated advanced config for "${entity.name}": ${changes.join(", ")}`, true);
@@ -2178,6 +2216,7 @@ registerCommand({
       stripPatterns: result.stripPatterns,
       thinkingLevel: result.thinkingLevel,
       collapseMessages: result.collapseMessages,
+      nsfwRelaxed: result.nsfwRelaxed,
       template: entity.template,
       systemTemplate: entity.system_template,
       exprContext: ctx2,

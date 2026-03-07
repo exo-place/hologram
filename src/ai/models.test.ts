@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseModelSpec, InferenceError, supportsImageOutput } from "./models";
+import { parseModelSpec, InferenceError, supportsImageOutput, buildNsfwOptions } from "./models";
 
 describe("parseModelSpec", () => {
   test("parses provider:model format", () => {
@@ -83,5 +83,44 @@ describe("supportsImageOutput", () => {
 
   test("returns false for unknown model", () => {
     expect(supportsImageOutput("gpt-4o")).toBe(false);
+  });
+});
+
+describe("buildNsfwOptions", () => {
+  test("google relaxed returns safetySettings with OFF thresholds", () => {
+    const result = buildNsfwOptions("google", true);
+    expect(result).toBeDefined();
+    expect(result!.google).toBeDefined();
+    const settings = (result!.google as { safetySettings: unknown[] }).safetySettings;
+    expect(Array.isArray(settings)).toBe(true);
+    expect(settings.length).toBeGreaterThan(0);
+    for (const s of settings) {
+      expect((s as { threshold: string }).threshold).toBe("OFF");
+    }
+  });
+
+  test("google not relaxed returns undefined", () => {
+    expect(buildNsfwOptions("google", false)).toBeUndefined();
+  });
+
+  test("google-vertex relaxed returns vertex.safetySettings", () => {
+    const result = buildNsfwOptions("google-vertex", true);
+    expect(result).toBeDefined();
+    expect(result!.vertex).toBeDefined();
+    const settings = (result!.vertex as { safetySettings: unknown[] }).safetySettings;
+    expect(Array.isArray(settings)).toBe(true);
+    expect(settings.length).toBeGreaterThan(0);
+  });
+
+  test("anthropic relaxed returns undefined (provider not supported)", () => {
+    expect(buildNsfwOptions("anthropic", true)).toBeUndefined();
+  });
+
+  test("openai relaxed returns undefined (provider not supported)", () => {
+    expect(buildNsfwOptions("openai", true)).toBeUndefined();
+  });
+
+  test("unknown provider relaxed returns undefined", () => {
+    expect(buildNsfwOptions("unknown-provider", true)).toBeUndefined();
   });
 });

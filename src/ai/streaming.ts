@@ -1,5 +1,5 @@
 import { streamText, stepCountIs } from "ai";
-import { getLanguageModel, DEFAULT_MODEL, InferenceError, parseModelSpec, buildThinkingOptions } from "./models";
+import { getLanguageModel, DEFAULT_MODEL, InferenceError, parseModelSpec, buildThinkingOptions, buildNsfwOptions } from "./models";
 import { debug, error } from "../logger";
 import {
   type EvaluatedEntity,
@@ -106,6 +106,7 @@ export async function* handleMessageStreaming(
   const modelSpec = entities[0]?.modelSpec ?? DEFAULT_MODEL;
   const { providerName, modelName } = parseModelSpec(modelSpec);
   const thinkingLevel = entities[0]?.thinkingLevel;
+  const nsfwRelaxed = entities[0]?.nsfwRelaxed ?? false;
 
   try {
     const model = getLanguageModel(modelSpec);
@@ -119,7 +120,11 @@ export async function* handleMessageStreaming(
     // Normalize messages for provider-specific restrictions (e.g., Google doesn't have system role)
     const normalizedMessages = normalizeMessagesForProvider(resolvedMessages, providerName);
 
-    const providerOptions = buildThinkingOptions(providerName, modelName, thinkingLevel);
+    const thinkingOptions = buildThinkingOptions(providerName, modelName, thinkingLevel);
+    const nsfwOptions = buildNsfwOptions(providerName, nsfwRelaxed);
+    const providerOptions = (thinkingOptions || nsfwOptions)
+      ? { ...thinkingOptions, ...nsfwOptions }
+      : undefined;
 
     const result = streamText({
       model,

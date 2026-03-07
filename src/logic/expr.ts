@@ -855,6 +855,7 @@ const MODEL_SIGIL = "$model ";
 const STRIP_SIGIL = "$strip";
 const THINKING_SIGIL = "$thinking";
 const COLLAPSE_SIGIL = "$collapse";
+const NSFW_SIGIL = "$nsfw";
 
 /** Memory retrieval scope */
 export type MemoryScope = "none" | "channel" | "guild" | "global";
@@ -917,6 +918,10 @@ export interface ProcessedFact {
   isCollapse: boolean;
   /** For $collapse directives, the set of roles whose adjacent messages should be collapsed */
   collapseRoles?: CollapseRoles;
+  /** True if this fact is a $nsfw directive */
+  isNsfw: boolean;
+  /** For $nsfw directives, the expression string (e.g. "channel.is_nsfw", "true", "false") */
+  nsfwExpr?: string;
 }
 
 /** Parse expression, expect ':', return position after ':' */
@@ -960,6 +965,7 @@ export function parseFact(fact: string): ProcessedFact {
         isStrip: false,
         isThinking: false,
         isCollapse: false,
+        isNsfw: false,
       };
     } else {
       // $locked prefix - recursively parse the rest, then mark as locked
@@ -996,6 +1002,7 @@ export function parseFact(fact: string): ProcessedFact {
         isStrip: false,
         isThinking: false,
         isCollapse: false,
+        isNsfw: false,
       };
     }
 
@@ -1020,6 +1027,7 @@ export function parseFact(fact: string): ProcessedFact {
         isStrip: false,
         isThinking: false,
         isCollapse: false,
+        isNsfw: false,
       };
     }
 
@@ -1045,6 +1053,7 @@ export function parseFact(fact: string): ProcessedFact {
         isStrip: false,
         isThinking: false,
         isCollapse: false,
+        isNsfw: false,
       };
     }
 
@@ -1069,6 +1078,7 @@ export function parseFact(fact: string): ProcessedFact {
         isStrip: false,
         isThinking: false,
         isCollapse: false,
+        isNsfw: false,
       };
     }
 
@@ -1093,6 +1103,7 @@ export function parseFact(fact: string): ProcessedFact {
         isStrip: false,
         isThinking: false,
         isCollapse: false,
+        isNsfw: false,
       };
     }
 
@@ -1115,6 +1126,7 @@ export function parseFact(fact: string): ProcessedFact {
         isStrip: false,
         isThinking: false,
         isCollapse: false,
+        isNsfw: false,
       };
     }
 
@@ -1139,6 +1151,7 @@ export function parseFact(fact: string): ProcessedFact {
         isStrip: false,
         isThinking: false,
         isCollapse: false,
+        isNsfw: false,
       };
     }
 
@@ -1163,6 +1176,7 @@ export function parseFact(fact: string): ProcessedFact {
         stripPatterns: stripResultCond,
         isThinking: false,
         isCollapse: false,
+        isNsfw: false,
       };
     }
 
@@ -1186,6 +1200,7 @@ export function parseFact(fact: string): ProcessedFact {
         isStrip: false,
         isThinking: true,
         isCollapse: false,
+        isNsfw: false,
         thinkingLevel: thinkingResultCond,
       };
     }
@@ -1211,10 +1226,36 @@ export function parseFact(fact: string): ProcessedFact {
         isThinking: false,
         isCollapse: true,
         collapseRoles: collapseResultCond,
+        isNsfw: false,
       };
     }
 
-    return { content, conditional: true, expression, isRespond: false, isRetry: false, isAvatar: false, isLockedDirective: false, isLockedFact: false, isStream: false, isMemory: false, isContext: false, isFreeform: false, isModel: false, isStrip: false, isCollapse: false, isThinking: false };
+    // Check if content is a $nsfw directive
+    const nsfwResultCond = parseNsfwDirective(content);
+    if (nsfwResultCond !== null) {
+      return {
+        content,
+        conditional: true,
+        expression,
+        isRespond: false,
+        isRetry: false,
+        isAvatar: false,
+        isLockedDirective: false,
+        isLockedFact: false,
+        isStream: false,
+        isMemory: false,
+        isContext: false,
+        isFreeform: false,
+        isModel: false,
+        isStrip: false,
+        isThinking: false,
+        isCollapse: false,
+        isNsfw: true,
+        nsfwExpr: nsfwResultCond,
+      };
+    }
+
+    return { content, conditional: true, expression, isRespond: false, isRetry: false, isAvatar: false, isLockedDirective: false, isLockedFact: false, isStream: false, isMemory: false, isContext: false, isFreeform: false, isModel: false, isStrip: false, isCollapse: false, isThinking: false, isNsfw: false };
   }
 
   // Check for unconditional $respond
@@ -1237,6 +1278,7 @@ export function parseFact(fact: string): ProcessedFact {
       isStrip: false,
       isThinking: false,
       isCollapse: false,
+      isNsfw: false,
     };
   }
 
@@ -1260,6 +1302,7 @@ export function parseFact(fact: string): ProcessedFact {
       isStrip: false,
       isThinking: false,
       isCollapse: false,
+      isNsfw: false,
     };
   }
 
@@ -1283,6 +1326,7 @@ export function parseFact(fact: string): ProcessedFact {
       isStrip: false,
       isThinking: false,
       isCollapse: false,
+      isNsfw: false,
     };
   }
 
@@ -1307,6 +1351,7 @@ export function parseFact(fact: string): ProcessedFact {
       isStrip: false,
       isThinking: false,
       isCollapse: false,
+      isNsfw: false,
     };
   }
 
@@ -1330,6 +1375,7 @@ export function parseFact(fact: string): ProcessedFact {
       isStrip: false,
       isThinking: false,
       isCollapse: false,
+      isNsfw: false,
     };
   }
 
@@ -1353,6 +1399,7 @@ export function parseFact(fact: string): ProcessedFact {
       isStrip: false,
       isThinking: false,
       isCollapse: false,
+      isNsfw: false,
     };
   }
 
@@ -1374,6 +1421,7 @@ export function parseFact(fact: string): ProcessedFact {
         isStrip: false,
         isThinking: false,
         isCollapse: false,
+        isNsfw: false,
       };
   }
 
@@ -1397,6 +1445,7 @@ export function parseFact(fact: string): ProcessedFact {
       isStrip: false,
       isThinking: false,
       isCollapse: false,
+      isNsfw: false,
     };
   }
 
@@ -1420,6 +1469,7 @@ export function parseFact(fact: string): ProcessedFact {
       stripPatterns: stripResult,
       isThinking: false,
       isCollapse: false,
+      isNsfw: false,
     };
   }
 
@@ -1442,6 +1492,7 @@ export function parseFact(fact: string): ProcessedFact {
       isStrip: false,
       isThinking: true,
       isCollapse: false,
+      isNsfw: false,
       thinkingLevel: thinkingResult,
     };
   }
@@ -1466,10 +1517,35 @@ export function parseFact(fact: string): ProcessedFact {
       isThinking: false,
       isCollapse: true,
       collapseRoles: collapseResult,
+      isNsfw: false,
     };
   }
 
-  return { content: trimmed, conditional: false, isRespond: false, isRetry: false, isAvatar: false, isLockedDirective: false, isLockedFact: false, isStream: false, isMemory: false, isContext: false, isFreeform: false, isModel: false, isStrip: false, isCollapse: false, isThinking: false };
+  // Check for unconditional $nsfw
+  const nsfwResult = parseNsfwDirective(trimmed);
+  if (nsfwResult !== null) {
+    return {
+      content: trimmed,
+      conditional: false,
+      isRespond: false,
+      isRetry: false,
+      isAvatar: false,
+      isLockedDirective: false,
+      isLockedFact: false,
+      isStream: false,
+      isMemory: false,
+      isContext: false,
+      isFreeform: false,
+      isModel: false,
+      isStrip: false,
+      isThinking: false,
+      isCollapse: false,
+      isNsfw: true,
+      nsfwExpr: nsfwResult,
+    };
+  }
+
+  return { content: trimmed, conditional: false, isRespond: false, isRetry: false, isAvatar: false, isLockedDirective: false, isLockedFact: false, isStream: false, isMemory: false, isContext: false, isFreeform: false, isModel: false, isStrip: false, isCollapse: false, isThinking: false, isNsfw: false };
 }
 
 /**
@@ -1743,6 +1819,25 @@ function parseCollapseDirective(content: string): CollapseRoles | null {
 }
 
 /**
+ * Parse a $nsfw directive.
+ * Returns the expression string if valid, or null if not a $nsfw directive.
+ *
+ * Syntax:
+ * - $nsfw → always relax (evaluates "true")
+ * - $nsfw true → always relax
+ * - $nsfw false → never relax
+ * - $nsfw channel.is_nsfw → default behavior (explicit)
+ * - $nsfw server.nsfw_level == "explicit" → custom expression
+ */
+function parseNsfwDirective(content: string): string | null {
+  if (!content.startsWith(NSFW_SIGIL)) return null;
+  const rest = content.slice(NSFW_SIGIL.length);
+  if (rest !== "" && !rest.startsWith(" ")) return null;
+  const trimmed = rest.trim();
+  return trimmed === "" ? "true" : trimmed;
+}
+
+/**
  * Parse a $memory directive.
  * Returns null if not a memory directive, or the scope.
  *
@@ -1891,6 +1986,8 @@ export interface EvaluatedFacts {
   thinkingLevel: ThinkingLevel | null;
   /** Which roles to collapse adjacent messages for. null = no directive (default: all roles) */
   collapseMessages: CollapseRoles | null;
+  /** Whether provider safety filters should be relaxed. Defaults to channel.is_nsfw if no directive */
+  nsfwRelaxed: boolean;
 }
 
 /**
@@ -1940,6 +2037,7 @@ export function evaluateFacts(
   let stripPatterns: string[] | null = defaults?.stripPatterns ?? null;
   let thinkingLevel: ThinkingLevel | null = defaults?.thinkingLevel ?? null;
   let collapseMessages: CollapseRoles | null = defaults?.collapseMessages ?? null;
+  let nsfwExprStr: string | null = null; // null = no directive, use channel.is_nsfw default
 
   // Strip comments first
   const uncommented = stripComments(facts);
@@ -2036,10 +2134,19 @@ export function evaluateFacts(
       continue;
     }
 
+    // Handle $nsfw directives - last one wins, strip from LLM context
+    if (parsed.isNsfw) {
+      nsfwExprStr = parsed.nsfwExpr ?? "true";
+      continue;
+    }
+
     results.push(parsed.content);
   }
 
-  return { facts: results, shouldRespond, respondSource, retryMs, avatarUrl, isLocked, lockedFacts, streamMode, streamDelimiter, memoryScope, contextExpr, isFreeform, modelSpec, stripPatterns, thinkingLevel, collapseMessages };
+  const nsfwRelaxed = nsfwExprStr !== null
+    ? !!evalExpr(nsfwExprStr, context)
+    : !!context.channel.is_nsfw;
+  return { facts: results, shouldRespond, respondSource, retryMs, avatarUrl, isLocked, lockedFacts, streamMode, streamDelimiter, memoryScope, contextExpr, isFreeform, modelSpec, stripPatterns, thinkingLevel, collapseMessages, nsfwRelaxed };
 }
 
 // =============================================================================
