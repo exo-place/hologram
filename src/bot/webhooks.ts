@@ -263,15 +263,32 @@ export async function executeWebhook(
         avatarUrl: avatarUrl ?? DEFAULT_AVATAR,
         wait: true,
         ...(threadId ? { threadId: BigInt(threadId) } : {}),
-        ...(chunkFiles ? { file: chunkFiles } : {}),
       };
       // Only include content if non-empty (files-only sends have empty content)
       if (chunk) payload.content = chunk;
-      const result = await bot!.helpers.executeWebhook(
-        BigInt(webhook.webhookId),
-        webhook.webhookToken,
-        payload
-      );
+
+      let result;
+      if (chunkFiles) {
+        // Discordeno's helpers.executeWebhook doesn't pass files at the request level,
+        // so multipart form data is never used. Use bot.rest.post directly so files
+        // are sent alongside payload_json in proper multipart encoding.
+        const route = bot!.rest.routes.webhooks.webhook(
+          BigInt(webhook.webhookId),
+          webhook.webhookToken,
+          { wait: true, ...(threadId ? { threadId: BigInt(threadId) } : {}) },
+        );
+        result = await bot!.rest.post(route, { body: payload, files: chunkFiles, unauthorized: true });
+        // bot.rest.post returns the raw Discord response (not transformed); extract id
+        if (result && typeof result === "object" && "id" in result) {
+          result = { id: result.id };
+        }
+      } else {
+        result = await bot!.helpers.executeWebhook(
+          BigInt(webhook.webhookId),
+          webhook.webhookToken,
+          payload
+        );
+      }
       if (result?.id) {
         messageIds.push(result.id.toString());
       }
