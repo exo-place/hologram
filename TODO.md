@@ -121,3 +121,4 @@ Current state: message history uses role-based `user`/`assistant` messages via `
 - [ ] Regex literal support in `$if` expressions - `/pattern/` syntax as alternative to string-based `.match()`. Low priority since `.match("pattern")` now works with safe regex validation
 - [ ] `$emojis` macro - expand to list of custom guild emojis for LLM context
 - [ ] Hearing distance / proximity awareness between entities
+- [ ] Multi-reply: single LLM trigger replies to multiple prior messages. Needs careful design — tool call approach (LLM calls `reply(message_id, content)` N times), history context needs to expose `discord_message_id`, interactions with streaming/webhooks/response chain logic all need working out
