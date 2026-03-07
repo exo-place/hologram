@@ -384,10 +384,17 @@ export function renderEntityTemplate(
  * Marker format (plain-text roles):
  * - Open:  <<<HMSG:{nonce}:{role}>>>  (role is system|user|assistant)
  * - Close: <<<HMSG_END:{nonce}>>>
+ *
+ * Attachment marker (inline within message content):
+ * - <<<HATT:{nonce}|{url}|{mimeType}>>>
+ *   Pipe-separated to avoid ambiguity with colons in URLs.
+ *   Resolved after template render to ImagePart / FilePart / text fallback.
  */
 const MARKER_OPEN_PREFIX = "<<<HMSG:";
 const MARKER_CLOSE_PREFIX = "<<<HMSG_END:";
 const MARKER_SUFFIX = ">>>";
+
+const MARKER_HATT_PREFIX = "<<<HATT:";
 
 /** Regex for role validation — only word characters allowed */
 const VALID_ROLE = /^\w+$/;
@@ -400,7 +407,12 @@ export interface ParsedTemplateMessage {
 export interface ParsedTemplateOutput {
   /** All messages including system-role segments */
   messages: ParsedTemplateMessage[];
+  /** Nonce used for HMSG and HATT markers in this render */
+  nonce: string;
 }
+
+/** The nonce prefix used for attachment markers — exported for use in resolveAttachmentMarkers */
+export { MARKER_HATT_PREFIX, MARKER_SUFFIX };
 
 /**
  * Parse structured output from a rendered template.
@@ -408,7 +420,7 @@ export interface ParsedTemplateOutput {
  * (or outside) marker pairs becomes system-role messages. No markers at all =
  * entire output is a single system message (legacy compat).
  */
-export function parseStructuredOutput(rendered: string, nonce: string): ParsedTemplateOutput {
+export function parseStructuredOutput(rendered: string, nonce: string): { messages: ParsedTemplateMessage[] } {
   // Build patterns for open and close markers
   const openPattern = new RegExp(
     `${escapeRegExp(MARKER_OPEN_PREFIX)}${escapeRegExp(nonce)}:(\\w+)${escapeRegExp(MARKER_SUFFIX)}`,
@@ -543,8 +555,23 @@ export const SYSTEM_PROMPT_TEMPLATE = "";
 export const DEFAULT_TEMPLATE = DEFAULT_TEMPLATE_SOURCE;
 
 /**
+ * Build the attach() function for a given nonce.
+ * Emits <<<HATT:{nonce}|{url}|{mimeType}>>> markers inline in template output.
+ * These are resolved after render to ImagePart / FilePart / text fallback.
+ */
+function buildAttachFn(nonce: string): (url: unknown, mimeType: unknown) => string {
+  return (url: unknown, mimeType: unknown) => {
+    const urlStr = String(url ?? "").trim();
+    const mimeStr = String(mimeType ?? "").trim();
+    if (!urlStr) return "";
+    return `${MARKER_HATT_PREFIX}${nonce}|${urlStr}|${mimeStr}${MARKER_SUFFIX}`;
+  };
+}
+
+/**
  * Render a template and parse structured output.
  * Injects a `send_as(role)` macro via `{% call send_as("user") %}...{% endcall %}`.
+ * Injects an `attach(url, mimeType)` function that emits HATT markers.
  * Unmarked text becomes system-role messages. No markers = single system message.
  */
 export function renderStructuredTemplate(
@@ -567,11 +594,14 @@ export function renderStructuredTemplate(
   loader.setInternal(parentName, augmented);
   loader.setMacroDef(macroDef);
 
+  // Inject attach() with nonce captured in closure; don't mutate caller's ctx
+  const augmentedCtx = { ...ctx, attach: buildAttachFn(nonce) };
+
   try {
     // Render via empty child that extends the parent — this triggers the parent
     // render and works uniformly whether or not the source uses {% extends %}
-    const rendered = renderEntityTemplate(`{% extends "${parentName}" %}`, ctx);
-    return parseStructuredOutput(rendered, nonce);
+    const rendered = renderEntityTemplate(`{% extends "${parentName}" %}`, augmentedCtx);
+    return { ...parseStructuredOutput(rendered, nonce), nonce };
   } finally {
     loader.clearInternal(parentName);
     loader.setMacroDef(null);

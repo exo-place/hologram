@@ -1,3 +1,4 @@
+import type { ModelMessage } from "ai";
 import type { CollapseRoles, ExprContext, ThinkingLevel } from "../logic/expr";
 
 // =============================================================================
@@ -95,6 +96,23 @@ export interface StructuredMessage {
 }
 
 // =============================================================================
+// Multimodal Content Parts
+// =============================================================================
+
+export type TextPart = { type: "text"; text: string };
+/** Image passed by URL; the AI SDK handles provider-specific encoding */
+export type ImagePart = { type: "image"; image: string };
+/** Document passed as base64-encoded bytes */
+export type FilePart = { type: "file"; data: string; mimeType: string };
+export type ContentPart = TextPart | ImagePart | FilePart;
+
+/** Message after attachment markers have been resolved to content parts */
+export type ResolvedMessage = {
+  role: "system" | "user" | "assistant";
+  content: string | ContentPart[];
+};
+
+// =============================================================================
 // Provider-Specific Message Normalization
 // =============================================================================
 
@@ -110,18 +128,18 @@ export interface StructuredMessage {
  * @returns Normalized messages array
  */
 export function normalizeMessagesForProvider(
-  messages: StructuredMessage[],
+  messages: ResolvedMessage[],
   providerName: string
-): StructuredMessage[] {
+): ModelMessage[] {
   // Only Google requires this normalization
   if (providerName !== "google" && providerName !== "google-vertex") {
-    return messages;
+    return messages as ModelMessage[];
   }
 
   // Check if there are any system messages
   const hasSystemMessage = messages.some(m => m.role === "system");
   if (!hasSystemMessage) {
-    return messages;
+    return messages as ModelMessage[];
   }
 
   // Convert all system messages to user messages
@@ -130,5 +148,5 @@ export function normalizeMessagesForProvider(
       return { ...msg, role: "user" as const };
     }
     return msg;
-  });
+  }) as ModelMessage[];
 }

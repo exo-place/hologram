@@ -356,7 +356,7 @@ export function buildPromptAndMessages(
   userEntityId?: number | null,
   guildId?: string,
   collapseMessages?: CollapseRoles | null,
-): { systemPrompt: string; messages: StructuredMessage[] } {
+): { systemPrompt: string; messages: StructuredMessage[]; nonce: string } {
   // Fetch history from DB (DESC order, newest first)
   const rawHistory = getMessages(channelId, MESSAGE_FETCH_LIMIT);
 
@@ -524,6 +524,8 @@ export function buildPromptAndMessages(
     );
   }
 
+  const { nonce } = output;
+
   // Convert to StructuredMessage[]
   let messages: StructuredMessage[] = output.messages.map(m => ({ role: m.role, content: m.content }));
 
@@ -547,7 +549,7 @@ export function buildPromptAndMessages(
     messages.splice(firstNonSystem, 0, { role: "user", content: "(continued)" });
   }
 
-  return { systemPrompt, messages };
+  return { systemPrompt, messages, nonce };
 }
 
 // =============================================================================
@@ -558,6 +560,8 @@ export interface PreparedPromptContext {
   /** Dedicated system prompt for AI SDK `system` parameter */
   systemPrompt: string;
   messages: StructuredMessage[];
+  /** Nonce for HATT attachment markers embedded in messages */
+  nonce: string;
   other: EntityWithFacts[];
   contextExpr: string;
   effectiveStripPatterns: string[];
@@ -617,9 +621,9 @@ export function preparePromptContext(
   const template = entities[0]?.template ?? null;
   const systemTemplate = entities[0]?.systemTemplate ?? null;
   const collapseMessages: CollapseRoles | null = entities.find(e => e.collapseMessages !== null)?.collapseMessages ?? null;
-  const { systemPrompt, messages } = buildPromptAndMessages(
+  const { systemPrompt, messages, nonce } = buildPromptAndMessages(
     entities, other, entityMemories, template, channelId, contextExpr, effectiveStripPatterns, systemTemplate, userEntityId, guildId, collapseMessages,
   );
 
-  return { systemPrompt, messages, other, contextExpr, effectiveStripPatterns };
+  return { systemPrompt, messages, nonce, other, contextExpr, effectiveStripPatterns };
 }

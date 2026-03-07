@@ -7,6 +7,8 @@ import {
   normalizeMessagesForProvider,
 } from "./context";
 import { preparePromptContext } from "./prompt";
+import { resolveAttachmentMarkers } from "./attachments";
+import { getEntity } from "../db/entities";
 import { createTools } from "./tools";
 import {
   stripNamePrefixFromStream,
@@ -87,7 +89,7 @@ export async function* handleMessageStreaming(
   const { channelId, guildId, entities, streamMode, delimiter } = ctx;
 
   // Prepare prompt context (expand refs, resolve user entity, build messages)
-  const { systemPrompt, messages: llmMessages, contextExpr } = preparePromptContext(
+  const { systemPrompt, messages: llmMessages, nonce, contextExpr } = preparePromptContext(
     entities, channelId, guildId, ctx.userId, ctx.entityMemories,
   );
 
@@ -107,8 +109,13 @@ export async function* handleMessageStreaming(
     const model = getLanguageModel(modelSpec);
     const tools = createTools(channelId, guildId);
 
+    // Resolve attachment markers (HATT → ImagePart / FilePart / text fallback)
+    const entityId = entities[0]?.id ?? 0;
+    const ownerId = entityId ? (getEntity(entityId)?.owned_by ?? "") : "";
+    const resolvedMessages = await resolveAttachmentMarkers(llmMessages, nonce, providerName, entityId, ownerId);
+
     // Normalize messages for provider-specific restrictions (e.g., Google doesn't have system role)
-    const normalizedMessages = normalizeMessagesForProvider(llmMessages, providerName);
+    const normalizedMessages = normalizeMessagesForProvider(resolvedMessages, providerName);
 
     const providerOptions = buildThinkingOptions(providerName, modelName, thinkingLevel);
 

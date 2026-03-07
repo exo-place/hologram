@@ -195,6 +195,18 @@ function initSchema(db: Database) {
     )
   `);
 
+  // Attachment cache - fetched Discord attachment bytes, keyed by URL hash
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS attachment_cache (
+      url_hash TEXT PRIMARY KEY,
+      url TEXT NOT NULL,
+      data BLOB NOT NULL,
+      content_type TEXT NOT NULL,
+      fetched_at INTEGER NOT NULL,
+      message_id TEXT
+    )
+  `);
+
   // Indexes
   db.exec(`CREATE INDEX IF NOT EXISTS idx_facts_entity ON facts(entity_id)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_discord_entities_lookup ON discord_entities(discord_id, discord_type)`);
@@ -206,6 +218,7 @@ function initSchema(db: Database) {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_memories_frecency ON entity_memories(entity_id, frecency DESC)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_webhooks_channel ON webhooks(channel_id)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_eval_errors_owner ON eval_errors(owner_id, notified_at)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_attachment_cache_message ON attachment_cache(message_id)`);
 
   // Migrations
   // Add system_template column (per-entity system prompt template)

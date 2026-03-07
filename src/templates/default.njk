@@ -45,7 +45,7 @@ Not everyone needs to respond to every message. Only respond as those who would 
       <embed>{{ embed.toJSON() }}</embed>
       {%- endfor %}
       {%- for attachment in msg.attachments %}
-      <attachment name="{{ attachment.filename }}"{{ ' type="' + attachment.content_type + '"' if attachment.content_type }} url="{{ attachment.url }}" />
+      {{ attach(attachment.url, attachment.content_type) }}
       {%- endfor %}
       {%- for sticker in msg.stickers %}
       [sticker: {{ sticker.name }}]

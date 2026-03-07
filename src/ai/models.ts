@@ -88,6 +88,47 @@ export function getTextEmbeddingModel(modelSpec: string) {
 export const DEFAULT_MODEL =
   process.env.DEFAULT_MODEL || "google:gemini-3-flash-preview";
 
+/** Model used for image captioning when the primary model doesn't support vision. null = no captioning. */
+export const VISION_MODEL: string | null = process.env.VISION_MODEL ?? null;
+
+// =============================================================================
+// Multimodal Capability Detection
+// =============================================================================
+
+/** Providers that support image parts in messages */
+const VISION_CAPABLE_PROVIDERS = new Set([
+  "anthropic",
+  "google",
+  "google-vertex",
+  "openai",
+  "azure",
+  "amazon-bedrock",
+  "xai",
+]);
+
+/** Providers and the document MIME types they accept as file parts */
+const DOCUMENT_CAPABLE: Record<string, Set<string>> = {
+  anthropic: new Set([
+    "application/pdf",
+    "text/plain",
+    "text/html",
+    "text/markdown",
+    "text/csv",
+  ]),
+  google: new Set(["application/pdf", "text/plain"]),
+  "google-vertex": new Set(["application/pdf", "text/plain"]),
+};
+
+/** Returns true if the provider supports image parts in messages */
+export function supportsVision(providerName: string): boolean {
+  return VISION_CAPABLE_PROVIDERS.has(providerName);
+}
+
+/** Returns true if the provider accepts this MIME type as a document/file part */
+export function supportsDocumentType(providerName: string, mimeType: string): boolean {
+  return DOCUMENT_CAPABLE[providerName]?.has(mimeType) ?? false;
+}
+
 // =============================================================================
 // Model Allowlist
 // =============================================================================
