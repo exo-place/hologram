@@ -40,7 +40,7 @@ Not everyone needs to respond to every message. Only respond as those who would 
   {% for msg in history %}
     {{- "\n" if not loop.first -}}
     {% call send_as("assistant" if responders[msg.entity_id] else "user") -%}
-      {{ msg.author }}: {{ msg.content }}
+      {{ msg.author }}: {{ parse_emojis(msg.content) }}
       {%- for embed in msg.embeds %}
       <embed>{{ embed.toJSON() }}</embed>
       {%- if embed.image and embed.image.url %}
@@ -54,7 +54,7 @@ Not everyone needs to respond to every message. Only respond as those who would 
       {{ attach(attachment.url, attachment.content_type) }}
       {%- endfor %}
       {%- for sticker in msg.stickers %}
-      [sticker: {{ sticker.name }}]
+      {{ render_sticker(sticker) }}
       {%- endfor %}
       {%- for component in msg.components %}
       <component>{{ component.toJSON() }}</component>

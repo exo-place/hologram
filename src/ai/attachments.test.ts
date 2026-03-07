@@ -145,6 +145,95 @@ describe("resolveAttachmentMarkers: nonce isolation", () => {
 });
 
 // =============================================================================
+// parse_emojis()
+// =============================================================================
+
+describe("parse_emojis(): emoji marker emission", () => {
+  test("static emoji: keeps reference + appends HATT marker", () => {
+    const result = renderStructuredTemplate(
+      `{% call send_as("user") %}{{ parse_emojis("<:wave:123456>") }}{% endcall %}`,
+      {},
+    );
+    const { nonce, messages } = result;
+    expect(messages[0].content).toContain("<:wave:123456>");
+    expect(messages[0].content).toContain(`${MARKER_HATT_PREFIX}${nonce}|https://cdn.discordapp.com/emojis/123456.webp|image/webp${MARKER_SUFFIX}`);
+  });
+
+  test("animated emoji: uses gif extension and mime type", () => {
+    const result = renderStructuredTemplate(
+      `{% call send_as("user") %}{{ parse_emojis("<a:dance:789>") }}{% endcall %}`,
+      {},
+    );
+    expect(result.messages[0].content).toContain(
+      `${MARKER_HATT_PREFIX}${result.nonce}|https://cdn.discordapp.com/emojis/789.gif|image/gif${MARKER_SUFFIX}`,
+    );
+  });
+
+  test("no custom emojis: content unchanged", () => {
+    const result = renderStructuredTemplate(
+      `{% call send_as("user") %}{{ parse_emojis("hello world 👋") }}{% endcall %}`,
+      {},
+    );
+    expect(result.messages[0].content).toBe("hello world 👋");
+  });
+
+  test("multiple emojis: all get markers inline", () => {
+    const result = renderStructuredTemplate(
+      `{% call send_as("user") %}{{ parse_emojis("a <:x:1> b <:y:2> c") }}{% endcall %}`,
+      {},
+    );
+    expect(result.messages[0].content).toContain("<:x:1>");
+    expect(result.messages[0].content).toContain(`emojis/1.webp`);
+    expect(result.messages[0].content).toContain("<:y:2>");
+    expect(result.messages[0].content).toContain(`emojis/2.webp`);
+    expect(result.messages[0].content).toContain("a ");
+    expect(result.messages[0].content).toContain(" b ");
+    expect(result.messages[0].content).toContain(" c");
+  });
+});
+
+// =============================================================================
+// render_sticker()
+// =============================================================================
+
+describe("render_sticker(): sticker marker emission", () => {
+  function renderSticker(sticker: Record<string, unknown>) {
+    return renderStructuredTemplate(
+      `{% call send_as("user") %}{{ render_sticker(s) }}{% endcall %}`,
+      { s: sticker },
+    );
+  }
+
+  test("PNG sticker (format_type 1) → HATT marker with .png", () => {
+    const result = renderSticker({ id: "111", name: "wave", format_type: 1 });
+    const { nonce, messages } = result;
+    expect(messages[0].content).toContain(
+      `${MARKER_HATT_PREFIX}${nonce}|https://cdn.discordapp.com/stickers/111.png|image/png${MARKER_SUFFIX}`,
+    );
+  });
+
+  test("APNG sticker (format_type 2) → HATT marker with .png", () => {
+    const result = renderSticker({ id: "222", name: "bounce", format_type: 2 });
+    expect(result.messages[0].content).toContain("stickers/222.png");
+  });
+
+  test("GIF sticker (format_type 4) → HATT marker with .gif", () => {
+    const result = renderSticker({ id: "333", name: "dance", format_type: 4 });
+    expect(result.messages[0].content).toContain("stickers/333.gif");
+  });
+
+  test("Lottie sticker (format_type 3) → text fallback", () => {
+    const result = renderSticker({ id: "444", name: "sparkle", format_type: 3 });
+    expect(result.messages[0].content).toBe("[sticker: sparkle]");
+  });
+
+  test("unknown format_type → text fallback", () => {
+    const result = renderSticker({ id: "555", name: "mystery", format_type: 99 });
+    expect(result.messages[0].content).toBe("[sticker: mystery]");
+  });
+});
+
+// =============================================================================
 // Capability detection (via models.ts)
 // =============================================================================
 

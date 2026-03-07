@@ -569,6 +569,52 @@ function buildAttachFn(nonce: string): (url: unknown, mimeType: unknown) => stri
 }
 
 /**
+ * Build the render_sticker(sticker) function for a given nonce.
+ * Emits a HATT marker for PNG/APNG/GIF stickers; falls back to [sticker: name]
+ * for Lottie (format_type 3) and unknown types.
+ */
+function buildRenderStickerFn(nonce: string): (sticker: unknown) => string {
+  const attachFn = buildAttachFn(nonce);
+  return (sticker: unknown) => {
+    if (!sticker || typeof sticker !== "object") return "";
+    const s = sticker as Record<string, unknown>;
+    const id = String(s.id ?? "");
+    const name = String(s.name ?? "sticker");
+    const formatType = Number(s.format_type ?? 0);
+
+    if (!id) return `[sticker: ${name}]`;
+
+    switch (formatType) {
+      case 1: // PNG
+      case 2: // APNG (served as .png)
+        return attachFn(`https://cdn.discordapp.com/stickers/${id}.png`, "image/png");
+      case 4: // GIF
+        return attachFn(`https://cdn.discordapp.com/stickers/${id}.gif`, "image/gif");
+      default: // Lottie (3) or unknown — text fallback
+        return `[sticker: ${name}]`;
+    }
+  };
+}
+
+/**
+ * Build the parse_emojis(content) function for a given nonce.
+ * Replaces <:name:id> and <a:name:id> emoji syntax with the original reference
+ * immediately followed by a HATT marker, so the model sees both the reference
+ * and the actual image inline.
+ */
+function buildParseEmojisFn(nonce: string): (content: unknown) => string {
+  const attachFn = buildAttachFn(nonce);
+  return (content: unknown) => {
+    const str = String(content ?? "");
+    return str.replace(/<(a?):(\w+):(\d+)>/g, (match, animated, _name, id) => {
+      const url = `https://cdn.discordapp.com/emojis/${id}.${animated ? "gif" : "webp"}`;
+      const mimeType = animated ? "image/gif" : "image/webp";
+      return `${match}${attachFn(url, mimeType)}`;
+    });
+  };
+}
+
+/**
  * Render a template and parse structured output.
  * Injects a `send_as(role)` macro via `{% call send_as("user") %}...{% endcall %}`.
  * Injects an `attach(url, mimeType)` function that emits HATT markers.
@@ -594,8 +640,13 @@ export function renderStructuredTemplate(
   loader.setInternal(parentName, augmented);
   loader.setMacroDef(macroDef);
 
-  // Inject attach() with nonce captured in closure; don't mutate caller's ctx
-  const augmentedCtx = { ...ctx, attach: buildAttachFn(nonce) };
+  // Inject template helpers with nonce captured in closures; don't mutate caller's ctx
+  const augmentedCtx = {
+    ...ctx,
+    attach: buildAttachFn(nonce),
+    render_sticker: buildRenderStickerFn(nonce),
+    parse_emojis: buildParseEmojisFn(nonce),
+  };
 
   try {
     // Render via empty child that extends the parent — this triggers the parent
