@@ -59,14 +59,16 @@ export function configureLogger(options: Partial<LoggerConfig>): void {
 /**
  * JSON.stringify replacer that converts binary data to a compact summary.
  *
- * Uint8Array → "[Uint8Array: N bytes]"
- * Buffer.toJSON() output ({ type:"Buffer", data:[...] }) → "[Buffer: N bytes]"
- * The Buffer case must be handled separately because Buffer.prototype.toJSON()
- * converts the Buffer to a plain object *before* the replacer is called.
+ * Uses ArrayBuffer.isView() instead of instanceof Uint8Array because SQLite
+ * BLOB values returned by Bun may fail cross-realm instanceof checks.
+ * Buffer.prototype.toJSON() is called before the replacer, so Buffer arrives
+ * as { type:"Buffer", data:[...] } and is handled separately.
  */
 function binaryRedactReplacer(_key: string, value: unknown): unknown {
-  if (value instanceof Uint8Array) {
-    return `[Uint8Array: ${value.byteLength} bytes]`;
+  // Catches Uint8Array, Buffer (before toJSON), Float32Array, etc.
+  if (ArrayBuffer.isView(value) && !(value instanceof DataView)) {
+    const name = (value as object).constructor?.name ?? "TypedArray";
+    return `[${name}: ${(value as Uint8Array).byteLength} bytes]`;
   }
   // Buffer.toJSON() returns { type: 'Buffer', data: number[] } — replacer sees this, not the Buffer
   if (
