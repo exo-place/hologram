@@ -772,6 +772,38 @@ describe("integration", () => {
     expect(evalExpr("!is_self", ctx2)).toBe(true);
   });
 
+  test("is_hologram variable works", () => {
+    const ctx1 = makeContext({ is_hologram: true });
+    const ctx2 = makeContext({ is_hologram: false });
+    expect(evalExpr("is_hologram", ctx1)).toBe(true);
+    expect(evalExpr("is_hologram", ctx2)).toBe(false);
+    expect(evalExpr("!is_hologram", ctx1)).toBe(false);
+    expect(evalExpr("!is_hologram", ctx2)).toBe(true);
+  });
+
+  test("is_hologram and is_self are independent", () => {
+    // A message can be from a hologram without being self (different entity's webhook)
+    const ctx = makeContext({ is_hologram: true, is_self: false });
+    expect(evalExpr("is_hologram && !is_self", ctx)).toBe(true);
+    expect(evalExpr("is_self", ctx)).toBe(false);
+  });
+
+  test("$if is_hologram filters facts correctly", () => {
+    const ctx1 = makeContext({ is_hologram: true });
+    const ctx2 = makeContext({ is_hologram: false });
+    const facts = ["$if is_hologram: bot message", "always here"];
+    expect(evaluateFacts(facts, ctx1).facts).toContain("bot message");
+    expect(evaluateFacts(facts, ctx2).facts).not.toContain("bot message");
+    expect(evaluateFacts(facts, ctx1).facts).toContain("always here");
+    expect(evaluateFacts(facts, ctx2).facts).toContain("always here");
+  });
+
+  test("$if is_hologram controls $respond", () => {
+    const facts = ["$if is_hologram: $respond"];
+    expect(evaluateFacts(facts, makeContext({ is_hologram: true })).shouldRespond).toBe(true);
+    expect(evaluateFacts(facts, makeContext({ is_hologram: false })).shouldRespond).toBe(null);
+  });
+
   test("mentioned_in_dialogue function checks quoted text", () => {
     // With quotes, only checks within quotes
     const ctx = makeContext({ content: '<Alice> "Hey Bob, how are you?"' });
