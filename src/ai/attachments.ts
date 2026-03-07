@@ -55,6 +55,15 @@ export async function resolveAttachmentMarkers(
       continue;
     }
 
+    // The AI SDK schema for assistant messages does not include ImagePart.
+    // Strip HATT markers from assistant messages; the text before each marker
+    // (e.g. "<:name:id>" for emojis, "[sticker: name]" for stickers) remains.
+    if (msg.role === "assistant") {
+      pattern.lastIndex = 0;
+      resolved.push({ role: msg.role, content: msg.content.replace(pattern, "") });
+      continue;
+    }
+
     const parts: ContentPart[] = [];
     let lastIndex = 0;
     pattern.lastIndex = 0;
@@ -120,7 +129,10 @@ async function resolveAttachment(
   if (isImage && supportsVision(providerName)) {
     if (isDiscordCdnUrl(url)) {
       const { data, contentType } = await fetchAndCacheAttachment(url);
-      return { type: "image", image: data.toString("base64"), mimeType: contentType };
+      // data is Buffer from getCachedAttachment (Buffer.from'd from SQLite Uint8Array).
+      // Use Buffer.from() to guarantee a real Buffer before encoding — AI SDK schema
+      // rejects Buffer objects and requires a base64 string for inline image data.
+      return { type: "image", image: Buffer.from(data).toString("base64"), mediaType: contentType };
     }
     // External image URLs (e.g. Tenor thumbnails): pass URL directly.
     // Most providers can fetch public URLs themselves.
@@ -130,7 +142,7 @@ async function resolveAttachment(
   if (!isImage && supportsDocumentType(providerName, mimeType)) {
     try {
       const { data } = await fetchAndCacheAttachment(url);
-      return { type: "file", data: data.toString("base64"), mimeType };
+      return { type: "file", data: data.toString("base64"), mediaType: mimeType };
     } catch (err) {
       warn("Failed to fetch document attachment", { url, mimeType, err });
       return fallbackPart(

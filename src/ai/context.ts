@@ -103,9 +103,9 @@ export interface StructuredMessage {
 
 export type TextPart = { type: "text"; text: string };
 /** Image passed by URL (public CDN) or raw bytes (Discord CDN, fetched + cached) */
-export type ImagePart = { type: "image"; image: string | Buffer; mimeType?: string };
+export type ImagePart = { type: "image"; image: string | Buffer; mediaType?: string };
 /** Document passed as base64-encoded bytes */
-export type FilePart = { type: "file"; data: string; mimeType: string };
+export type FilePart = { type: "file"; data: string; mediaType: string };
 export type ContentPart = TextPart | ImagePart | FilePart;
 
 /** Message after attachment markers have been resolved to content parts */
