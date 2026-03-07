@@ -1,10 +1,20 @@
 /**
  * Tests for attachment marker resolution (HATT protocol) and the attach() template function.
  */
-import { describe, expect, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 import { renderStructuredTemplate, MARKER_HATT_PREFIX, MARKER_SUFFIX } from "./template";
 import { resolveAttachmentMarkers } from "./attachments";
 import type { StructuredMessage, ContentPart } from "./context";
+
+// Stub out DB-touching functions so these tests don't need a real DB or network.
+// fetchAndCacheAttachment: called for Discord CDN URLs — stub throws (tests use non-CDN URLs)
+// tryFetchExternalImage: always returns null so external URLs fall back to URL passthrough
+mock.module("../db/attachment-cache", () => ({
+  fetchAndCacheAttachment: async (_url: string) => {
+    throw new Error("fetchAndCacheAttachment not expected in these tests");
+  },
+  tryFetchExternalImage: async (_url: string) => null,
+}));
 
 // =============================================================================
 // attach() marker emission via renderStructuredTemplate
