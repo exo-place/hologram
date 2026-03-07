@@ -211,7 +211,20 @@ function initSchema(db: Database) {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_facts_entity ON facts(entity_id)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_discord_entities_lookup ON discord_entities(discord_id, discord_type)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_messages_channel ON messages(channel_id, created_at DESC)`);
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_messages_discord_id ON messages(discord_message_id)`);
+  // Migration: deduplicate messages by discord_message_id (keep lowest id) before
+  // creating the unique index. Idempotent — no-op if no duplicates exist.
+  db.exec(`
+    DELETE FROM messages
+    WHERE discord_message_id IS NOT NULL
+    AND id NOT IN (
+      SELECT MIN(id) FROM messages
+      WHERE discord_message_id IS NOT NULL
+      GROUP BY discord_message_id
+    )
+  `);
+  // Partial unique index: prevents duplicate storage of the same Discord message.
+  // NULL discord_message_id (synthetic messages) are excluded — SQLite NULL != NULL.
+  db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_discord_id ON messages(discord_message_id) WHERE discord_message_id IS NOT NULL`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_effects_entity ON effects(entity_id)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_effects_expires ON effects(expires_at)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_memories_entity ON entity_memories(entity_id)`);

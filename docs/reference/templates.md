@@ -218,6 +218,59 @@ You are {{ entities[0].name }}.
 
 **Security:** `send_as` markers use cryptographic nonce markers (256-bit random hex) at render time. Template context values are strings, not template code — Discord user messages containing marker-like text cannot trigger the parser.
 
+### Attachment Functions
+
+These functions emit attachment markers (HATT) that are resolved after rendering to inline image/file content parts for vision-capable models, or text fallbacks for others.
+
+#### `attach(url, contentType?)`
+
+Emits an attachment marker for the given URL. The model receives the attachment as an inline image/file if the provider supports it, or a text reference otherwise.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `url` | `string` | URL of the attachment |
+| `contentType` | `string?` | MIME type or base type. Accepts full types (`"image/jpeg"`, `"application/pdf"`) or base types (`"image"` when exact subtype is unknown). Defaults to `"application/octet-stream"` if omitted. |
+
+```
+{# Known subtype #}
+{{ attach(attachment.url, attachment.content_type) }}
+
+{# Unknown subtype — known to be an image #}
+{{ attach(embed.image.url, "image") }}
+
+{# Document #}
+{{ attach(file.url, "application/pdf") }}
+```
+
+**Note:** Discord CDN images (`cdn.discordapp.com`, `media.discordapp.net`) are fetched and sent as inline base64 data. External URLs are passed as-is (the model fetches them directly).
+
+#### `parse_emojis(content)`
+
+Replaces Discord custom emoji syntax (`<:name:id>`, `<a:name:id>`) with the original reference immediately followed by an inline image attachment. Vision-capable models see both the text reference and the image.
+
+```
+{{ parse_emojis(msg.content) }}
+```
+
+Animated emoji (`<a:...>`) use `.gif`, static emoji use `.webp` (Discord always serves WebP at `.webp` URLs regardless of upload format).
+
+#### `sticker_url(sticker)` / `sticker_media_type(sticker)`
+
+Return the CDN URL and IANA media type for a sticker, or empty string for unsupported formats (Lottie, unknown). Use with `attach()` to give the template full control over rendering:
+
+```
+{%- for sticker in msg.stickers %}
+[sticker: {{ sticker.name }}]{% if sticker_url(sticker) %}{{ attach(sticker_url(sticker), sticker_media_type(sticker)) }}{% endif %}
+{%- endfor %}
+```
+
+| `format_type` | Format | `sticker_url` | `sticker_media_type` |
+|---------------|--------|---------------|----------------------|
+| 1 | PNG | `stickers/{id}.png` | `image/png` |
+| 2 | APNG | `stickers/{id}.png` | `image/png` |
+| 3 | Lottie | `""` | `""` |
+| 4 | GIF | `stickers/{id}.gif` | `image/gif` |
+
 ### Template Inheritance
 
 Templates can inherit from other entities' templates:

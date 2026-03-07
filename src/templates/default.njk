@@ -44,17 +44,17 @@ Not everyone needs to respond to every message. Only respond as those who would 
       {%- for embed in msg.embeds %}
       <embed>{{ embed.toJSON() }}</embed>
       {%- if embed.image and embed.image.url %}
-      {{ attach(embed.image.url, "image/jpeg") }}
+      {{ attach(embed.image.url, "image") }}
       {%- endif %}
       {%- if embed.thumbnail and embed.thumbnail.url %}
-      {{ attach(embed.thumbnail.url, "image/jpeg") }}
+      {{ attach(embed.thumbnail.url, "image") }}
       {%- endif %}
       {%- endfor %}
       {%- for attachment in msg.attachments %}
       {{ attach(attachment.url, attachment.content_type) }}
       {%- endfor %}
       {%- for sticker in msg.stickers %}
-      {{ render_sticker(sticker) }}
+      [sticker: {{ sticker.name }}]{% if sticker_url(sticker) %}{{ attach(sticker_url(sticker), sticker_media_type(sticker)) }}{% endif %}
       {%- endfor %}
       {%- for component in msg.components %}
       <component>{{ component.toJSON() }}</component>

@@ -682,8 +682,8 @@ describe("addMessage / getMessages", () => {
 
   test("stores discord_message_id and data", () => {
     const msg = addMessage("chan-1", "u1", "A", "test", "discord-123", { is_bot: true });
-    expect(msg.discord_message_id).toBe("discord-123");
-    expect(msg.data).toBe('{"is_bot":true}');
+    expect(msg?.discord_message_id).toBe("discord-123");
+    expect(msg?.data).toBe('{"is_bot":true}');
   });
 });
 

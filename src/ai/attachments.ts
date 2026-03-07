@@ -124,7 +124,8 @@ async function resolveAttachment(
   entityId: number,
   ownerId: string,
 ): Promise<ContentPart> {
-  const isImage = mimeType.startsWith("image/");
+  // Accept both full MIME types ("image/jpeg") and base types ("image") for routing.
+  const isImage = mimeType === "image" || mimeType.startsWith("image/");
 
   if (isImage && supportsVision(providerName)) {
     if (isDiscordCdnUrl(url)) {

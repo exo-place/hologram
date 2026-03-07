@@ -569,29 +569,46 @@ function buildAttachFn(nonce: string): (url: unknown, mimeType: unknown) => stri
 }
 
 /**
- * Build the render_sticker(sticker) function for a given nonce.
- * Emits a HATT marker for PNG/APNG/GIF stickers; falls back to [sticker: name]
- * for Lottie (format_type 3) and unknown types.
+ * Build sticker_url(sticker) — returns the CDN URL for the sticker image,
+ * or an empty string for Lottie (format_type 3) and unknown types.
+ * Template designers call attach() themselves and control how labels are rendered.
  */
-function buildRenderStickerFn(nonce: string): (sticker: unknown) => string {
-  const attachFn = buildAttachFn(nonce);
+function buildStickerUrlFn(): (sticker: unknown) => string {
   return (sticker: unknown) => {
     if (!sticker || typeof sticker !== "object") return "";
     const s = sticker as Record<string, unknown>;
     const id = String(s.id ?? "");
-    const name = String(s.name ?? "sticker");
+    if (!id) return "";
     const formatType = Number(s.format_type ?? 0);
-
-    if (!id) return `[sticker: ${name}]`;
-
     switch (formatType) {
       case 1: // PNG
-      case 2: // APNG (served as .png)
-        return `[sticker: ${name}]${attachFn(`https://cdn.discordapp.com/stickers/${id}.png`, "image/png")}`;
+      case 2: // APNG (served as .png by Discord CDN)
+        return `https://cdn.discordapp.com/stickers/${id}.png`;
       case 4: // GIF
-        return `[sticker: ${name}]${attachFn(`https://cdn.discordapp.com/stickers/${id}.gif`, "image/gif")}`;
-      default: // Lottie (3) or unknown — text fallback
-        return `[sticker: ${name}]`;
+        return `https://cdn.discordapp.com/stickers/${id}.gif`;
+      default: // Lottie (3) or unknown — no image available
+        return "";
+    }
+  };
+}
+
+/**
+ * Build sticker_media_type(sticker) — returns the IANA media type for the
+ * sticker image, or an empty string when no image is available.
+ */
+function buildStickerMediaTypeFn(): (sticker: unknown) => string {
+  return (sticker: unknown) => {
+    if (!sticker || typeof sticker !== "object") return "";
+    const s = sticker as Record<string, unknown>;
+    const formatType = Number(s.format_type ?? 0);
+    switch (formatType) {
+      case 1:
+      case 2:
+        return "image/png";
+      case 4:
+        return "image/gif";
+      default:
+        return "";
     }
   };
 }
@@ -644,7 +661,8 @@ export function renderStructuredTemplate(
   const augmentedCtx = {
     ...ctx,
     attach: buildAttachFn(nonce),
-    render_sticker: buildRenderStickerFn(nonce),
+    sticker_url: buildStickerUrlFn(),
+    sticker_media_type: buildStickerMediaTypeFn(),
     parse_emojis: buildParseEmojisFn(nonce),
   };
 

@@ -52,6 +52,11 @@ See `docs/postmortem/2026-01-26-ux-critique.md` for full analysis.
 
 - [ ] Known but not speaking - non-responding entities bound to a channel should be included in LLM context with a `<known_entity>` marker so the LLM knows they're present but shouldn't speak for them
 
+### Permissions
+
+- [ ] **Admin unbind** — server admins (Manage Channels) should be able to unbind any entity from any channel/guild in their server, even if they don't have edit/use permission on the entity. Currently unbind requires entity edit/use permission.
+- [ ] **$nsfw content filtering rework** — `$nsfw` is too coarse. Needs general content filtering with more granularity than on/off, and should be one of multiple possible filter dimensions (not NSFW-specific).
+
 ### Features
 
 - [ ] Zero-command start - mention with no binding → prompt "who should I be?" → auto-create and respond

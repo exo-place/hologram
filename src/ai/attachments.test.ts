@@ -202,13 +202,13 @@ describe("parse_emojis(): emoji marker emission", () => {
 });
 
 // =============================================================================
-// render_sticker()
+// sticker_url() / sticker_media_type()
 // =============================================================================
 
-describe("render_sticker(): sticker marker emission", () => {
+describe("sticker_url() / sticker_media_type(): sticker helpers", () => {
   function renderSticker(sticker: Record<string, unknown>) {
     return renderStructuredTemplate(
-      `{% call send_as("user") %}{{ render_sticker(s) }}{% endcall %}`,
+      `{% call send_as("user") %}[sticker: {{ s.name }}]{% if sticker_url(s) %}{{ attach(sticker_url(s), sticker_media_type(s)) }}{% endif %}{% endcall %}`,
       { s: sticker },
     );
   }
@@ -234,12 +234,12 @@ describe("render_sticker(): sticker marker emission", () => {
     expect(result.messages[0].content).toContain("stickers/333.gif");
   });
 
-  test("Lottie sticker (format_type 3) → text fallback", () => {
+  test("Lottie sticker (format_type 3) → text only, no HATT marker", () => {
     const result = renderSticker({ id: "444", name: "sparkle", format_type: 3 });
     expect(result.messages[0].content).toBe("[sticker: sparkle]");
   });
 
-  test("unknown format_type → text fallback", () => {
+  test("unknown format_type → text only, no HATT marker", () => {
     const result = renderSticker({ id: "555", name: "mystery", format_type: 99 });
     expect(result.messages[0].content).toBe("[sticker: mystery]");
   });

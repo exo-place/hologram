@@ -569,10 +569,10 @@ export function addMessage(
   content: string,
   discordMessageId?: string,
   data?: MessageData
-): Message {
+): Message | undefined {
   const db = getDb();
   return db.prepare(`
-    INSERT INTO messages (channel_id, author_id, author_name, content, discord_message_id, data)
+    INSERT OR IGNORE INTO messages (channel_id, author_id, author_name, content, discord_message_id, data)
     VALUES (?, ?, ?, ?, ?, ?)
     RETURNING *
   `).get(channelId, authorId, authorName, content, discordMessageId ?? null, data ? JSON.stringify(data) : null) as Message;
@@ -639,7 +639,7 @@ export function getMessages(channelId: string, limit = 50): Message[] {
     return db.prepare(`
       SELECT * FROM messages
       WHERE channel_id = ? AND created_at > ?
-      ORDER BY created_at DESC
+      ORDER BY created_at DESC, id DESC
       LIMIT ?
     `).all(channelId, forgetTime, limit) as Message[];
   }
@@ -647,7 +647,7 @@ export function getMessages(channelId: string, limit = 50): Message[] {
   return db.prepare(`
     SELECT * FROM messages
     WHERE channel_id = ?
-    ORDER BY created_at DESC
+    ORDER BY created_at DESC, id DESC
     LIMIT ?
   `).all(channelId, limit) as Message[];
 }
@@ -711,7 +711,7 @@ export function getFilteredMessages(
   return db.prepare(`
     SELECT * FROM messages
     WHERE channel_id = ? AND author_name = ? COLLATE NOCASE${timeClause}
-    ORDER BY created_at DESC
+    ORDER BY created_at DESC, id DESC
     LIMIT ?
   `).all(channelId, filter, ...timeParams, limit) as Message[];
 }
