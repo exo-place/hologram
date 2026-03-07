@@ -1,4 +1,4 @@
-import type { ModelMessage } from "ai";
+import type { ModelMessage, TextPart, ImagePart, FilePart } from "ai";
 import type { CollapseRoles, ExprContext, ThinkingLevel } from "../logic/expr";
 
 // =============================================================================
@@ -101,11 +101,8 @@ export interface StructuredMessage {
 // Multimodal Content Parts
 // =============================================================================
 
-export type TextPart = { type: "text"; text: string };
-/** Image passed by URL (public CDN) or raw bytes (Discord CDN, fetched + cached) */
-export type ImagePart = { type: "image"; image: string | Buffer; mediaType?: string };
-/** Document passed as base64-encoded bytes */
-export type FilePart = { type: "file"; data: string; mediaType: string };
+// Re-export AI SDK types directly — no parallel definitions to diverge from the schema.
+export type { TextPart, ImagePart, FilePart };
 export type ContentPart = TextPart | ImagePart | FilePart;
 
 /** Message after attachment markers have been resolved to content parts */
