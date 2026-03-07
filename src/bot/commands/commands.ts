@@ -47,7 +47,7 @@ import {
   deleteDiscordConfig,
   countUnreadMessages,
 } from "../../db/discord";
-import { parsePermissionDirectives, matchesUserEntry, isUserBlacklisted, isUserAllowed, evaluateFacts, createBaseContext } from "../../logic/expr";
+import { parsePermissionDirectives, matchesUserEntry, isUserBlacklisted, isUserAllowed, evaluateFacts, createBaseContext, parseCollapseRoles } from "../../logic/expr";
 import { formatEntityDisplay } from "../../ai/context";
 import { preparePromptContext } from "../../ai/prompt";
 import { sendResponse, getChannelMetadata, getGuildMetadata } from "../client";
@@ -653,6 +653,14 @@ registerCommand({
           required: false,
           placeholder: "minimal, low, medium, high",
         },
+        {
+          customId: "collapse",
+          label: "Collapse Adjacent Messages",
+          style: TextStyles.Short,
+          value: config?.config_collapse ?? "",
+          required: false,
+          placeholder: "all (default), none, user, assistant, system (space-separated)",
+        },
       ];
 
       await respondWithModal(ctx.bot, ctx.interaction, `edit-advanced:${entity.id}`, `Advanced: ${entity.name}`, advancedFields);
@@ -1045,6 +1053,7 @@ registerModalHandler("edit-advanced", async (bot, interaction, values) => {
   }
 
   const thinking = values.thinking?.trim().toLowerCase() || null;
+  const collapseRaw = values.collapse?.trim().toLowerCase() || null;
 
   // Validate thinking level
   if (thinking && !["minimal", "low", "medium", "high"].includes(thinking)) {
@@ -1052,12 +1061,20 @@ registerModalHandler("edit-advanced", async (bot, interaction, values) => {
     return;
   }
 
+  // Validate collapse roles
+  if (collapseRaw && parseCollapseRoles(collapseRaw) === null) {
+    await respond(bot, interaction, `Invalid collapse value: "${collapseRaw}". Use: all, none, or space-separated roles (user, assistant, system)`, true);
+    return;
+  }
+
   setEntityConfig(entityId, {
     config_thinking: thinking,
+    config_collapse: collapseRaw,
   });
 
   const changes: string[] = [];
   if (thinking) changes.push(`thinking: ${thinking}`);
+  if (collapseRaw) changes.push(`collapse: ${collapseRaw}`);
   if (changes.length === 0) changes.push("all cleared");
 
   await respond(bot, interaction, `Updated advanced config for "${entity.name}": ${changes.join(", ")}`, true);

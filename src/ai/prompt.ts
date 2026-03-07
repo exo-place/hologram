@@ -8,7 +8,7 @@ import {
   type EvaluatedEntity,
 } from "./context";
 import { getMessages, getWebhookMessageEntity, parseMessageData, resolveDiscordEntity, resolvePersona, type EmbedData, type AttachmentData, type StickerData, type DiscordComponentData } from "../db/discord";
-import { evalMacroValue, formatDuration, rollDice, compileContextExpr, parseFact, stripComments, ExprError, type ExprContext } from "../logic/expr";
+import { evalMacroValue, formatDuration, rollDice, compileContextExpr, parseFact, stripComments, ExprError, type CollapseRoles, type ExprContext } from "../logic/expr";
 import { DEFAULT_MODEL } from "./models";
 import { DEFAULT_TEMPLATE, renderStructuredTemplate, renderSystemPrompt } from "./template";
 import {
@@ -285,17 +285,20 @@ const MESSAGE_FETCH_LIMIT = 100;
 // Unified Prompt + Messages Builder
 // =============================================================================
 
+const ALL_COLLAPSE_ROLES: CollapseRoles = new Set(["user", "assistant", "system"]);
+
 /**
- * Collapse consecutive messages with the same role into a single message.
+ * Collapse consecutive messages with the same role into a single message,
+ * but only for roles included in `collapseRoles`.
  * Content is joined with newline. Empty messages are preserved (they may
  * carry structural meaning to the template author).
  */
-function collapseAdjacentMessages(messages: StructuredMessage[]): StructuredMessage[] {
-  if (messages.length <= 1) return messages;
+function collapseAdjacentMessages(messages: StructuredMessage[], collapseRoles: CollapseRoles): StructuredMessage[] {
+  if (messages.length <= 1 || collapseRoles.size === 0) return messages;
   const result: StructuredMessage[] = [messages[0]];
   for (let i = 1; i < messages.length; i++) {
     const prev = result[result.length - 1];
-    if (messages[i].role === prev.role) {
+    if (messages[i].role === prev.role && collapseRoles.has(prev.role)) {
       prev.content += "\n" + messages[i].content;
     } else {
       result.push({ ...messages[i] });
@@ -352,7 +355,7 @@ export function buildPromptAndMessages(
   systemTemplate?: string | null,
   userEntityId?: number | null,
   guildId?: string,
-  collapseMessages?: boolean | null,
+  collapseMessages?: CollapseRoles | null,
 ): { systemPrompt: string; messages: StructuredMessage[] } {
   // Fetch history from DB (DESC order, newest first)
   const rawHistory = getMessages(channelId, MESSAGE_FETCH_LIMIT);
@@ -535,10 +538,8 @@ export function buildPromptAndMessages(
     messages.push({ role: "user", content: latestContent });
   }
 
-  // Collapse consecutive same-role messages into one (default: enabled)
-  if (collapseMessages !== false) {
-    messages = collapseAdjacentMessages(messages);
-  }
+  // Collapse consecutive same-role messages for configured roles (default: all roles)
+  messages = collapseAdjacentMessages(messages, collapseMessages ?? ALL_COLLAPSE_ROLES);
 
   // AI SDK requires first non-system message to be user role
   const firstNonSystem = messages.findIndex(m => m.role !== "system");
@@ -615,7 +616,7 @@ export function preparePromptContext(
   // Build messages via template engine
   const template = entities[0]?.template ?? null;
   const systemTemplate = entities[0]?.systemTemplate ?? null;
-  const collapseMessages = entities.find(e => e.collapseMessages !== null)?.collapseMessages ?? null;
+  const collapseMessages: CollapseRoles | null = entities.find(e => e.collapseMessages !== null)?.collapseMessages ?? null;
   const { systemPrompt, messages } = buildPromptAndMessages(
     entities, other, entityMemories, template, channelId, contextExpr, effectiveStripPatterns, systemTemplate, userEntityId, guildId, collapseMessages,
   );

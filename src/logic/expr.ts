@@ -859,6 +859,9 @@ const COLLAPSE_SIGIL = "$collapse";
 /** Memory retrieval scope */
 export type MemoryScope = "none" | "channel" | "guild" | "global";
 
+/** Which message roles are eligible for adjacent-message collapsing */
+export type CollapseRoles = Set<"user" | "assistant" | "system">;
+
 /** Thinking level for Google models */
 export type ThinkingLevel = "minimal" | "low" | "medium" | "high";
 
@@ -912,8 +915,8 @@ export interface ProcessedFact {
   thinkingLevel?: ThinkingLevel;
   /** True if this fact is a $collapse directive */
   isCollapse: boolean;
-  /** For $collapse directives, whether to collapse adjacent same-role messages */
-  collapseEnabled?: boolean;
+  /** For $collapse directives, the set of roles whose adjacent messages should be collapsed */
+  collapseRoles?: CollapseRoles;
 }
 
 /** Parse expression, expect ':', return position after ':' */
@@ -1207,7 +1210,7 @@ export function parseFact(fact: string): ProcessedFact {
         isStrip: false,
         isThinking: false,
         isCollapse: true,
-        collapseEnabled: collapseResultCond,
+        collapseRoles: collapseResultCond,
       };
     }
 
@@ -1462,7 +1465,7 @@ export function parseFact(fact: string): ProcessedFact {
       isStrip: false,
       isThinking: false,
       isCollapse: true,
-      collapseEnabled: collapseResult,
+      collapseRoles: collapseResult,
     };
   }
 
@@ -1692,15 +1695,42 @@ function parseThinkingDirective(content: string): ThinkingLevel | null {
   return null;
 }
 
+const ALL_COLLAPSE_ROLES: CollapseRoles = new Set(["user", "assistant", "system"]);
+const VALID_COLLAPSE_ROLE_NAMES = new Set(["user", "assistant", "system"]);
+
+/**
+ * Parse a space-separated list of role names into a CollapseRoles set.
+ * Returns null if any token is unrecognized.
+ *
+ * Accepts: "all", "none", or space-separated subset of "user", "assistant", "system".
+ */
+export function parseCollapseRoles(str: string): CollapseRoles | null {
+  const trimmed = str.trim().toLowerCase();
+  if (trimmed === "" || trimmed === "all") return new Set(ALL_COLLAPSE_ROLES);
+  if (trimmed === "none") return new Set();
+  const parts = trimmed.split(/\s+/);
+  const roles = new Set<"user" | "assistant" | "system">();
+  for (const part of parts) {
+    if (!VALID_COLLAPSE_ROLE_NAMES.has(part)) return null;
+    roles.add(part as "user" | "assistant" | "system");
+  }
+  return roles;
+}
+
 /**
  * Parse a $collapse directive.
- * Returns null if not a collapse directive, or a boolean indicating whether to collapse.
+ * Returns null if not a collapse directive or has invalid content.
  *
  * Syntax:
- * - $collapse → enable collapsing (explicit true, same as default)
- * - $collapse false → disable collapsing adjacent same-role messages
+ * - $collapse → collapse all roles (default behavior, explicit)
+ * - $collapse all → same as bare $collapse
+ * - $collapse none → disable collapsing entirely
+ * - $collapse user → collapse only adjacent user messages
+ * - $collapse assistant → collapse only adjacent assistant messages
+ * - $collapse user assistant → collapse user and assistant (space-separated)
+ * - $collapse system user assistant → all three roles (same as all)
  */
-function parseCollapseDirective(content: string): boolean | null {
+function parseCollapseDirective(content: string): CollapseRoles | null {
   if (!content.startsWith(COLLAPSE_SIGIL)) {
     return null;
   }
@@ -1709,10 +1739,7 @@ function parseCollapseDirective(content: string): boolean | null {
   if (rest !== "" && !rest.startsWith(" ")) {
     return null;
   }
-  const trimmed = rest.trim().toLowerCase();
-  if (trimmed === "") return true;
-  if (trimmed === "false") return false;
-  return null; // Has unrecognized content → not a valid directive
+  return parseCollapseRoles(rest);
 }
 
 /**
@@ -1862,8 +1889,8 @@ export interface EvaluatedFacts {
   stripPatterns: string[] | null;
   /** Thinking level from $thinking directive. null = no directive (use default minimal for Google) */
   thinkingLevel: ThinkingLevel | null;
-  /** Whether to collapse adjacent same-role messages. null = no directive (default: true) */
-  collapseMessages: boolean | null;
+  /** Which roles to collapse adjacent messages for. null = no directive (default: all roles) */
+  collapseMessages: CollapseRoles | null;
 }
 
 /**
@@ -1889,7 +1916,7 @@ export interface EvaluatedFactsDefaults {
   stripPatterns?: string[] | null;
   shouldRespond?: boolean | null;
   thinkingLevel?: ThinkingLevel | null;
-  collapseMessages?: boolean | null;
+  collapseMessages?: CollapseRoles | null;
 }
 
 export function evaluateFacts(
@@ -1912,7 +1939,7 @@ export function evaluateFacts(
   let modelSpec: string | null = defaults?.modelSpec ?? null;
   let stripPatterns: string[] | null = defaults?.stripPatterns ?? null;
   let thinkingLevel: ThinkingLevel | null = defaults?.thinkingLevel ?? null;
-  let collapseMessages: boolean | null = defaults?.collapseMessages ?? null;
+  let collapseMessages: CollapseRoles | null = defaults?.collapseMessages ?? null;
 
   // Strip comments first
   const uncommented = stripComments(facts);
@@ -2005,7 +2032,7 @@ export function evaluateFacts(
 
     // Handle $collapse directives - last one wins, strip from LLM context
     if (parsed.isCollapse) {
-      collapseMessages = parsed.collapseEnabled ?? true;
+      collapseMessages = parsed.collapseRoles ?? new Set(ALL_COLLAPSE_ROLES);
       continue;
     }
 

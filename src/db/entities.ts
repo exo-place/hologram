@@ -1,6 +1,6 @@
 import { getDb } from "./index";
 import { getActiveEffectFacts } from "./effects";
-import type { EvaluatedFactsDefaults, MemoryScope, ThinkingLevel } from "../logic/expr";
+import { parseCollapseRoles, type EvaluatedFactsDefaults, type MemoryScope, type ThinkingLevel } from "../logic/expr";
 
 /** Parse JSON with a fallback value on failure (handles corrupted DB data) */
 function safeParseFallback<T>(json: string | null, fallback: T): T {
@@ -106,6 +106,7 @@ export interface EntityConfig {
   config_use: string | null;
   config_blacklist: string | null;
   config_thinking: string | null;
+  config_collapse: string | null;
 }
 
 const CONFIG_COLUMNS = `
@@ -113,7 +114,7 @@ const CONFIG_COLUMNS = `
   config_stream_mode, config_stream_delimiters,
   config_avatar, config_memory, config_freeform,
   config_strip, config_view, config_edit, config_use, config_blacklist,
-  config_thinking
+  config_thinking, config_collapse
 `.trim();
 
 export function getEntityConfig(entityId: number): EntityConfig | null {
@@ -166,6 +167,7 @@ export function getEntityEvalDefaults(entityId: number): EvaluatedFactsDefaults 
     stripPatterns: safeParseFallback(config.config_strip, null),
     shouldRespond: config.config_respond === "true" ? true : config.config_respond === "false" ? false : null,
     thinkingLevel: config.config_thinking as ThinkingLevel | null,
+    collapseMessages: config.config_collapse ? parseCollapseRoles(config.config_collapse) : null,
   };
 }
 

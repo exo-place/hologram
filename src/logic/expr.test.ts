@@ -2040,48 +2040,76 @@ describe("$collapse directive", () => {
     expect(result.collapseMessages).toBeNull();
   });
 
-  test("$collapse false disables collapsing", () => {
-    const facts = ["$collapse false", "some fact"];
-    const ctx = makeContext();
-    const result = evaluateFacts(facts, ctx);
-    expect(result.collapseMessages).toBe(false);
-    expect(result.facts).toEqual(["some fact"]);
-  });
-
-  test("bare $collapse enables collapsing explicitly", () => {
+  test("bare $collapse sets all roles", () => {
     const facts = ["$collapse", "some fact"];
     const ctx = makeContext();
     const result = evaluateFacts(facts, ctx);
-    expect(result.collapseMessages).toBe(true);
+    expect(result.collapseMessages).toEqual(new Set(["user", "assistant", "system"]));
     expect(result.facts).toEqual(["some fact"]);
   });
 
-  test("last $collapse wins", () => {
-    const facts = ["$collapse", "$collapse false"];
+  test("$collapse all sets all roles", () => {
+    const facts = ["$collapse all", "some fact"];
     const ctx = makeContext();
     const result = evaluateFacts(facts, ctx);
-    expect(result.collapseMessages).toBe(false);
+    expect(result.collapseMessages).toEqual(new Set(["user", "assistant", "system"]));
   });
 
-  test("conditional $collapse false", () => {
-    const facts = ["$if mentioned: $collapse false", "some fact"];
+  test("$collapse none sets empty set", () => {
+    const facts = ["$collapse none", "some fact"];
+    const ctx = makeContext();
+    const result = evaluateFacts(facts, ctx);
+    expect(result.collapseMessages).toEqual(new Set());
+  });
+
+  test("$collapse user sets only user role", () => {
+    const facts = ["$collapse user", "some fact"];
+    const ctx = makeContext();
+    const result = evaluateFacts(facts, ctx);
+    expect(result.collapseMessages).toEqual(new Set(["user"]));
+  });
+
+  test("$collapse user assistant sets two roles", () => {
+    const facts = ["$collapse user assistant", "some fact"];
+    const ctx = makeContext();
+    const result = evaluateFacts(facts, ctx);
+    expect(result.collapseMessages).toEqual(new Set(["user", "assistant"]));
+  });
+
+  test("last $collapse wins", () => {
+    const facts = ["$collapse user", "$collapse none"];
+    const ctx = makeContext();
+    const result = evaluateFacts(facts, ctx);
+    expect(result.collapseMessages).toEqual(new Set());
+  });
+
+  test("conditional $collapse none", () => {
+    const facts = ["$if mentioned: $collapse none", "some fact"];
     const ctx = makeContext({ mentioned: true });
     const result = evaluateFacts(facts, ctx);
-    expect(result.collapseMessages).toBe(false);
+    expect(result.collapseMessages).toEqual(new Set());
   });
 
   test("conditional $collapse not triggered", () => {
-    const facts = ["$if mentioned: $collapse false", "some fact"];
+    const facts = ["$if mentioned: $collapse none", "some fact"];
     const ctx = makeContext({ mentioned: false });
     const result = evaluateFacts(facts, ctx);
     expect(result.collapseMessages).toBeNull();
   });
 
   test("$collapse is stripped from LLM context", () => {
-    const facts = ["$collapse false", "some fact"];
+    const facts = ["$collapse none", "some fact"];
     const ctx = makeContext();
     const result = evaluateFacts(facts, ctx);
-    expect(result.facts).not.toContain("$collapse false");
+    expect(result.facts).not.toContain("$collapse none");
     expect(result.facts).toEqual(["some fact"]);
+  });
+
+  test("invalid role name is not a valid directive (treated as plain fact)", () => {
+    const facts = ["$collapse badvalue", "some fact"];
+    const ctx = makeContext();
+    const result = evaluateFacts(facts, ctx);
+    expect(result.collapseMessages).toBeNull();
+    expect(result.facts).toContain("$collapse badvalue");
   });
 });

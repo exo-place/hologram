@@ -221,4 +221,11 @@ function initSchema(db: Database) {
   } catch {
     // Column already exists
   }
+
+  // Add config_collapse column (adjacent message collapsing roles)
+  try {
+    db.exec(`ALTER TABLE entities ADD COLUMN config_collapse TEXT`);
+  } catch {
+    // Column already exists
+  }
 }

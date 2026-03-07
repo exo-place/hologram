@@ -271,10 +271,12 @@ const HELP_ENTITY_FACTS: Record<string, string[]> = {
     "**`$freeform`** - Allow natural multi-character prose",
     "Disables per-character message splitting in multi-char channels.",
     "---",
-    "**`$collapse false`** - Disable adjacent same-role message merging",
-    "By default, consecutive user or assistant messages are merged into one.",
-    "`$collapse false` - keep them as separate messages (e.g. for models sensitive to turn structure).",
-    "`$collapse` - explicitly re-enable (same as default).",
+    "**`$collapse <roles>`** - Control which adjacent same-role messages are merged",
+    "By default, consecutive messages of the same role are merged into one.",
+    "`$collapse none` - disable all merging (keep messages as distinct turns).",
+    "`$collapse user assistant` - merge only user/assistant, not system.",
+    "`$collapse all` / `$collapse` - merge all roles (same as default).",
+    "Accepts: `all`, `none`, or space-separated: `user`, `assistant`, `system`.",
   ],
 };
 

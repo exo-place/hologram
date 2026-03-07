@@ -1,4 +1,4 @@
-import type { ExprContext, ThinkingLevel } from "../logic/expr";
+import type { CollapseRoles, ExprContext, ThinkingLevel } from "../logic/expr";
 
 // =============================================================================
 // Types
@@ -41,8 +41,8 @@ export interface EvaluatedEntity {
   stripPatterns: string[] | null;
   /** Thinking level from $thinking directive. null = no directive (use default) */
   thinkingLevel: ThinkingLevel | null;
-  /** Whether to collapse adjacent same-role messages. null = no directive (default: true) */
-  collapseMessages: boolean | null;
+  /** Which roles to collapse adjacent messages for. null = no directive (default: all roles) */
+  collapseMessages: CollapseRoles | null;
   /** Custom system prompt template (null = use default formatting) */
   template: string | null;
   /** Custom system prompt for AI SDK `system` parameter (null = use global default) */

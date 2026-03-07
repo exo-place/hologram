@@ -11,7 +11,7 @@ import { isModelAllowed } from "../ai/models";
 import { retrieveRelevantMemories, type MemoryScope } from "../db/memories";
 import { resolveDiscordEntity, resolveDiscordEntities, isNewUser, markUserWelcomed, addMessage, updateMessageByDiscordId, mergeMessageData, deleteMessageByDiscordId, trackWebhookMessage, getWebhookMessageEntity, getMessages, getFilteredMessages, formatMessagesForContext, recordEvalError, isOurWebhookUserId, countUnreadMessages, getLastMessageSnowflake, getAllBoundChannelIds, type MessageData } from "../db/discord";
 import { getEntity, getEntityWithFacts, getEntityConfig, getSystemEntity, getFactsForEntity, type EntityWithFacts } from "../db/entities";
-import { evaluateFacts, createBaseContext, parsePermissionDirectives, isUserBlacklisted, isUserAllowed, compileContextExpr, ExprError, type EvaluatedFactsDefaults, type PermissionDefaults } from "../logic/expr";
+import { evaluateFacts, createBaseContext, parsePermissionDirectives, isUserBlacklisted, isUserAllowed, compileContextExpr, parseCollapseRoles, ExprError, type EvaluatedFactsDefaults, type PermissionDefaults } from "../logic/expr";
 import { DEFAULT_CONTEXT_EXPR } from "../ai/context";
 import type { EntityConfig } from "../db/entities";
 import { executeWebhook, editWebhookMessage, setBot } from "./webhooks";
@@ -414,6 +414,7 @@ function configToDefaults(config: EntityConfig | null): EvaluatedFactsDefaults {
     stripPatterns: safeJsonParse(config.config_strip, null),
     shouldRespond: config.config_respond === "true" ? true : config.config_respond === "false" ? false : null,
     thinkingLevel: config.config_thinking as import("../logic/expr").ThinkingLevel | null,
+    collapseMessages: config.config_collapse ? parseCollapseRoles(config.config_collapse) : null,
   };
 }
 
