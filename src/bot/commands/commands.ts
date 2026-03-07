@@ -47,7 +47,7 @@ import {
   deleteDiscordConfig,
   countUnreadMessages,
 } from "../../db/discord";
-import { parsePermissionDirectives, matchesUserEntry, isUserBlacklisted, isUserAllowed, evaluateFacts, createBaseContext, parseCollapseRoles } from "../../logic/expr";
+import { parsePermissionDirectives, matchesUserEntry, isUserBlacklisted, isUserAllowed, evaluateFacts, createBaseContext } from "../../logic/expr";
 import { formatEntityDisplay } from "../../ai/context";
 import { preparePromptContext } from "../../ai/prompt";
 import { sendResponse, getChannelMetadata, getGuildMetadata } from "../client";
@@ -641,29 +641,50 @@ registerCommand({
     }
 
     if (editType === "advanced") {
-      // Advanced config editing
+      // Advanced config editing — V2 modal with Label components
       const config = getEntityConfig(entity.id);
 
-      const advancedFields = [
+      // Pre-select current collapse roles
+      const currentCollapseRoles = new Set(
+        (config?.config_collapse ?? "").split(/\s+/).filter(Boolean)
+      );
+
+      const advancedLabels = [
         {
-          customId: "thinking",
-          label: "Thinking",
-          style: TextStyles.Short,
-          value: config?.config_thinking ?? "",
-          required: false,
-          placeholder: "minimal, low, medium, high",
+          type: MessageComponentTypes.Label,
+          label: "Thinking Level",
+          description: "Extended thinking for supported models (e.g. Claude)",
+          component: {
+            type: MessageComponentTypes.TextInput,
+            customId: "thinking",
+            style: TextStyles.Short,
+            value: config?.config_thinking ?? "",
+            required: false,
+            placeholder: "minimal, low, medium, high",
+          },
         },
         {
-          customId: "collapse",
+          type: MessageComponentTypes.Label,
           label: "Collapse Adjacent Messages",
-          style: TextStyles.Short,
-          value: config?.config_collapse ?? "",
-          required: false,
-          placeholder: "all (default), none, user, assistant, system (space-separated)",
+          description: "Which roles to merge when consecutive messages share the same role",
+          component: {
+            type: MessageComponentTypes.StringSelect,
+            customId: "collapse",
+            minValues: 0,
+            maxValues: 4,
+            required: false,
+            placeholder: "All roles (default)",
+            options: [
+              { label: "None (disable all merging)", value: "none", default: currentCollapseRoles.has("none") },
+              { label: "User messages", value: "user", default: currentCollapseRoles.has("user") },
+              { label: "Assistant messages", value: "assistant", default: currentCollapseRoles.has("assistant") },
+              { label: "System messages", value: "system", default: currentCollapseRoles.has("system") },
+            ],
+          },
         },
       ];
 
-      await respondWithModal(ctx.bot, ctx.interaction, `edit-advanced:${entity.id}`, `Advanced: ${entity.name}`, advancedFields);
+      await respondWithV2Modal(ctx.bot, ctx.interaction, `edit-advanced:${entity.id}`, `Advanced: ${entity.name}`, advancedLabels);
       return;
     }
 
@@ -1034,7 +1055,7 @@ registerModalHandler("edit-config", async (bot, interaction, values) => {
 // Advanced Config Modal Handler
 // =============================================================================
 
-registerModalHandler("edit-advanced", async (bot, interaction, values) => {
+registerModalHandler("edit-advanced", async (bot, interaction, _textValues) => {
   const customId = interaction.data?.customId ?? "";
   const entityId = parseInt(customId.split(":")[1]);
 
@@ -1052,8 +1073,22 @@ registerModalHandler("edit-advanced", async (bot, interaction, values) => {
     return;
   }
 
-  const thinking = values.thinking?.trim().toLowerCase() || null;
-  const collapseRaw = values.collapse?.trim().toLowerCase() || null;
+  // Parse V2 components: Label (type 18) wraps inner .component (TextInput or StringSelect)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const components: any[] = interaction.data?.components ?? [];
+  const textValues: Record<string, string> = {};
+  const selectValues: Record<string, string[]> = {};
+  for (const comp of components) {
+    const inner = comp.component;
+    if (!inner?.customId) continue;
+    if (inner.value !== undefined) {
+      textValues[inner.customId] = inner.value;
+    } else if (inner.values !== undefined) {
+      selectValues[inner.customId] = inner.values;
+    }
+  }
+
+  const thinking = textValues.thinking?.trim().toLowerCase() || null;
 
   // Validate thinking level
   if (thinking && !["minimal", "low", "medium", "high"].includes(thinking)) {
@@ -1061,11 +1096,14 @@ registerModalHandler("edit-advanced", async (bot, interaction, values) => {
     return;
   }
 
-  // Validate collapse roles
-  if (collapseRaw && parseCollapseRoles(collapseRaw) === null) {
-    await respond(bot, interaction, `Invalid collapse value: "${collapseRaw}". Use: all, none, or space-separated roles (user, assistant, system)`, true);
-    return;
-  }
+  // Collapse: selected options from StringSelect (empty = no override / use default)
+  const collapseSelected = selectValues.collapse ?? [];
+  // "none" takes precedence; otherwise join selected roles; empty = clear config (null = use default = all)
+  const collapseRaw = collapseSelected.length === 0
+    ? null
+    : collapseSelected.includes("none")
+      ? "none"
+      : collapseSelected.join(" ");
 
   setEntityConfig(entityId, {
     config_thinking: thinking,
