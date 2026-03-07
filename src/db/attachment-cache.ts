@@ -39,7 +39,10 @@ export function getCachedAttachment(urlHash: string): CachedAttachment | null {
     .prepare("SELECT data, content_type FROM attachment_cache WHERE url_hash = ?")
     .get(urlHash) as { data: Buffer; content_type: string } | null;
   if (!row) return null;
-  return { data: row.data, contentType: row.content_type };
+  // Bun's SQLite returns BLOBs as a cross-realm Uint8Array that fails instanceof
+  // checks in the AI SDK (convertToBase64 uses `value instanceof Uint8Array`).
+  // Buffer.from() normalises it to a proper Node.js Buffer.
+  return { data: Buffer.from(row.data), contentType: row.content_type };
 }
 
 export function setCachedAttachment(
