@@ -634,7 +634,7 @@ bot.events.messageCreate = async (message) => {
 
   // Track response chain depth to prevent infinite self-response loops
   const isWebhookMessage = !!message.webhookId;
-  const isHologram = isWebhookMessage && isOwnWebhookMessage(message.id.toString());
+  const isHologram = isWebhookMessage && isOurWebhookUserId(message.webhookId!.toString());
   if (isHologram) {
     // This is our own webhook - increment chain depth
     const depth = (responseChainDepth.get(channelId) ?? 0) + 1;
