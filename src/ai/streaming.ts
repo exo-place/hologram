@@ -154,12 +154,6 @@ export async function* handleMessageStreaming(
       yield* streamMultiEntityNamePrefix(trackedStream, entities, streamMode, delimiter);
     }
 
-    // Empty/whitespace-only response is an error
-    const trimmedAccumulated = accumulatedText.trim();
-    if (!trimmedAccumulated) {
-      throw new InferenceError("Empty response from model", modelSpec);
-    }
-
     // Collect generated image files (e.g. from gemini-2.0-flash-image-generation)
     const rawFiles = await result.files;
     const generatedFiles: GeneratedFile[] = (rawFiles ?? [])
@@ -168,6 +162,12 @@ export async function* handleMessageStreaming(
 
     if (generatedFiles.length > 0) {
       yield { type: "files", files: generatedFiles };
+    }
+
+    // Empty/whitespace-only response is an error unless the model returned image files
+    const trimmedAccumulated = accumulatedText.trim();
+    if (!trimmedAccumulated && generatedFiles.length === 0) {
+      throw new InferenceError("Empty response from model", modelSpec);
     }
 
     // Yield done event with accumulated text

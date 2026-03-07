@@ -133,8 +133,8 @@ export async function handleMessage(ctx: MessageContext): Promise<ResponseResult
       return null;
     }
 
-    // Empty/whitespace-only response is an error
-    if (!trimmedText) {
+    // Empty/whitespace-only response is an error unless the model returned image files
+    if (!trimmedText && generatedFiles.length === 0) {
       throw new InferenceError("Empty response from model", modelSpec);
     }
 
