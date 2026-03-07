@@ -587,9 +587,9 @@ function buildRenderStickerFn(nonce: string): (sticker: unknown) => string {
     switch (formatType) {
       case 1: // PNG
       case 2: // APNG (served as .png)
-        return attachFn(`https://cdn.discordapp.com/stickers/${id}.png`, "image/png");
+        return `[sticker: ${name}]${attachFn(`https://cdn.discordapp.com/stickers/${id}.png`, "image/png")}`;
       case 4: // GIF
-        return attachFn(`https://cdn.discordapp.com/stickers/${id}.gif`, "image/gif");
+        return `[sticker: ${name}]${attachFn(`https://cdn.discordapp.com/stickers/${id}.gif`, "image/gif")}`;
       default: // Lottie (3) or unknown — text fallback
         return `[sticker: ${name}]`;
     }

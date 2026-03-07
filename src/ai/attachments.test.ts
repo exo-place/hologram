@@ -204,21 +204,24 @@ describe("render_sticker(): sticker marker emission", () => {
     );
   }
 
-  test("PNG sticker (format_type 1) → HATT marker with .png", () => {
+  test("PNG sticker (format_type 1) → name + HATT marker with .png", () => {
     const result = renderSticker({ id: "111", name: "wave", format_type: 1 });
     const { nonce, messages } = result;
+    expect(messages[0].content).toContain("[sticker: wave]");
     expect(messages[0].content).toContain(
       `${MARKER_HATT_PREFIX}${nonce}|https://cdn.discordapp.com/stickers/111.png|image/png${MARKER_SUFFIX}`,
     );
   });
 
-  test("APNG sticker (format_type 2) → HATT marker with .png", () => {
+  test("APNG sticker (format_type 2) → name + HATT marker with .png", () => {
     const result = renderSticker({ id: "222", name: "bounce", format_type: 2 });
+    expect(result.messages[0].content).toContain("[sticker: bounce]");
     expect(result.messages[0].content).toContain("stickers/222.png");
   });
 
-  test("GIF sticker (format_type 4) → HATT marker with .gif", () => {
+  test("GIF sticker (format_type 4) → name + HATT marker with .gif", () => {
     const result = renderSticker({ id: "333", name: "dance", format_type: 4 });
+    expect(result.messages[0].content).toContain("[sticker: dance]");
     expect(result.messages[0].content).toContain("stickers/333.gif");
   });
 
