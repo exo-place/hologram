@@ -16,3 +16,9 @@
 
 [aliases]
 todo = ["TODO.md"]
+
+[analyze.rules.missing-summary]
+severity = "error"
+
+[analyze.rules.stale-summary]
+severity = "error"
