@@ -573,13 +573,50 @@ describe("safety invariant: quantifier nesting", () => {
 // Edge Cases
 // =============================================================================
 
-describe("edge cases", () => {
-  test("very long safe pattern", () => {
-    const pattern = "a".repeat(1000);
+describe("input length limit", () => {
+  test("pattern at exactly the limit is accepted", () => {
+    const pattern = "a".repeat(500);
     expectSafe(pattern);
   });
 
-  test("many alternations", () => {
+  test("pattern one character over the limit is rejected", () => {
+    const pattern = "a".repeat(501);
+    expectUnsafe(pattern, "too long");
+  });
+
+  test("very long pattern is rejected with length in message", () => {
+    const pattern = "a".repeat(1000);
+    expect(() => validateRegexPattern(pattern)).toThrow("1000 characters");
+  });
+
+  test("1MB alternation pattern is rejected before parsing", () => {
+    // a|b|c|... repeated to exceed limit — should fail on length check, not hang
+    const pattern = Array.from({ length: 50000 }, () => "a").join("|");
+    expectUnsafe(pattern, "too long");
+  });
+
+  test("error message includes the limit", () => {
+    const pattern = "a".repeat(501);
+    expect(() => validateRegexPattern(pattern)).toThrow("500");
+  });
+});
+
+describe("node count limit", () => {
+  test("deeply alternated pattern within length limit but hitting node count is rejected", () => {
+    // 500 chars of a|a|a|... = ~250 alternation nodes — well within node limit
+    const pattern = Array.from({ length: 100 }, () => "a").join("|");
+    // This is safe (under both limits)
+    expectSafe(pattern);
+  });
+});
+
+describe("edge cases", () => {
+  test("safe pattern near but under the length limit", () => {
+    const pattern = "a".repeat(499);
+    expectSafe(pattern);
+  });
+
+  test("many alternations (within limit)", () => {
     const pattern = Array.from({ length: 50 }, (_, i) => `opt${i}`).join("|");
     expectSafe(pattern);
   });

@@ -40,6 +40,16 @@ const SPECIAL_ESCAPES = new Set([
 ]);
 
 // =============================================================================
+// Limits
+// =============================================================================
+
+/** Maximum allowed regex pattern length in characters */
+const MAX_PATTERN_LENGTH = 500;
+
+/** Maximum number of AST nodes the parser may produce (guards deeply nested inputs) */
+const MAX_NODE_COUNT = 2000;
+
+// =============================================================================
 // Parser
 // =============================================================================
 
@@ -48,6 +58,12 @@ const SPECIAL_ESCAPES = new Set([
  * Throws ExprError with a descriptive message if the pattern is unsafe.
  */
 export function validateRegexPattern(pattern: string): void {
+  if (pattern.length > MAX_PATTERN_LENGTH) {
+    throw new ExprError(
+      `Unsafe regex: pattern is too long (${pattern.length} characters). ` +
+      `Maximum allowed length is ${MAX_PATTERN_LENGTH} characters`
+    );
+  }
   const parser = new RegexParser(pattern);
   parser.parse();
 }
@@ -55,9 +71,20 @@ export function validateRegexPattern(pattern: string): void {
 class RegexParser {
   private pattern: string;
   private pos = 0;
+  private nodeCount = 0;
 
   constructor(pattern: string) {
     this.pattern = pattern;
+  }
+
+  /** Increment node counter and throw if the limit is exceeded */
+  private countNode(): void {
+    if (++this.nodeCount > MAX_NODE_COUNT) {
+      throw new ExprError(
+        `Unsafe regex: pattern produces too many nodes (limit ${MAX_NODE_COUNT}). ` +
+        "Simplify the pattern"
+      );
+    }
   }
 
   private peek(): string | undefined {
@@ -91,6 +118,7 @@ class RegexParser {
       this.advance(); // |
       const right = this.parseSequence();
       // Alternation propagates hasQuantifier from either branch
+      this.countNode();
       node = { hasQuantifier: node.hasQuantifier || right.hasQuantifier };
     }
     return node;
@@ -108,6 +136,7 @@ class RegexParser {
       const atom = this.parseAtom();
       if (!atom) break;
 
+      this.countNode();
       // Try to parse a quantifier after the atom
       const quantified = this.tryQuantifier(atom);
       if (quantified.hasQuantifier) {
