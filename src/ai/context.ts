@@ -44,7 +44,7 @@ export interface EvaluatedEntity {
   thinkingLevel: ThinkingLevel | null;
   /** Which roles to collapse adjacent messages for. null = no directive (default: all roles) */
   collapseMessages: CollapseRoles | null;
-  /** Per-category content filter overrides (from $safety/$nsfw directives). Empty = use provider defaults */
+  /** Per-category content filter overrides (from $safety directives). Empty = use provider defaults */
   contentFilters: ContentFilter[];
   /** Custom system prompt template (null = use default formatting) */
   template: string | null;

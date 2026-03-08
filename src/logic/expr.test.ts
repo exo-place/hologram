@@ -2169,8 +2169,7 @@ describe("$safety directive", () => {
     expect(result.contentFilters).toHaveLength(0);
   });
 
-  test("$safety channel.is_nsfw → no filter (use $nsfw for boolean conditions)", () => {
-    // $safety doesn't support boolean expressions; use $nsfw for channel.is_nsfw patterns
+  test("$safety channel.is_nsfw → no filter (boolean expressions not supported in $safety)", () => {
     const result = evaluateFacts(["$safety channel.is_nsfw", "fact"], nsfwCtx);
     expect(result.contentFilters).toHaveLength(0);
   });
@@ -2244,7 +2243,7 @@ describe("$safety directive", () => {
     }
   });
 
-  test("$safety civic channel.is_nsfw → no filter (boolean not supported in $safety)", () => {
+  test("$safety civic channel.is_nsfw → no filter (boolean expressions not supported in $safety)", () => {
     const result = evaluateFacts(["$safety civic channel.is_nsfw", "fact"], nsfwCtx);
     expect(result.contentFilters).toHaveLength(0);
   });
@@ -2265,33 +2264,6 @@ describe("$safety directive", () => {
     expect(result.contentFilters).toEqual([{ category: "sexual", threshold: "off" }]);
   });
 
-  // --- $nsfw backward-compat alias ---
-  test("$nsfw (bare) → all categories off (alias)", () => {
-    const result = evaluateFacts(["$nsfw", "fact"], safeCtx);
-    expect(result.contentFilters).toHaveLength(5);
-    expect(result.contentFilters.every(f => f.threshold === "off")).toBe(true);
-  });
-
-  test("$nsfw true → all categories off", () => {
-    const result = evaluateFacts(["$nsfw true", "fact"], safeCtx);
-    expect(result.contentFilters).toHaveLength(5);
-  });
-
-  test("$nsfw false → no filters", () => {
-    const result = evaluateFacts(["$nsfw false", "fact"], safeCtx);
-    expect(result.contentFilters).toHaveLength(0);
-  });
-
-  test("$nsfw channel.is_nsfw in NSFW channel → all off", () => {
-    const result = evaluateFacts(["$nsfw channel.is_nsfw", "fact"], nsfwCtx);
-    expect(result.contentFilters).toHaveLength(5);
-  });
-
-  test("$nsfw fact is stripped from LLM context", () => {
-    const result = evaluateFacts(["$nsfw true", "some fact"], safeCtx);
-    expect(result.facts).toEqual(["some fact"]);
-  });
-
   // --- edge cases ---
   test("$safetyfoo is not treated as $safety directive", () => {
     const result = evaluateFacts(["$safetyfoo", "some fact"], safeCtx);
@@ -2299,7 +2271,7 @@ describe("$safety directive", () => {
     expect(result.facts).toContain("$safetyfoo");
   });
 
-  test("$nsfwfoo is not treated as $nsfw directive", () => {
+  test("$nsfwfoo is not treated as $safety directive", () => {
     const result = evaluateFacts(["$nsfwfoo", "some fact"], safeCtx);
     expect(result.contentFilters).toHaveLength(0);
     expect(result.facts).toContain("$nsfwfoo");

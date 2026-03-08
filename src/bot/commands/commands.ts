@@ -599,18 +599,14 @@ registerCommand({
         (config?.config_collapse ?? "").split(/\s+/).filter(Boolean)
       );
 
-      // Pre-populate safety filter from entity facts: find the first all-categories $safety or $nsfw fact
+      // Pre-populate safety filter from entity facts: find the first all-categories $safety fact
       const safetyFact = entity.facts.find(f => {
         const c = f.content.trim();
         const parsed = parseSafetyDirective(c);
         return parsed !== null && parsed.category === "all";
       });
       const safetyValue = safetyFact
-        ? (() => {
-            const c = safetyFact.content.trim();
-            const sigil = c.startsWith("$safety") ? "$safety" : "$nsfw";
-            return c.slice(sigil.length).trim();
-          })()
+        ? safetyFact.content.trim().slice("$safety".length).trim()
         : "";
 
       const advancedLabels = [
@@ -1082,7 +1078,7 @@ registerModalHandler("edit-advanced", async (bot, interaction, _textValues) => {
       ? "none"
       : collapseSelected.join(" ");
 
-  // Safety filters: remove all all-category $safety/$nsfw facts, add new $safety fact if non-empty
+  // Safety filters: remove all all-category $safety facts, add new $safety fact if non-empty
   const safetyRaw = textValues.safety?.trim() || null;
   const existingFacts = entity.facts.map(f => f.content);
   for (const fc of existingFacts) {
