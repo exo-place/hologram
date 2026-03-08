@@ -149,6 +149,13 @@ export function error(
     if (err instanceof Error) {
       errorContext.error = err.message;
       errorContext.stack = err.stack;
+      if (err.cause !== undefined) {
+        try {
+          errorContext.cause = typeof err.cause === "object" ? JSON.stringify(err.cause, binaryRedactReplacer) : String(err.cause);
+        } catch {
+          errorContext.cause = String(err.cause);
+        }
+      }
     } else if (err !== undefined) {
       // Try to serialize objects properly
       try {

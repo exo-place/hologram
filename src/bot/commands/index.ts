@@ -9,7 +9,7 @@ import type { CreateApplicationCommand, TextInputComponent, TextStyles } from "@
 import type { bot } from "../client";
 type Bot = typeof bot;
 type Interaction = Parameters<NonNullable<Bot["events"]["interactionCreate"]>>[0];
-import { info, warn, error } from "../../logger";
+import { debug, info, warn, error } from "../../logger";
 import { searchEntities, searchEntitiesOwnedBy, getEntitiesWithFacts, getPermissionDefaults } from "../../db/entities";
 import { parsePermissionDirectives, matchesUserEntry, isUserBlacklisted, isUserAllowed } from "../../logic/expr";
 import { getBoundEntityIds, type DiscordType } from "../../db/discord";
@@ -155,27 +155,31 @@ export async function respondWithModal(
   // Discord modal titles are limited to 45 characters
   const truncatedTitle = title.length > 45 ? title.slice(0, 42) + "..." : title;
 
+  const modalComponents = components.map(c => {
+    const textInput: TextInputComponent = {
+      type: MessageComponentTypes.TextInput,
+      customId: c.customId,
+      label: c.label,
+      style: c.style,
+      required: c.required ?? true,
+      value: c.value || undefined,
+      placeholder: c.placeholder,
+    };
+
+    return {
+      type: MessageComponentTypes.ActionRow as const,
+      components: [textInput],
+    };
+  });
+
+  debug("Sending modal", { customId, title: truncatedTitle, components: JSON.stringify(modalComponents) });
+
   await bot.helpers.sendInteractionResponse(interaction.id, interaction.token, {
     type: InteractionResponseTypes.Modal,
     data: {
       customId,
       title: truncatedTitle,
-      components: components.map(c => {
-        const textInput: TextInputComponent = {
-          type: MessageComponentTypes.TextInput,
-          customId: c.customId,
-          label: c.label,
-          style: c.style,
-          required: c.required ?? true,
-          value: c.value,
-          placeholder: c.placeholder,
-        };
-
-        return {
-          type: MessageComponentTypes.ActionRow as const,
-          components: [textInput],
-        };
-      }),
+      components: modalComponents,
     },
   });
 }
@@ -193,6 +197,8 @@ export async function respondWithV2Modal(
   labels: any[]
 ) {
   const truncatedTitle = title.length > 45 ? title.slice(0, 42) + "..." : title;
+
+  debug("Sending V2 modal", { customId, title: truncatedTitle, components: JSON.stringify(labels) });
 
   await bot.helpers.sendInteractionResponse(interaction.id, interaction.token, {
     type: InteractionResponseTypes.Modal,
