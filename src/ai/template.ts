@@ -97,7 +97,33 @@ nunjucks.runtime.callWrap = function (
   context: unknown,
   args: unknown[],
 ): unknown {
-  // Extract the method name from "obj.method" or 'obj["method"]' style names
+  // Extract the method name from the callee expression string.
+  //
+  // Nunjucks generates the `name` argument in one of two forms:
+  //   - Member call:   `obj["method"]` or `obj["a"]["b"]["method"]` (always bracket notation in compiled output)
+  //   - Direct call:   `fn` (bare identifier)
+  //   - Expression:    `--expression--` or `the return value of (expr)` (parenthesized / computed callee)
+  //
+  // The regex /\["(\w+)"\]$/ reliably extracts the last bracket segment for member calls.
+  // For direct calls or expression callees, we fall back to dot-splitting (or use the name as-is).
+  //
+  // Two Nunjucks patterns bypass this name extraction:
+  //   1. `{{ (s.toString.apply)(s) }}`  — produces name `--expression--`
+  //   2. `{% set fn = s.toString.apply %}{{ fn(s) }}`  — produces name `fn`
+  // In both cases the extracted methodName is NOT "apply"/"call"/"bind", so the block below
+  // doesn't fire. HOWEVER, these bypasses are not exploitable because:
+  //   (a) `memberLookup` already blocked `.constructor` at property access time, so
+  //       fn.apply.constructor / fn.call.constructor / fn.bind.constructor → undefined.
+  //       There is no path from apply/call/bind to Function or any global.
+  //   (b) Nunjucks compiled templates run inside `new Function(...)` in strict mode.
+  //       Passing `null` as `thisArg` to .call/.apply does NOT give access to globalThis —
+  //       `this` is null (strict mode), not the global object.
+  //   (c) The only functions reachable via call/apply/bind are those already in the
+  //       template context (safe closures from buildPromptAndMessages). There is no
+  //       dangerous function available to redirect.
+  // Net result: the regex blocklist is defense-in-depth for the COMMON case (direct member
+  // call syntax). The two bypass patterns exist but lead to dead ends due to the
+  // memberLookup constructor block and strict-mode this-binding.
   let methodName: string;
   const bracketMatch = name.match(/\["(\w+)"\]$/);
   if (bracketMatch) {
@@ -112,7 +138,8 @@ nunjucks.runtime.callWrap = function (
     throw new ExprError(BLOCKED_METHODS[methodName]);
   }
 
-  // Block .apply(), .bind(), .call()
+  // Block .apply(), .bind(), .call() for the common member-call syntax.
+  // See comment above for analysis of the two bypass patterns that exist.
   if (
     methodName === "apply" ||
     methodName === "bind" ||

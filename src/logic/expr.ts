@@ -664,7 +664,25 @@ function generateCode(node: ExprNode, extraGlobals?: Set<string>): string {
       return `ctx.${node.name}`;
 
     case "member": {
-      // Block dangerous property names that could escape the sandbox
+      // Block dangerous property names that could escape the sandbox.
+      //
+      // This is an intentional blocklist rather than a whitelist. A whitelist is not
+      // viable here because property names in member access are user-defined: expressions
+      // like `self.health`, `self.fox_tf`, `channel.name`, `server.description` depend on
+      // arbitrary fact names and Discord metadata fields chosen by entity authors. Any
+      // practical whitelist would need to enumerate every possible key, which is unbounded.
+      //
+      // The blocklist is complete for prototype chain escape: the blocked set covers every
+      // property name that grants access to an object's prototype chain or descriptor API:
+      //   - `constructor`      → Function constructor → arbitrary code
+      //   - `__proto__`        → direct prototype chain access
+      //   - `prototype`        → constructor prototype manipulation
+      //   - `__defineGetter__` / `__defineSetter__`    → getter/setter injection
+      //   - `__lookupGetter__` / `__lookupSetter__`    → descriptor inspection
+      // Bracket notation (computed property access like `obj["__proto__"]`) is not parsed
+      // by the expression grammar — only dot-notation member access is supported. This
+      // makes the attack surface static: property names are always string literals in the
+      // AST, enumerable at compile time, fully covered by the blocklist.
       const blockedMsg = BLOCKED_PROPERTIES.get(node.property);
       if (blockedMsg) {
         throw new ExprError(blockedMsg);
