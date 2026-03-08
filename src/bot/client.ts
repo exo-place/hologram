@@ -645,6 +645,9 @@ bot.events.messageCreate = async (message) => {
       debug("Response chain limit reached", { channel: channelId, depth, max: MAX_RESPONSE_CHAIN });
       return;
     }
+  } else if (!isBot && !isWebhookMessage) {
+    // A genuine human message breaks any active self-response chain
+    responseChainDepth.delete(channelId);
   }
 
   debug("Mention check", {
@@ -877,11 +880,6 @@ bot.events.messageCreate = async (message) => {
 
   // Respond immediately with entities that are ready
   if (respondingEntities.length > 0) {
-    // Reset chain depth only when a real user message triggers a response
-    if (!message.webhookId) {
-      responseChainDepth.set(channelId, 0);
-    }
-
     // Group entities by template so entities with different templates get separate LLM calls
     const templateGroups = new Map<string | null, EvaluatedEntity[]>();
     for (const entity of respondingEntities) {
