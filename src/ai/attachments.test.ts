@@ -20,27 +20,35 @@ mock.module("../db/attachment-cache", () => ({
 // =============================================================================
 
 describe("attach(): marker emission", () => {
-  test("emits HATT marker with nonce, url, and mimeType", () => {
+  test("emits HATT marker with hattNonce, url, and mimeType", () => {
     const result = renderStructuredTemplate(
       `{% call send_as("user") %}{{ attach("https://example.com/photo.png", "image/png") }}{% endcall %}`,
       {},
     );
-    const { nonce } = result;
-    expect(nonce).toHaveLength(64); // 32 bytes hex
+    const { hattNonce } = result;
+    expect(hattNonce).toHaveLength(64); // 32 bytes hex
     const msg = result.messages[0];
-    expect(msg.content).toContain(`${MARKER_HATT_PREFIX}${nonce}|https://example.com/photo.png|image/png${MARKER_SUFFIX}`);
+    expect(msg.content).toContain(`${MARKER_HATT_PREFIX}${hattNonce}|https://example.com/photo.png|image/png${MARKER_SUFFIX}`);
   });
 
-  test("nonce is returned in ParsedTemplateOutput", () => {
+  test("nonce (HMSG) and hattNonce are both returned in ParsedTemplateOutput", () => {
     const result = renderStructuredTemplate("Hello", {});
     expect(typeof result.nonce).toBe("string");
     expect(result.nonce).toHaveLength(64);
+    expect(typeof result.hattNonce).toBe("string");
+    expect(result.hattNonce).toHaveLength(64);
   });
 
-  test("each render has a unique nonce", () => {
+  test("nonce and hattNonce are distinct (separate entropy for HMSG vs HATT)", () => {
+    const result = renderStructuredTemplate("Hello", {});
+    expect(result.nonce).not.toBe(result.hattNonce);
+  });
+
+  test("each render has unique nonces", () => {
     const r1 = renderStructuredTemplate("Hello", {});
     const r2 = renderStructuredTemplate("Hello", {});
     expect(r1.nonce).not.toBe(r2.nonce);
+    expect(r1.hattNonce).not.toBe(r2.hattNonce);
   });
 
   test("attach() with empty url emits nothing", () => {
@@ -58,9 +66,9 @@ describe("attach(): marker emission", () => {
       {},
     );
     const content = result.messages[0].content;
-    const { nonce } = result;
+    const { hattNonce } = result;
     expect(content).toContain("before");
-    expect(content).toContain(`${MARKER_HATT_PREFIX}${nonce}|https://cdn.discord.com/img.jpg|image/jpeg${MARKER_SUFFIX}`);
+    expect(content).toContain(`${MARKER_HATT_PREFIX}${hattNonce}|https://cdn.discord.com/img.jpg|image/jpeg${MARKER_SUFFIX}`);
     expect(content).toContain("after");
   });
 });
@@ -163,9 +171,9 @@ describe("parse_emojis(): emoji marker emission", () => {
       `{% call send_as("user") %}{{ parse_emojis("<:wave:123456>") }}{% endcall %}`,
       {},
     );
-    const { nonce, messages } = result;
+    const { hattNonce, messages } = result;
     expect(messages[0].content).toContain("<:wave:123456>");
-    expect(messages[0].content).toContain(`${MARKER_HATT_PREFIX}${nonce}|https://cdn.discordapp.com/emojis/123456.webp|image/webp${MARKER_SUFFIX}`);
+    expect(messages[0].content).toContain(`${MARKER_HATT_PREFIX}${hattNonce}|https://cdn.discordapp.com/emojis/123456.webp|image/webp${MARKER_SUFFIX}`);
   });
 
   test("animated emoji: uses gif extension and mime type", () => {
@@ -174,7 +182,7 @@ describe("parse_emojis(): emoji marker emission", () => {
       {},
     );
     expect(result.messages[0].content).toContain(
-      `${MARKER_HATT_PREFIX}${result.nonce}|https://cdn.discordapp.com/emojis/789.gif|image/gif${MARKER_SUFFIX}`,
+      `${MARKER_HATT_PREFIX}${result.hattNonce}|https://cdn.discordapp.com/emojis/789.gif|image/gif${MARKER_SUFFIX}`,
     );
   });
 
@@ -215,10 +223,10 @@ describe("sticker_url() / sticker_media_type(): sticker helpers", () => {
 
   test("PNG sticker (format_type 1) → name + HATT marker with .png", () => {
     const result = renderSticker({ id: "111", name: "wave", format_type: 1 });
-    const { nonce, messages } = result;
+    const { hattNonce, messages } = result;
     expect(messages[0].content).toContain("[sticker: wave]");
     expect(messages[0].content).toContain(
-      `${MARKER_HATT_PREFIX}${nonce}|https://cdn.discordapp.com/stickers/111.png|image/png${MARKER_SUFFIX}`,
+      `${MARKER_HATT_PREFIX}${hattNonce}|https://cdn.discordapp.com/stickers/111.png|image/png${MARKER_SUFFIX}`,
     );
   });
 

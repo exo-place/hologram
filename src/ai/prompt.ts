@@ -356,7 +356,7 @@ export function buildPromptAndMessages(
   userEntityId?: number | null,
   guildId?: string,
   collapseMessages?: CollapseRoles | null,
-): { systemPrompt: string; messages: StructuredMessage[]; nonce: string } {
+): { systemPrompt: string; messages: StructuredMessage[]; nonce: string; hattNonce: string } {
   // Fetch history from DB (DESC order, newest first)
   const rawHistory = getMessages(channelId, MESSAGE_FETCH_LIMIT);
 
@@ -524,7 +524,7 @@ export function buildPromptAndMessages(
     );
   }
 
-  const { nonce } = output;
+  const { nonce, hattNonce } = output;
 
   // Convert to StructuredMessage[]
   let messages: StructuredMessage[] = output.messages.map(m => ({ role: m.role, content: m.content }));
@@ -549,7 +549,7 @@ export function buildPromptAndMessages(
     messages.splice(firstNonSystem, 0, { role: "user", content: "(continued)" });
   }
 
-  return { systemPrompt, messages, nonce };
+  return { systemPrompt, messages, nonce, hattNonce };
 }
 
 // =============================================================================
@@ -560,7 +560,12 @@ export interface PreparedPromptContext {
   /** Dedicated system prompt for AI SDK `system` parameter */
   systemPrompt: string;
   messages: StructuredMessage[];
-  /** Nonce for HATT attachment markers embedded in messages */
+  /**
+   * Nonce for HATT attachment markers embedded in messages.
+   * Distinct from the HMSG nonce (used for send_as role parsing) — kept separate
+   * so that template authors who can observe hattNonce via attach() return values
+   * cannot use it to forge send_as markers.
+   */
   nonce: string;
   other: EntityWithFacts[];
   contextExpr: string;
@@ -621,9 +626,9 @@ export function preparePromptContext(
   const template = entities[0]?.template ?? null;
   const systemTemplate = entities[0]?.systemTemplate ?? null;
   const collapseMessages: CollapseRoles | null = entities.find(e => e.collapseMessages !== null)?.collapseMessages ?? null;
-  const { systemPrompt, messages, nonce } = buildPromptAndMessages(
+  const { systemPrompt, messages, hattNonce } = buildPromptAndMessages(
     entities, other, entityMemories, template, channelId, contextExpr, effectiveStripPatterns, systemTemplate, userEntityId, guildId, collapseMessages,
   );
 
-  return { systemPrompt, messages, nonce, other, contextExpr, effectiveStripPatterns };
+  return { systemPrompt, messages, nonce: hattNonce, other, contextExpr, effectiveStripPatterns };
 }

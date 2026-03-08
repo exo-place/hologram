@@ -41,7 +41,7 @@ Findings from parallel consistency + gaps + adversarial audit across entire code
 
 ### Test Coverage
 
-Current: 873 tests across `src/logic/expr.test.ts`, `src/logic/expr.security.test.ts`, `src/logic/expr.date.test.ts`, `src/logic/safe-regex.test.ts`, `src/ai/template.test.ts`, `src/ai/template-output.test.ts`, and `src/ai/template-parity.test.ts`. Covers:
+Current: 1291 tests across `src/logic/expr.test.ts`, `src/logic/expr.security.test.ts`, `src/logic/expr.date.test.ts`, `src/logic/safe-regex.test.ts`, `src/ai/template.test.ts`, `src/ai/template-output.test.ts`, `src/ai/template-parity.test.ts`, and `src/ai/attachments.test.ts`. Covers:
 - Expression evaluator (tokenizer, parser, operators, precedence)
 - Security (identifier whitelist, injection prevention, prototype access)
 - Adversarial sandbox escapes (184 tests): prototype chains, global access, constructors, module system, bracket notation, code injection, statement injection, unsupported syntax, call/apply/bind, string/array method abuse, DoS vectors (ReDoS + memory exhaustion runtime-bounded: repeat, padStart, padEnd, replaceAll, join), unicode tricks, numeric edge cases, known CVE patterns, combined multi-vector attacks, prototype-less objects, evalMacroValue sandbox
@@ -57,8 +57,9 @@ Current: 873 tests across `src/logic/expr.test.ts`, `src/logic/expr.security.tes
 - messages() with filter ($user, $char)
 - Discord emote edge cases
 - Real-world entity evaluation
-- Template engine (Nunjucks) security (148 tests): prototype chain escapes, RCE via constructor chains, global object access blocked, built-in constructor access blocked, call/apply/bind blocked, matchAll blocked, string method memory limits, loop iteration cap (1000), output size cap (1MB), ReDoS regex validation, context prototype leakage contained, known CVE patterns, multi-vector combined attacks, filter functionality, whitespace control, structured context rendering, send_as security (not available in plain render, role injection safe, prototype chain blocked)
+- Template engine (Nunjucks) security (150 tests): prototype chain escapes, RCE via constructor chains, global object access blocked, built-in constructor access blocked, call/apply/bind blocked, matchAll blocked, string method memory limits, loop iteration cap (1000), output size cap (1MB), ReDoS regex validation, context prototype leakage contained, known CVE patterns, multi-vector combined attacks, filter functionality, whitespace control, structured context rendering, send_as security (not available in plain render, role injection safe, prototype chain blocked, hattNonce-to-HMSG forgery blocked via separate nonces)
 - Template tests (43 tests): DEFAULT_TEMPLATE snapshot tests (system prompt + messages for single/multi entity, freeform, memories, others, no entities, empty history), adversarial injection (nonce-like markers, template syntax in content), send_as protocol tests (role designation, for-loop, unmarked text interleaving, empty filtering, legacy compat), block invisibility tests (blocks are organizational only), renderSystemPrompt tests, template inheritance
+- Attachment tests (HATT protocol): marker emission, nonce isolation, image/file/URL part resolution, parse_emojis, sticker helpers, capability detection (vision, document type)
 
 ---
 
