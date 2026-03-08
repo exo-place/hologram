@@ -1204,11 +1204,16 @@ registerModalHandler("edit-permissions", async (bot, interaction, _values) => {
     }
   }
 
-  // Build entries with role: prefix using resolved data
+  // Build entries with role: prefix using resolved data.
+  // If resolved data is absent or an ID appears in neither roles nor users, skip it
+  // to prevent a role ID being silently stored as a plain user ID.
   const buildEntries = (values: string[]): string[] => {
-    return values.map(id => {
-      const isRole = resolved?.roles?.has?.(BigInt(id)) ?? false;
-      return isRole ? `role:${id}` : id;
+    return values.flatMap(id => {
+      const bigId = BigInt(id);
+      if (resolved?.roles?.has(bigId)) return [`role:${id}`];
+      if (resolved?.users?.has(bigId)) return [id];
+      // ID not found in resolved data — skip rather than guess
+      return [];
     });
   };
 
@@ -1766,10 +1771,16 @@ registerModalHandler("config", async (bot, interaction, _values) => {
     }
   }
 
+  // Build entries with role: prefix using resolved data.
+  // If resolved data is absent or an ID appears in neither roles nor users, skip it
+  // to prevent a role ID being silently stored as a plain user ID.
   const buildEntries = (values: string[]): string[] => {
-    return values.map(id => {
-      const isRole = resolved?.roles?.has?.(BigInt(id)) ?? false;
-      return isRole ? `role:${id}` : id;
+    return values.flatMap(id => {
+      const bigId = BigInt(id);
+      if (resolved?.roles?.has(bigId)) return [`role:${id}`];
+      if (resolved?.users?.has(bigId)) return [id];
+      // ID not found in resolved data — skip rather than guess
+      return [];
     });
   };
 
