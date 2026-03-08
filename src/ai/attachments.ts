@@ -129,11 +129,22 @@ async function resolveAttachment(
 
   if (isImage && supportsVision(providerName)) {
     if (isDiscordCdnUrl(url)) {
-      const { data, contentType } = await fetchAndCacheAttachment(url);
-      // data is Buffer from getCachedAttachment (Buffer.from'd from SQLite Uint8Array).
-      // Use Buffer.from() to guarantee a real Buffer before encoding — AI SDK schema
-      // rejects Buffer objects and requires a base64 string for inline image data.
-      return { type: "image", image: Buffer.from(data).toString("base64"), mediaType: contentType };
+      try {
+        const { data, contentType } = await fetchAndCacheAttachment(url);
+        // data is Buffer from getCachedAttachment (Buffer.from'd from SQLite Uint8Array).
+        // Use Buffer.from() to guarantee a real Buffer before encoding — AI SDK schema
+        // rejects Buffer objects and requires a base64 string for inline image data.
+        return { type: "image", image: Buffer.from(data).toString("base64"), mediaType: contentType };
+      } catch (err) {
+        warn("Failed to fetch image attachment", { url, mimeType, err });
+        return fallbackPart(
+          url,
+          mimeType,
+          entityId,
+          ownerId,
+          `Failed to fetch: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
     }
     // External image URLs (e.g. Tenor thumbnails): pass URL directly.
     // Most providers can fetch public URLs themselves.
