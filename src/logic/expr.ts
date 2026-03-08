@@ -940,9 +940,11 @@ export interface ProcessedFact {
   collapseRoles?: CollapseRoles;
   /** True if this fact is a $safety (or $nsfw alias) directive */
   isSafety: boolean;
+  /** True if this fact used the $nsfw alias (enables boolean true→off mapping) */
+  safetyIsNsfwAlias?: boolean;
   /** For $safety directives, the category ("all" = applies to all categories) */
   safetyCategory?: SafetyCategory | "all";
-  /** For $safety directives, the expression string (evaluates to threshold string or boolean) */
+  /** For $safety directives, the expression string (threshold keyword or boolean expr) */
   safetyExpr?: string;
 }
 
@@ -1273,6 +1275,7 @@ export function parseFact(fact: string): ProcessedFact {
         isThinking: false,
         isCollapse: false,
         isSafety: true,
+        safetyIsNsfwAlias: safetyResultCond.isNsfwAlias,
         safetyCategory: safetyResultCond.category,
         safetyExpr: safetyResultCond.expr,
       };
@@ -1564,6 +1567,7 @@ export function parseFact(fact: string): ProcessedFact {
       isThinking: false,
       isCollapse: false,
       isSafety: true,
+      safetyIsNsfwAlias: safetyResult.isNsfwAlias,
       safetyCategory: safetyResult.category,
       safetyExpr: safetyResult.expr,
     };
@@ -1859,7 +1863,7 @@ function parseCollapseDirective(content: string): CollapseRoles | null {
  *
  * $nsfw (alias) → same as $safety with category=all
  */
-export function parseSafetyDirective(content: string): { category: SafetyCategory | "all"; expr: string } | null {
+export function parseSafetyDirective(content: string): { category: SafetyCategory | "all"; expr: string; isNsfwAlias: boolean } | null {
   let sigil: string;
   if (content.startsWith(SAFETY_SIGIL)) {
     sigil = SAFETY_SIGIL;
@@ -1872,9 +1876,9 @@ export function parseSafetyDirective(content: string): { category: SafetyCategor
   if (rest !== "" && !rest.startsWith(" ")) return null;
   const trimmed = rest.trim();
 
-  // $nsfw is always all-categories
+  // $nsfw is always all-categories; boolean true→off mapping applies
   if (sigil === NSFW_SIGIL) {
-    return { category: "all", expr: trimmed === "" ? "true" : trimmed };
+    return { category: "all", expr: trimmed === "" ? "true" : trimmed, isNsfwAlias: true };
   }
 
   // $safety: check if first token is a known category keyword
@@ -1883,21 +1887,19 @@ export function parseSafetyDirective(content: string): { category: SafetyCategor
     const firstToken = trimmed.slice(0, spaceIdx).toLowerCase();
     if (SAFETY_CATEGORY_SET.has(firstToken)) {
       const expr = trimmed.slice(spaceIdx + 1).trim();
-      return { category: firstToken as SafetyCategory, expr: expr === "" ? "true" : expr };
+      return { category: firstToken as SafetyCategory, expr: expr === "" ? "true" : expr, isNsfwAlias: false };
     }
   }
 
   // No category keyword: applies to all categories
-  return { category: "all", expr: trimmed === "" ? "true" : trimmed };
+  return { category: "all", expr: trimmed === "" ? "true" : trimmed, isNsfwAlias: false };
 }
 
 /**
- * Map an evaluated expression value to a SafetyThreshold.
- * true → "off", false/null/undefined → null (no override), string → threshold or null
+ * Map a threshold keyword string to a SafetyThreshold.
+ * Returns null for unrecognized values.
  */
 function evaluateSafetyThreshold(val: unknown): SafetyThreshold | null {
-  if (val === true) return "off";
-  if (!val) return null;
   if (typeof val === "string") {
     const lower = val.toLowerCase();
     if (lower === "off") return "off";
@@ -2210,19 +2212,21 @@ export function evaluateFacts(
     if (parsed.isSafety) {
       const category = parsed.safetyCategory ?? "all";
       const expr = parsed.safetyExpr ?? "true";
-      // Threshold keywords are not valid expr identifiers — evaluate as literal string.
-      // Other expressions are evaluated; invalid expressions → null (no override).
-      let val: unknown;
+      // Threshold keywords are not valid expr identifiers — handle as literals.
+      // Boolean expressions are only meaningful for $nsfw alias (true → off).
+      // $safety only supports threshold keywords; non-keyword expressions yield no override.
+      let threshold: SafetyThreshold | null;
       if (SAFETY_THRESHOLD_KEYWORDS.has(expr)) {
-        val = expr;
+        threshold = evaluateSafetyThreshold(expr);
+      } else if (parsed.safetyIsNsfwAlias) {
+        // $nsfw: boolean expression — true=off (relax all), false=no override
+        let boolVal: boolean;
+        try { boolVal = evalExpr(expr, context); } catch { boolVal = false; }
+        threshold = boolVal ? "off" : null;
       } else {
-        try {
-          val = evalExpr(expr, context);
-        } catch {
-          val = null;
-        }
+        // $safety: non-keyword expressions not supported — no override
+        threshold = null;
       }
-      const threshold = evaluateSafetyThreshold(val);
       if (threshold !== null) {
         const cats = category === "all" ? ALL_SAFETY_CATEGORIES : [category];
         for (const cat of cats) safetyMap.set(cat, threshold);

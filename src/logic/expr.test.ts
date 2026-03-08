@@ -2159,24 +2159,19 @@ describe("$safety directive", () => {
     for (const f of result.contentFilters) expect(f.threshold).toBe("off");
   });
 
-  test("$safety true → all categories OFF (boolean true = off)", () => {
+  test("$safety true → no filter ($safety ignores boolean expressions)", () => {
     const result = evaluateFacts(["$safety true", "fact"], safeCtx);
-    expect(result.contentFilters).toHaveLength(5);
+    expect(result.contentFilters).toHaveLength(0);
   });
 
-  test("$safety false → no filters (boolean false = skip)", () => {
+  test("$safety false → no filter", () => {
     const result = evaluateFacts(["$safety false", "fact"], safeCtx);
     expect(result.contentFilters).toHaveLength(0);
   });
 
-  test("$safety channel.is_nsfw in NSFW channel → all categories OFF", () => {
+  test("$safety channel.is_nsfw → no filter (use $nsfw for boolean conditions)", () => {
+    // $safety doesn't support boolean expressions; use $nsfw for channel.is_nsfw patterns
     const result = evaluateFacts(["$safety channel.is_nsfw", "fact"], nsfwCtx);
-    expect(result.contentFilters).toHaveLength(5);
-    expect(result.contentFilters.every(f => f.threshold === "off")).toBe(true);
-  });
-
-  test("$safety channel.is_nsfw in non-NSFW channel → no filters", () => {
-    const result = evaluateFacts(["$safety channel.is_nsfw", "fact"], safeCtx);
     expect(result.contentFilters).toHaveLength(0);
   });
 
@@ -2249,10 +2244,9 @@ describe("$safety directive", () => {
     }
   });
 
-  test("$safety civic channel.is_nsfw in NSFW channel → civic OFF", () => {
+  test("$safety civic channel.is_nsfw → no filter (boolean not supported in $safety)", () => {
     const result = evaluateFacts(["$safety civic channel.is_nsfw", "fact"], nsfwCtx);
-    expect(result.contentFilters).toHaveLength(1);
-    expect(result.contentFilters[0]).toEqual({ category: "civic", threshold: "off" });
+    expect(result.contentFilters).toHaveLength(0);
   });
 
   // --- conditional $safety ---
