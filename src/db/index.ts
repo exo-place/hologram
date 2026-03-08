@@ -155,7 +155,7 @@ function initSchema(db: Database) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS webhook_messages (
       message_id TEXT PRIMARY KEY,
-      entity_id INTEGER NOT NULL,
+      entity_id INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
       entity_name TEXT NOT NULL,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )
@@ -253,5 +253,23 @@ function initSchema(db: Database) {
     db.exec(`ALTER TABLE entities ADD COLUMN config_collapse TEXT`);
   } catch {
     // Column already exists
+  }
+
+  // Migrate webhook_messages to add FK constraint (ON DELETE CASCADE)
+  // SQLite doesn't support ALTER TABLE ADD FOREIGN KEY, so recreate the table.
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS webhook_messages_new (
+        message_id TEXT PRIMARY KEY,
+        entity_id INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+        entity_name TEXT NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    db.exec(`INSERT OR IGNORE INTO webhook_messages_new SELECT * FROM webhook_messages`);
+    db.exec(`DROP TABLE webhook_messages`);
+    db.exec(`ALTER TABLE webhook_messages_new RENAME TO webhook_messages`);
+  } catch {
+    // Migration already applied or table in expected state
   }
 }
