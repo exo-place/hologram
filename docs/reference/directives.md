@@ -170,19 +170,6 @@ $if channel.is_nsfw: $safety off   # Conditional override
 
 Can also be set via `/edit <entity> type:Advanced`.
 
-### `$nsfw` / `$nsfw <expr>`
-
-Backward-compatible alias for `$safety` (all categories). Accepts boolean expressions; `true` maps to `off` threshold.
-
-```
-$nsfw                              # Disable all safety filters (same as $safety off)
-$nsfw true                         # Same
-$nsfw false                        # No override
-$nsfw channel.is_nsfw              # Relax when channel is NSFW
-```
-
-Prefer `$safety` for new facts — `$nsfw` is kept for backward compatibility.
-
 ## Permissions
 
 ### `$locked`
