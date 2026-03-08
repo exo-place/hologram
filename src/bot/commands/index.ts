@@ -373,22 +373,34 @@ async function handleAutocomplete(bot: Bot, interaction: Interaction) {
     const targetOption = options.find((o: { name: string }) => o.name === "target");
     const target = targetOption?.value as string | undefined;
 
+    // Server admins (Manage Channels) can unbind from their own channels/server
+    // without needing entity-level edit permission (mirrors handler logic).
+    const memberPerms = interaction.member?.permissions;
+    const hasManageChannels =
+      memberPerms != null &&
+      typeof memberPerms === "object" &&
+      (memberPerms.has("MANAGE_CHANNELS") || memberPerms.has("ADMINISTRATOR"));
+
     // If target not yet selected, show entities user can edit or use as fallback
     if (!target) {
-      const allResults = searchEntities(query, 100);
-      const entitiesWithFacts = getEntitiesWithFacts(allResults.map(e => e.id));
-      results = allResults.filter(entity => {
-        if (entity.owned_by === userId) return true;
-        const entityWithFacts = entitiesWithFacts.get(entity.id);
-        if (!entityWithFacts) return false;
-        const facts = entityWithFacts.facts.map(f => f.content);
-        const permissions = parsePermissionDirectives(facts, getPermissionDefaults(entity.id));
-        if (isUserBlacklisted(permissions, userId, username, entity.owned_by, userRoles)) return false;
-        if (permissions.editList === "@everyone") return true;
-        if (permissions.editList?.some(u => matchesUserEntry(u, userId, username, userRoles))) return true;
-        if (isUserAllowed(permissions, userId, username, entity.owned_by, userRoles)) return true;
-        return false;
-      }).slice(0, 25);
+      if (hasManageChannels) {
+        results = searchEntities(query, 25);
+      } else {
+        const allResults = searchEntities(query, 100);
+        const entitiesWithFacts = getEntitiesWithFacts(allResults.map(e => e.id));
+        results = allResults.filter(entity => {
+          if (entity.owned_by === userId) return true;
+          const entityWithFacts = entitiesWithFacts.get(entity.id);
+          if (!entityWithFacts) return false;
+          const facts = entityWithFacts.facts.map(f => f.content);
+          const permissions = parsePermissionDirectives(facts, getPermissionDefaults(entity.id));
+          if (isUserBlacklisted(permissions, userId, username, entity.owned_by, userRoles)) return false;
+          if (permissions.editList === "@everyone") return true;
+          if (permissions.editList?.some(u => matchesUserEntry(u, userId, username, userRoles))) return true;
+          if (isUserAllowed(permissions, userId, username, entity.owned_by, userRoles)) return true;
+          return false;
+        }).slice(0, 25);
+      }
     } else {
       // Determine discordId and discordType based on target
       const channelId = interaction.channelId?.toString() ?? "";
@@ -420,13 +432,14 @@ async function handleAutocomplete(bot: Bot, interaction: Interaction) {
         if (query && !entityWithFacts.name.toLowerCase().includes(queryLower)) continue;
 
         // Check permission: edit for channel/server, use for persona
+        // Manage Channels bypasses edit check for non-persona targets (mirrors handler logic).
         if (entityWithFacts.owned_by !== userId) {
           const facts = entityWithFacts.facts.map(f => f.content);
           const permissions = parsePermissionDirectives(facts, getPermissionDefaults(entityId));
           if (isUserBlacklisted(permissions, userId, username, entityWithFacts.owned_by, userRoles)) continue;
           if (isPersonaTarget) {
             if (!isUserAllowed(permissions, userId, username, entityWithFacts.owned_by, userRoles)) continue;
-          } else {
+          } else if (!hasManageChannels) {
             if (permissions.editList !== "@everyone" &&
                 !permissions.editList?.some(u => matchesUserEntry(u, userId, username, userRoles))) {
               continue;
