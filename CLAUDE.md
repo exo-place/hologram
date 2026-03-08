@@ -254,6 +254,7 @@ error("Message", err, { key: "value" });
 - **Note things down immediately:** problems, tech debt, issues → TODO.md. If you see ANY issue while working - inconsistency, bug, missing feature, tech debt - add it to TODO.md before you forget.
 - **Do the work properly.** No undocumented workarounds. No copouts like "this is out of date, leaving it" - fix it or flag it.
 - **Update docs after every task.** Keep `docs/`, `README.md`, and `CLAUDE.md` in sync with code changes. Outdated docs are bugs.
+- **Keep SUMMARY.md files current.** Every directory under `src/` and `docs/` needs a `SUMMARY.md` describing its purpose and contents. When you add, remove, or significantly change files in a directory, update that directory's `SUMMARY.md`. The pre-commit hook runs `normalize rules run` — a `stale-summary` warning means the SUMMARY.md is out of date and must be refreshed before committing.
 - **Always write tests for new features.** Every new feature, bug fix, or behavior change must include corresponding tests. Tests go in `*.test.ts` files next to the code they test. Run `bun test` to execute.
 - **Coverage refresh rule.** At the start of each session, read `test/coverage-meta.json`. If either condition is true, run `bun test --coverage`, update the file, and commit it:
   - `git rev-list <meta.commit>..HEAD --count` ≥ 5 commits since last run, OR
@@ -315,4 +316,4 @@ Use conventional commits: `type(scope): message`
 
 Types: `feat`, `fix`, `refactor`, `docs`, `chore`, `test`
 
-Before committing: `bun run lint && bun run check:types` must pass.
+Before committing: `bun run lint && bun run check:types` must pass. The pre-commit hook also runs `normalize rules run` — fix any `error`-severity issues it reports (e.g. `hardcoded-secret`). Warnings (e.g. `missing-summary`, `stale-summary`) won't block the commit but should be addressed.
