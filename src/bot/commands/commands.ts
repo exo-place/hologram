@@ -57,42 +57,8 @@ import { debug } from "../../logger";
 import { formatMessagesForContext, getFilteredMessages } from "../../db/discord";
 import { buildEvaluatedEntity } from "../../debug/evaluation";
 import { getEmbeddingStatus, getEmbeddingCoverage, testRagRetrieval } from "../../debug/embeddings";
-
-// =============================================================================
-// Text Helpers
-// =============================================================================
-
-/**
- * Split text into chunks fitting maxLen, breaking at newlines when possible.
- */
-function chunkContent(content: string, maxLen: number): string[] {
-  const chunks: string[] = [];
-  let remaining = content;
-  while (remaining.length > 0) {
-    if (remaining.length <= maxLen) {
-      chunks.push(remaining);
-      break;
-    }
-    let splitAt = remaining.lastIndexOf("\n", maxLen);
-    if (splitAt === -1) splitAt = maxLen;
-    chunks.push(remaining.slice(0, splitAt));
-    remaining = remaining.slice(splitAt + 1);
-  }
-  return chunks;
-}
-
-const MAX_OUTPUT_CHARS = 8000;
-const ELISION_MARKER = "\n... (elided) ...\n";
-
-/**
- * Elide text that exceeds the max length, keeping beginning and end.
- */
-function elideText(text: string, maxLen = MAX_OUTPUT_CHARS): string {
-  if (text.length <= maxLen) return text;
-  const keepLen = maxLen - ELISION_MARKER.length;
-  const halfKeep = Math.floor(keepLen / 2);
-  return text.slice(0, halfKeep) + ELISION_MARKER + text.slice(-halfKeep);
-}
+import { chunkContent, elideText, buildDefaultValues, buildEntries, type ResolvedData } from "./helpers";
+export { chunkContent, elideText, buildDefaultValues, buildEntries, type ResolvedData };
 
 // =============================================================================
 // Permission Helpers
@@ -103,7 +69,7 @@ function elideText(text: string, maxLen = MAX_OUTPUT_CHARS): string {
  * Owner always can. Blacklist blocks everyone except owner.
  * Otherwise check $edit directive. Default = owner-only.
  */
-function canUserEdit(entity: EntityWithFacts, userId: string, username: string, userRoles: string[] = []): boolean {
+export function canUserEdit(entity: EntityWithFacts, userId: string, username: string, userRoles: string[] = []): boolean {
   // Owner always can
   if (entity.owned_by === userId) return true;
 
@@ -127,7 +93,7 @@ function canUserEdit(entity: EntityWithFacts, userId: string, username: string, 
  * Owner always can. Blacklist blocks everyone except owner.
  * Otherwise check $view directive. Default = owner-only.
  */
-function canUserView(entity: EntityWithFacts, userId: string, username: string, userRoles: string[] = []): boolean {
+export function canUserView(entity: EntityWithFacts, userId: string, username: string, userRoles: string[] = []): boolean {
   // Owner always can
   if (entity.owned_by === userId) return true;
 
@@ -153,7 +119,7 @@ function canUserView(entity: EntityWithFacts, userId: string, username: string, 
  * Owner always can. Blacklist blocks everyone except owner.
  * Otherwise check $use directive. Default = everyone.
  */
-function canUserUse(entity: EntityWithFacts, userId: string, username: string, userRoles: string[] = []): boolean {
+export function canUserUse(entity: EntityWithFacts, userId: string, username: string, userRoles: string[] = []): boolean {
   if (entity.owned_by === userId) return true;
   const facts = entity.facts.map(f => f.content);
   const permissions = parsePermissionDirectives(facts, getPermissionDefaults(entity.id));
@@ -165,7 +131,7 @@ function canUserUse(entity: EntityWithFacts, userId: string, username: string, u
  * Check if a user can bind entities in a location (server-side check).
  * Uses resolveDiscordConfig for channel > guild > default precedence.
  */
-function canUserBindInLocation(userId: string, username: string, userRoles: string[], channelId?: string, guildId?: string): boolean {
+export function canUserBindInLocation(userId: string, username: string, userRoles: string[], channelId?: string, guildId?: string): boolean {
   const config = resolveDiscordConfig(channelId, guildId);
 
   // Check blacklist first (deny overrides allow)
@@ -182,7 +148,7 @@ function canUserBindInLocation(userId: string, username: string, userRoles: stri
  * Check if a user can use personas in a location (server-side check).
  * Uses resolveDiscordConfig for channel > guild > default precedence.
  */
-function canUserPersonaInLocation(userId: string, username: string, userRoles: string[], channelId?: string, guildId?: string): boolean {
+export function canUserPersonaInLocation(userId: string, username: string, userRoles: string[], channelId?: string, guildId?: string): boolean {
   const config = resolveDiscordConfig(channelId, guildId);
 
   // Check blacklist first (deny overrides allow)
@@ -222,24 +188,6 @@ const PERM_CONFIG_KEYS: Record<PermField, string> = {
   use: "config_use",
   blacklist: "config_blacklist",
 };
-
-/**
- * Build default_values array for a mentionable select from DB value.
- * Skips username entries (can't pre-populate those in a select).
- */
-function buildDefaultValues(value: string[] | "@everyone" | null): Array<{ id: string; type: "user" | "role" }> {
-  if (!value || value === "@everyone" || !Array.isArray(value)) return [];
-  const defaults: Array<{ id: string; type: "user" | "role" }> = [];
-  for (const entry of value) {
-    if (entry.startsWith("role:")) {
-      defaults.push({ id: entry.slice(5), type: "role" });
-    } else if (/^\d{17,19}$/.test(entry)) {
-      defaults.push({ id: entry, type: "user" });
-    }
-    // Skip username strings — can't pre-populate in select
-  }
-  return defaults;
-}
 
 /**
  * Build Label components (type 18) wrapping MentionableSelects for a V2 modal.
@@ -1204,23 +1152,10 @@ registerModalHandler("edit-permissions", async (bot, interaction, _values) => {
     }
   }
 
-  // Build entries with role: prefix using resolved data.
-  // If resolved data is absent or an ID appears in neither roles nor users, skip it
-  // to prevent a role ID being silently stored as a plain user ID.
-  const buildEntries = (values: string[]): string[] => {
-    return values.flatMap(id => {
-      const bigId = BigInt(id);
-      if (resolved?.roles?.has(bigId)) return [`role:${id}`];
-      if (resolved?.users?.has(bigId)) return [id];
-      // ID not found in resolved data — skip rather than guess
-      return [];
-    });
-  };
-
   // Save all fields
   for (const field of PERM_FIELDS) {
     const values = selectValues[`perm_${field}`] ?? [];
-    const entries = buildEntries(values);
+    const entries = buildEntries(values, resolved as ResolvedData | undefined);
     const configKey = PERM_CONFIG_KEYS[field];
 
     if (field === "blacklist") {
@@ -1771,22 +1706,9 @@ registerModalHandler("config", async (bot, interaction, _values) => {
     }
   }
 
-  // Build entries with role: prefix using resolved data.
-  // If resolved data is absent or an ID appears in neither roles nor users, skip it
-  // to prevent a role ID being silently stored as a plain user ID.
-  const buildEntries = (values: string[]): string[] => {
-    return values.flatMap(id => {
-      const bigId = BigInt(id);
-      if (resolved?.roles?.has(bigId)) return [`role:${id}`];
-      if (resolved?.users?.has(bigId)) return [id];
-      // ID not found in resolved data — skip rather than guess
-      return [];
-    });
-  };
-
-  const bindEntries = buildEntries(selectValues.config_bind ?? []);
-  const personaEntries = buildEntries(selectValues.config_persona ?? []);
-  const blacklistEntries = buildEntries(selectValues.config_blacklist ?? []);
+  const bindEntries = buildEntries(selectValues.config_bind ?? [], resolved as ResolvedData | undefined);
+  const personaEntries = buildEntries(selectValues.config_persona ?? [], resolved as ResolvedData | undefined);
+  const blacklistEntries = buildEntries(selectValues.config_blacklist ?? [], resolved as ResolvedData | undefined);
 
   // If all fields are empty, delete the row entirely
   if (bindEntries.length === 0 && personaEntries.length === 0 && blacklistEntries.length === 0) {
