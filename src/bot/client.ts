@@ -674,8 +674,8 @@ bot.events.messageCreate = async (message) => {
   const userId = message.author.id.toString();
   if (isNewUser(userId)) {
     markUserWelcomed(userId);
-    sendWelcomeDm(message.author.id).catch(() => {
-      // DMs may fail if user has them disabled - that's fine
+    sendWelcomeDm(message.author.id).catch(err => {
+      warn("Failed to send welcome DM", { userId: message.author.id.toString(), err });
     });
   }
 
@@ -883,7 +883,9 @@ bot.events.messageCreate = async (message) => {
     debug("Scheduling entity retry", { entity: entity.name, retryMs });
     const timer = setTimeout(() => {
       retryTimers.delete(key);
-      processEntityRetry(channelId, guildId, entity.id, authorName, content, messageTime, channelEntities);
+      processEntityRetry(channelId, guildId, entity.id, authorName, content, messageTime, channelEntities).catch(err => {
+        error("Unhandled error in entity retry", err, { entity: entity.name, channelId });
+      });
     }, retryMs);
     retryTimers.set(key, timer);
   }
@@ -973,7 +975,9 @@ async function processEntityRetry(
     debug("Scheduling chained entity retry", { entity: entity.name, retryMs: result.retryMs });
     const timer = setTimeout(() => {
       retryTimers.delete(key);
-      processEntityRetry(channelId, guildId, entityId, username, content, messageTime, allChannelEntities);
+      processEntityRetry(channelId, guildId, entityId, username, content, messageTime, allChannelEntities).catch(err => {
+        error("Unhandled error in chained entity retry", err, { entity: entity.name, channelId });
+      });
     }, result.retryMs);
     retryTimers.set(key, timer);
     return;
@@ -1698,12 +1702,15 @@ function getEditorsToNotify(entityId: number, ownerId: string | null, facts: str
 }
 
 async function notifyUserOfError(userId: string, entityName: string, errorMsg: string): Promise<void> {
-  const dmChannel = await bot.helpers.getDmChannel(BigInt(userId));
-  await bot.helpers.sendMessage(dmChannel.id, {
-    content: `**Condition error in ${entityName}**\n\`\`\`\n${errorMsg}\n\`\`\`\nUse \`/edit ${entityName}\` to fix the condition.`,
-  });
-
-  debug("Sent error DM", { userId, entityName });
+  try {
+    const dmChannel = await bot.helpers.getDmChannel(BigInt(userId));
+    await bot.helpers.sendMessage(dmChannel.id, {
+      content: `**Condition error in ${entityName}**\n\`\`\`\n${errorMsg}\n\`\`\`\nUse \`/edit ${entityName}\` to fix the condition.`,
+    });
+    debug("Sent error DM", { userId, entityName });
+  } catch (err) {
+    warn("Failed to send error DM", { userId, entityName, err });
+  }
 }
 
 bot.events.messageUpdate = async (message) => {
