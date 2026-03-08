@@ -138,13 +138,12 @@ export async function* handleMessageStreaming(
     // Attach early .catch() to result.text to prevent unhandled promise rejection.
     // AI_NoOutputGeneratedError is stored in the text promise (not thrown through textStream),
     // so without this it surfaces as an unhandled rejection even when we handle it elsewhere.
+    // Also catches AI_APICallError (e.g. "Function calling is not enabled for this model") which
+    // the Google provider closes the stream silently for rather than throwing through textStream.
     let textPromiseError: Error | null = null;
     const handledTextPromise = Promise.resolve(result.text).catch((err: unknown) => {
-      if (err instanceof Error && err.name === "AI_NoOutputGeneratedError") {
-        textPromiseError = err;
-        return ""; // normalise to empty so we can check generatedFiles below
-      }
-      throw err; // real errors still propagate
+      textPromiseError = err instanceof Error ? err : new Error(String(err));
+      return ""; // normalise to empty so we can check generatedFiles below
     });
 
     // Wrap textStream to accumulate full text (avoids ReadableStream locked
@@ -189,10 +188,15 @@ export async function* handleMessageStreaming(
     // Empty/whitespace-only response is an error unless the model returned image files
     const trimmedAccumulated = accumulatedText.trim();
     if (!trimmedAccumulated && generatedFiles.length === 0) {
-      throw new InferenceError(
-        streamNoOutput ? "No output generated" : "Empty response from model",
-        modelSpec,
-      );
+      // Use the actual error from the text promise if available (e.g. API call errors
+      // like "Function calling is not enabled for this model" that don't surface through
+      // the text stream but do reject result.text)
+      // Cast to re-assert the type — tsgo flow analysis doesn't track async callback assignments
+      const capturedError = textPromiseError as Error | null;
+      const errMsg = capturedError !== null
+        ? capturedError.message
+        : streamNoOutput ? "No output generated" : "Empty response from model";
+      throw new InferenceError(errMsg, modelSpec, capturedError ?? undefined);
     }
 
     // Yield done event with accumulated text
