@@ -253,6 +253,27 @@ function buildMsgDataAndContent(message: BotMessage): { content: string; msgData
 
 let botUserId: bigint | null = null;
 
+// Lazily-fetched bot application owner IDs (single-owner app: [ownerId]; team app: [ownerUserId])
+let botOwnerIds: string[] | null = null;
+
+async function getBotOwnerIds(): Promise<string[]> {
+  if (botOwnerIds !== null) return botOwnerIds;
+  try {
+    const app = await bot.helpers.getApplicationInfo();
+    const ids: string[] = [];
+    if (app.team) {
+      ids.push(app.team.ownerUserId.toString());
+    } else if (app.owner) {
+      ids.push(app.owner.id.toString());
+    }
+    botOwnerIds = ids;
+  } catch (err) {
+    warn("Failed to fetch application info for bot owner", { err });
+    botOwnerIds = [];
+  }
+  return botOwnerIds;
+}
+
 // Track last response time per channel (for response_ms in expressions)
 const lastResponseTime = new Map<string, number>();
 
@@ -1310,6 +1331,15 @@ async function handleStreamingResponse(
         break;
       }
 
+      case "tools_auto_disabled": {
+        // Tool calls auto-disabled for this model — notify editors + bot owner
+        const notifyEntity = entity ?? entities[0];
+        if (notifyEntity) {
+          notifyToolsAutoDisabled(event.modelSpec, notifyEntity).catch(() => {});
+        }
+        break;
+      }
+
       case "done": {
         // Update single-entity full mode message with final content
         if (fullMessage) {
@@ -1513,6 +1543,11 @@ export async function sendResponse(
       return;
     }
 
+    // Notify if tool calls were auto-disabled for this model
+    if (result.toolsAutoDisabledForModel && respondingEntities && respondingEntities.length > 0) {
+      notifyToolsAutoDisabled(result.toolsAutoDisabledForModel, respondingEntities[0]).catch(() => {});
+    }
+
     // Stop typing before sending response (indicator will expire naturally)
     stopTyping();
 
@@ -1710,6 +1745,37 @@ async function notifyUserOfError(userId: string, entityName: string, errorMsg: s
     debug("Sent error DM", { userId, entityName });
   } catch (err) {
     warn("Failed to send error DM", { userId, entityName, err });
+  }
+}
+
+/**
+ * Notify entity editors + bot owner that tool calls have been auto-disabled for a model.
+ * Uses the eval_errors dedup table to prevent repeated DMs.
+ */
+async function notifyToolsAutoDisabled(modelSpec: string, entity: EvaluatedEntity): Promise<void> {
+  const entityData = getEntityWithFacts(entity.id);
+  if (!entityData) return;
+
+  const editors = getEditorsToNotify(entity.id, entityData.owned_by, entityData.facts.map(f => f.content));
+  const ownerIds = await getBotOwnerIds();
+
+  // Merge editors + bot owner, deduplicated
+  const allRecipients = [...new Set([...editors, ...ownerIds])];
+
+  const errorMsg = `Tool calls auto-disabled for model "${modelSpec}" (model does not support function calling)`;
+  const isNew = recordEvalError(entity.id, allRecipients[0] ?? "", errorMsg);
+  if (!isNew) return;
+
+  for (const uid of allRecipients) {
+    try {
+      const dmChannel = await bot.helpers.getDmChannel(BigInt(uid));
+      await bot.helpers.sendMessage(dmChannel.id, {
+        content: `**Tool calls auto-disabled for \`${modelSpec}\`**\nThe model \`${modelSpec}\` (used by **${entity.name}**) does not support function calling. Tool calls have been permanently disabled for this model — responses will continue without tools.`,
+      });
+      debug("Sent tools-disabled DM", { uid, modelSpec, entity: entity.name });
+    } catch (err) {
+      warn("Failed to send tools-disabled DM", { uid, modelSpec, err });
+    }
   }
 }
 

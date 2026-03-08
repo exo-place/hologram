@@ -1,4 +1,5 @@
 import type { ContentFilter, SafetyCategory, SafetyThreshold } from "../logic/expr";
+import { getDb } from "../db";
 import { anthropic } from "@ai-sdk/anthropic";
 import { azure } from "@ai-sdk/azure";
 import { bedrock } from "@ai-sdk/amazon-bedrock";
@@ -303,4 +304,54 @@ export class InferenceError extends Error {
     this.name = "InferenceError";
     this.modelSpec = modelSpec;
   }
+}
+
+// =============================================================================
+// Model Tool Capability Detection
+// =============================================================================
+
+/** In-memory cache of models known not to support tool calls, backed by model_no_tools table */
+let noToolModelsCache: Set<string> | null = null;
+
+function loadNoToolModels(): Set<string> {
+  if (noToolModelsCache !== null) return noToolModelsCache;
+  const db = getDb();
+  const rows = db.prepare("SELECT model_spec FROM model_no_tools").all() as { model_spec: string }[];
+  noToolModelsCache = new Set(rows.map(r => r.model_spec));
+  return noToolModelsCache;
+}
+
+/** Returns false if this model has been recorded as not supporting tool calls */
+export function modelSupportsTools(modelSpec: string): boolean {
+  return !loadNoToolModels().has(modelSpec);
+}
+
+/**
+ * Record that a model doesn't support tool calls.
+ * Returns true if this is the first time (triggers notification), false if already known.
+ */
+export function recordNoToolModel(modelSpec: string): boolean {
+  const cache = loadNoToolModels();
+  if (cache.has(modelSpec)) return false;
+  cache.add(modelSpec);
+  const db = getDb();
+  db.prepare("INSERT OR IGNORE INTO model_no_tools (model_spec) VALUES (?)").run(modelSpec);
+  return true;
+}
+
+/**
+ * Returns true if the error indicates the model doesn't support tool/function calling.
+ * Matches error messages from Google, OpenAI, Anthropic, and other providers.
+ */
+export function isToolsNotSupportedError(err: unknown): boolean {
+  const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
+  return (
+    msg.includes("function calling is not enabled") ||
+    msg.includes("tool use is not supported") ||
+    msg.includes("tools is not supported") ||
+    msg.includes("tool_use is not supported") ||
+    msg.includes("function_declarations is not supported") ||
+    msg.includes("does not support tool") ||
+    msg.includes("does not support function")
+  );
 }

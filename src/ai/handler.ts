@@ -1,5 +1,5 @@
 import { generateText, stepCountIs } from "ai";
-import { getLanguageModel, DEFAULT_MODEL, InferenceError, parseModelSpec, buildThinkingOptions, buildSafetyOptions } from "./models";
+import { getLanguageModel, DEFAULT_MODEL, InferenceError, parseModelSpec, buildThinkingOptions, buildSafetyOptions, modelSupportsTools, recordNoToolModel, isToolsNotSupportedError } from "./models";
 import { debug, error } from "../logger";
 import {
   type EvaluatedEntity,
@@ -31,6 +31,8 @@ export interface ResponseResult {
   memoriesSaved: number;
   memoriesUpdated: number;
   memoriesRemoved: number;
+  /** Set to the model spec if tools were auto-disabled for this model during this call */
+  toolsAutoDisabledForModel?: string;
 }
 
 // =============================================================================
@@ -76,7 +78,7 @@ export async function handleMessage(ctx: MessageContext): Promise<ResponseResult
 
   try {
     const model = getLanguageModel(modelSpec);
-    const tools = createTools(channelId, guildId);
+    let toolsAutoDisabledForModel: string | undefined;
 
     // Resolve attachment markers (HATT → ImagePart / FilePart / text fallback)
     const entityId = evaluated[0]?.id ?? 0;
@@ -92,14 +94,13 @@ export async function handleMessage(ctx: MessageContext): Promise<ResponseResult
       ? { ...thinkingOptions, ...safetyOptions }
       : undefined;
 
-    const result = await generateText({
+    const callOptions = {
       model,
       system: systemPrompt || undefined,
       messages: normalizedMessages,
-      tools,
       providerOptions,
       stopWhen: stepCountIs(5), // Allow up to 5 tool call rounds
-      onStepFinish: ({ toolCalls }) => {
+      onStepFinish: ({ toolCalls }: { toolCalls?: { toolName: string }[] }) => {
         for (const call of toolCalls ?? []) {
           if (call.toolName === "add_fact") factsAdded++;
           if (call.toolName === "update_fact") factsUpdated++;
@@ -109,7 +110,25 @@ export async function handleMessage(ctx: MessageContext): Promise<ResponseResult
           if (call.toolName === "remove_memory") memoriesRemoved++;
         }
       },
-    });
+    };
+
+    let result;
+    if (modelSupportsTools(modelSpec)) {
+      try {
+        result = await generateText({ ...callOptions, tools: createTools(channelId, guildId) });
+      } catch (toolErr) {
+        if (isToolsNotSupportedError(toolErr)) {
+          // Model doesn't support tool calls — record, retry without tools
+          const isNew = recordNoToolModel(modelSpec);
+          if (isNew) toolsAutoDisabledForModel = modelSpec;
+          result = await generateText(callOptions);
+        } else {
+          throw toolErr;
+        }
+      }
+    } else {
+      result = await generateText(callOptions);
+    }
 
     debug("LLM response", {
       text: result.text,
@@ -159,6 +178,7 @@ export async function handleMessage(ctx: MessageContext): Promise<ResponseResult
       memoriesSaved,
       memoriesUpdated,
       memoriesRemoved,
+      toolsAutoDisabledForModel,
     };
   } catch (err) {
     error("LLM error", err);

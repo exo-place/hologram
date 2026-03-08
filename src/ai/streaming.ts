@@ -1,5 +1,5 @@
 import { streamText, stepCountIs } from "ai";
-import { getLanguageModel, DEFAULT_MODEL, InferenceError, parseModelSpec, buildThinkingOptions, buildSafetyOptions } from "./models";
+import { getLanguageModel, DEFAULT_MODEL, InferenceError, parseModelSpec, buildThinkingOptions, buildSafetyOptions, modelSupportsTools, recordNoToolModel, isToolsNotSupportedError } from "./models";
 import { debug, error } from "../logger";
 import {
   type EvaluatedEntity,
@@ -45,7 +45,9 @@ export type StreamEvent =
   | { type: "char_line_end"; name: string; content: string }  // lines full: line complete for entity
   | { type: "char_end"; name: string; content: string }
   | { type: "files"; files: GeneratedFile[] }
-  | { type: "done"; fullText: string };
+  | { type: "done"; fullText: string }
+  /** Emitted (before done) when tool calls were auto-disabled for this model */
+  | { type: "tools_auto_disabled"; modelSpec: string };
 
 // =============================================================================
 // Delimiter Utilities
@@ -110,7 +112,6 @@ export async function* handleMessageStreaming(
 
   try {
     const model = getLanguageModel(modelSpec);
-    const tools = createTools(channelId, guildId);
 
     // Resolve attachment markers (HATT → ImagePart / FilePart / text fallback)
     const entityId = entities[0]?.id ?? 0;
@@ -126,81 +127,97 @@ export async function* handleMessageStreaming(
       ? { ...thinkingOptions, ...safetyOptions }
       : undefined;
 
-    const result = streamText({
+    const baseStreamOptions = {
       model,
       system: systemPrompt || undefined,
       messages: normalizedMessages,
-      tools,
       providerOptions,
       stopWhen: stepCountIs(5),
-    });
+    };
 
-    // Attach early .catch() to result.text to prevent unhandled promise rejection.
-    // AI_NoOutputGeneratedError is stored in the text promise (not thrown through textStream),
-    // so without this it surfaces as an unhandled rejection even when we handle it elsewhere.
-    // Also catches AI_APICallError (e.g. "Function calling is not enabled for this model") which
-    // the Google provider closes the stream silently for rather than throwing through textStream.
-    let textPromiseError: Error | null = null;
-    const handledTextPromise = Promise.resolve(result.text).catch((err: unknown) => {
-      textPromiseError = err instanceof Error ? err : new Error(String(err));
-      return ""; // normalise to empty so we can check generatedFiles below
-    });
+    // Retry loop: attempt 0 uses tools (if supported), attempt 1 is the no-tools retry.
+    // When "Function calling is not enabled" is detected (empty stream + API error), we record
+    // the model and retry without tools in the same response cycle so the user sees no failure.
+    let toolsAutoDisabledForModel: string | undefined;
 
-    // Wrap textStream to accumulate full text (avoids ReadableStream locked
-    // error when accessing result.text after consuming textStream)
-    let accumulatedText = "";
-    const trackedStream = (async function* () {
-      for await (const chunk of result.textStream) {
-        accumulatedText += chunk;
-        yield chunk;
+    for (let attempt = 0; attempt <= 1; attempt++) {
+      const useTools = attempt === 0 && modelSupportsTools(modelSpec);
+      const result = useTools
+        ? streamText({ ...baseStreamOptions, tools: createTools(channelId, guildId) })
+        : streamText(baseStreamOptions);
+
+      // Attach early .catch() to result.text to prevent unhandled promise rejection.
+      // AI_APICallError (e.g. "Function calling is not enabled") closes the stream silently
+      // and rejects result.text rather than throwing through textStream.
+      let textPromiseError: Error | null = null;
+      const handledTextPromise = Promise.resolve(result.text).catch((err: unknown) => {
+        textPromiseError = err instanceof Error ? err : new Error(String(err));
+        return "";
+      });
+
+      // Wrap textStream to accumulate full text
+      let accumulatedText = "";
+      const trackedStream = (async function* () {
+        for await (const chunk of result.textStream) {
+          accumulatedText += chunk;
+          yield chunk;
+        }
+      })();
+
+      // Use different streaming logic based on single vs multiple entities
+      // In freeform mode, treat multi-entity like single (no Name: prefix parsing)
+      const isFreeform = entities.some(e => e.isFreeform);
+      if (entities.length === 1 || isFreeform) {
+        yield* streamSingleEntity(trackedStream, streamMode, delimiter, entities[0]?.name);
+      } else {
+        yield* streamMultiEntityNamePrefix(trackedStream, entities, streamMode, delimiter);
       }
-    })();
 
-    // Use different streaming logic based on single vs multiple entities
-    // In freeform mode, treat multi-entity like single (no Name: prefix parsing)
-    const isFreeform = entities.some(e => e.isFreeform);
-    if (entities.length === 1 || isFreeform) {
-      yield* streamSingleEntity(trackedStream, streamMode, delimiter, entities[0]?.name);
-    } else {
-      yield* streamMultiEntityNamePrefix(trackedStream, entities, streamMode, delimiter);
-    }
+      // Wait for text promise to settle
+      await handledTextPromise;
+      const streamNoOutput = textPromiseError !== null;
 
-    // Wait for text promise to settle (catches AI_NoOutputGeneratedError from flush)
-    await handledTextPromise;
-    const streamNoOutput = textPromiseError !== null;
-
-    // Collect generated image files (e.g. from gemini-2.0-flash-image-generation).
-    // When streamNoOutput is true, _steps was rejected so result.files also rejects — skip it.
-    const generatedFiles: GeneratedFile[] = [];
-    if (!streamNoOutput) {
-      const rawFiles = await result.files;
-      for (const f of rawFiles ?? []) {
-        if (f.mediaType.startsWith("image/")) {
-          generatedFiles.push({ data: f.uint8Array, mediaType: f.mediaType });
+      // Collect generated image files (e.g. from gemini-2.0-flash-image-generation).
+      // When streamNoOutput is true, _steps was rejected so result.files also rejects — skip it.
+      const generatedFiles: GeneratedFile[] = [];
+      if (!streamNoOutput) {
+        const rawFiles = await result.files;
+        for (const f of rawFiles ?? []) {
+          if (f.mediaType.startsWith("image/")) {
+            generatedFiles.push({ data: f.uint8Array, mediaType: f.mediaType });
+          }
         }
       }
-    }
 
-    if (generatedFiles.length > 0) {
-      yield { type: "files", files: generatedFiles };
-    }
-
-    // Empty/whitespace-only response is an error unless the model returned image files
-    const trimmedAccumulated = accumulatedText.trim();
-    if (!trimmedAccumulated && generatedFiles.length === 0) {
-      // Use the actual error from the text promise if available (e.g. API call errors
-      // like "Function calling is not enabled for this model" that don't surface through
-      // the text stream but do reject result.text)
-      // Cast to re-assert the type — tsgo flow analysis doesn't track async callback assignments
+      // Cast to re-assert type — tsgo flow analysis doesn't track async callback assignments
       const capturedError = textPromiseError as Error | null;
-      const errMsg = capturedError !== null
-        ? capturedError.message
-        : streamNoOutput ? "No output generated" : "Empty response from model";
-      throw new InferenceError(errMsg, modelSpec, capturedError ?? undefined);
-    }
+      const trimmedAccumulated = accumulatedText.trim();
 
-    // Yield done event with accumulated text
-    yield { type: "done", fullText: accumulatedText };
+      // Empty stream + tool-not-supported error on the tools attempt → record and retry
+      if (useTools && !trimmedAccumulated && generatedFiles.length === 0 && capturedError !== null && isToolsNotSupportedError(capturedError)) {
+        const isNew = recordNoToolModel(modelSpec);
+        if (isNew) toolsAutoDisabledForModel = modelSpec;
+        continue; // retry without tools (attempt 1)
+      }
+
+      // Empty/whitespace-only response is an error unless the model returned image files
+      if (!trimmedAccumulated && generatedFiles.length === 0) {
+        const errMsg = capturedError !== null
+          ? capturedError.message
+          : streamNoOutput ? "No output generated" : "Empty response from model";
+        throw new InferenceError(errMsg, modelSpec, capturedError ?? undefined);
+      }
+
+      // Success — emit events
+      if (generatedFiles.length > 0) {
+        yield { type: "files" as const, files: generatedFiles };
+      }
+      if (toolsAutoDisabledForModel !== undefined) {
+        yield { type: "tools_auto_disabled" as const, modelSpec: toolsAutoDisabledForModel };
+      }
+      yield { type: "done" as const, fullText: accumulatedText };
+      return;
+    }
 
   } catch (err) {
     error("LLM streaming error", err);

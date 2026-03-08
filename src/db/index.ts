@@ -195,6 +195,14 @@ function initSchema(db: Database) {
     )
   `);
 
+  // Models known to not support tool calls - auto-detected, persisted to avoid repeated failures
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS model_no_tools (
+      model_spec TEXT PRIMARY KEY,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
   // Attachment cache - fetched Discord attachment bytes, keyed by URL hash
   db.exec(`
     CREATE TABLE IF NOT EXISTS attachment_cache (
