@@ -11,7 +11,7 @@ import type { EvaluatedEntity } from "../ai/context";
 import { isModelAllowed } from "../ai/models";
 import { retrieveRelevantMemories, type MemoryScope } from "../db/memories";
 import { resolveDiscordEntity, resolveDiscordEntities, isNewUser, markUserWelcomed, addMessage, updateMessageByDiscordId, mergeMessageData, deleteMessageByDiscordId, trackWebhookMessage, getWebhookMessageEntity, getMessages, getFilteredMessages, formatMessagesForContext, recordEvalError, isOurWebhookUserId, countUnreadMessages, getLastMessageSnowflake, getAllBoundChannelIds, type MessageData } from "../db/discord";
-import { getEntity, getEntityWithFacts, getSystemEntity, getFactsForEntity, getEntityEvalDefaults, getPermissionDefaults, type EntityWithFacts } from "../db/entities";
+import { getEntity, getEntityWithFacts, getSystemEntity, getFactsForEntity, getEntityEvalDefaults, getEntityKeywords, getPermissionDefaults, type EntityWithFacts } from "../db/entities";
 import { evaluateFacts, createBaseContext, parsePermissionDirectives, isUserBlacklisted, isUserAllowed, compileContextExpr, ExprError } from "../logic/expr";
 import { DEFAULT_CONTEXT_EXPR } from "../ai/context";
 import { executeWebhook, editWebhookMessage, setBot } from "./webhooks";
@@ -799,6 +799,7 @@ bot.events.messageCreate = async (message) => {
       chars: channelEntities.map(e => e.name),
       channel: channelMeta,
       server: guildMeta,
+      keywords: getEntityKeywords(entity.id),
     });
 
     let result;
@@ -842,18 +843,22 @@ bot.events.messageCreate = async (message) => {
       // 1. If only one character: respond to @mentions (ambiguous with multiple chars)
       // 2. Respond if reply is specifically to this entity's message (unambiguous)
       // 3. Respond if entity's name is mentioned in dialogue (not self-triggered)
+      // 4. Respond if message matches any configured trigger keyword
       const nameMentioned = ctx.mentioned_in_dialogue(entity.name) && !isSelf;
       const repliedToThis = repliedToWebhookEntity?.entityName.toLowerCase() === entity.name.toLowerCase();
+      const keywordMatch = ctx.keyword_match && !isSelf;
       const defaultRespond =
         (channelEntities.length === 1 && isMentioned) ||
         repliedToThis ||
-        nameMentioned;
+        nameMentioned ||
+        keywordMatch;
       const shouldRespond = result.shouldRespond ?? defaultRespond;
 
       if (shouldRespond) {
         // Log the trigger source
         const source = result.respondSource
           ?? (nameMentioned ? `name mentioned in: "${content.slice(0, 50)}"`
+            : keywordMatch ? `keyword match in: "${content.slice(0, 50)}"`
             : isMentioned ? "bot @mentioned"
             : isReplied ? "reply to bot"
             : "unknown");
@@ -963,6 +968,7 @@ async function processEntityRetry(
     chars: allChannelEntities.map(e => e.name),
     channel: channelMeta,
     server: guildMeta,
+    keywords: getEntityKeywords(entityId),
   });
 
   let result;
@@ -1004,8 +1010,8 @@ async function processEntityRetry(
     return;
   }
 
-  // Default for retry: respond if entity's name is mentioned in dialogue
-  const defaultRespond = ctx.mentioned_in_dialogue(entity.name);
+  // Default for retry: respond if entity's name is mentioned in dialogue, or keyword match
+  const defaultRespond = ctx.mentioned_in_dialogue(entity.name) || ctx.keyword_match;
   const shouldRespond = result.shouldRespond ?? defaultRespond;
 
   if (!shouldRespond) {

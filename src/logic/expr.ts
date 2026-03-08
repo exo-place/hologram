@@ -126,6 +126,8 @@ export interface ExprContext {
     /** Guild NSFW level: "default" | "explicit" | "safe" | "age_restricted" */
     nsfw_level: string;
   };
+  /** Whether the message matched any of the entity's configured trigger keywords */
+  keyword_match: boolean;
   /** Additional context-specific variables */
   [key: string]: unknown;
 }
@@ -529,6 +531,7 @@ const EXPR_CONTEXT_REFERENCE: ExprContext = {
   weekday: () => "",
   pick: () => undefined,
   interaction_type: "",
+  keyword_match: false,
   channel: { id: "", name: "", description: "", is_nsfw: false, type: "text", mention: "" },
   server: { id: "", name: "", description: "", nsfw_level: "default" },
   Date: { new: () => new globalThis.Date(), now: () => 0, parse: () => 0, UTC: () => 0 },
@@ -2337,6 +2340,8 @@ export interface BaseContextOptions {
   channel: { id: string; name: string; description: string; is_nsfw: boolean; type: string; mention: string };
   /** Server metadata */
   server: { id: string; name: string; description: string; nsfw_level: string };
+  /** Trigger keywords to match against message content (plain strings or /regex/flags). Defaults to []. */
+  keywords?: string[];
 }
 
 /**
@@ -2376,6 +2381,32 @@ function checkMentionedInDialogue(content: string, name: string): boolean {
 }
 
 /**
+ * Match message content against a list of keyword patterns.
+ * Plain strings use case-insensitive substring matching.
+ * Patterns wrapped in /slashes/ are treated as safe regexes (validated against ReDoS).
+ * Invalid regex patterns are silently skipped.
+ */
+export function checkKeywordMatch(keywords: string[], content: string): boolean {
+  const lower = content.toLowerCase();
+  for (const kw of keywords) {
+    if (!kw) continue;
+    const regexMatch = kw.match(/^\/(.+)\/([gimsuy]*)$/);
+    if (regexMatch) {
+      try {
+        validateRegexPattern(regexMatch[1]);
+        const regex = new RegExp(regexMatch[1], regexMatch[2] || "i");
+        if (regex.test(content)) return true;
+      } catch {
+        // Invalid or unsafe regex — skip
+      }
+    } else {
+      if (lower.includes(kw.toLowerCase())) return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Create a base context with standard globals.
  * Caller should extend with entity-specific data.
  */
@@ -2383,6 +2414,8 @@ export function createBaseContext(options: BaseContextOptions): ExprContext {
   const now = new Date();
   const hour = now.getHours();
   const { messages, chars } = options;
+  const content = messages(1, "%m");
+  const keywords = options.keywords ?? [];
 
   return {
     self: parseSelfContext(options.facts),
@@ -2408,9 +2441,10 @@ export function createBaseContext(options: BaseContextOptions): ExprContext {
     is_forward: options.is_forward,
     is_self: options.is_self,
     is_hologram: options.is_hologram,
-    mentioned_in_dialogue: (name: string) => checkMentionedInDialogue(messages(1, "%m"), name),
-    content: messages(1, "%m"),
+    mentioned_in_dialogue: (name: string) => checkMentionedInDialogue(content, name),
+    content,
     author: messages(1, "%a"),
+    keyword_match: checkKeywordMatch(keywords, content),
     interaction_type: options.interaction_type,
     name: options.name,
     chars,

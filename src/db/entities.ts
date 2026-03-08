@@ -107,6 +107,7 @@ export interface EntityConfig {
   config_blacklist: string | null;
   config_thinking: string | null;
   config_collapse: string | null;
+  config_keywords: string | null;
 }
 
 const CONFIG_COLUMNS = `
@@ -114,7 +115,7 @@ const CONFIG_COLUMNS = `
   config_stream_mode, config_stream_delimiters,
   config_avatar, config_memory, config_freeform,
   config_strip, config_view, config_edit, config_use, config_blacklist,
-  config_thinking, config_collapse
+  config_thinking, config_collapse, config_keywords
 `.trim();
 
 export function getEntityConfig(entityId: number): EntityConfig | null {
@@ -133,6 +134,13 @@ export function setEntityConfig(entityId: number, config: Partial<EntityConfig>)
   if (sets.length === 0) return;
   values.push(entityId);
   db.prepare(`UPDATE entities SET ${sets.join(", ")} WHERE id = ?`).run(...values);
+}
+
+/** Parse entity keywords from config (newline-separated list of strings or /regex/flags) */
+export function getEntityKeywords(entityId: number): string[] {
+  const config = getEntityConfig(entityId);
+  if (!config?.config_keywords) return [];
+  return config.config_keywords.split("\n").map(k => k.trim()).filter(Boolean);
 }
 
 /** Convert config columns to permission defaults for parsePermissionDirectives */

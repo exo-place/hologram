@@ -7,6 +7,7 @@ import {
   evaluateFacts,
   parseSelfContext,
   createBaseContext,
+  checkKeywordMatch,
   ExprError,
   rollDice,
   formatDuration,
@@ -124,6 +125,7 @@ function makeContext(overrides: Partial<ExprContext> = {}): ExprContext {
     },
     weekday: () => new Date().toLocaleDateString("en-US", { weekday: "long" }),
     pick: <T>(arr: T[]) => (Array.isArray(arr) && arr.length > 0 ? arr[Math.floor(Math.random() * arr.length)] : undefined),
+    keyword_match: false,
     channel: Object.assign(Object.create(null), { id: "", name: "", description: "", mention: "" }),
     server: Object.assign(Object.create(null), { id: "", name: "", description: "" }),
     Date: Object.freeze(Object.assign(Object.create(null), {
@@ -2281,5 +2283,67 @@ describe("$safety directive", () => {
     const result = evaluateFacts(["$safety notavalue", "fact"], safeCtx);
     expect(result.contentFilters).toHaveLength(0);
     // treated as non-category word → all categories, expr="notavalue" → unknown string → null threshold → no override
+  });
+});
+
+// =============================================================================
+// checkKeywordMatch
+// =============================================================================
+
+describe("checkKeywordMatch", () => {
+  test("empty keywords returns false", () => {
+    expect(checkKeywordMatch([], "hello world")).toBe(false);
+  });
+
+  test("plain substring match (case-insensitive)", () => {
+    expect(checkKeywordMatch(["hello"], "Hello World")).toBe(true);
+    expect(checkKeywordMatch(["HELLO"], "hello world")).toBe(true);
+    expect(checkKeywordMatch(["hello"], "goodbye world")).toBe(false);
+  });
+
+  test("multiple keywords, any match returns true", () => {
+    expect(checkKeywordMatch(["foo", "bar"], "I said bar")).toBe(true);
+    expect(checkKeywordMatch(["foo", "bar"], "I said baz")).toBe(false);
+  });
+
+  test("regex pattern match", () => {
+    expect(checkKeywordMatch(["/\\bhello\\b/i"], "say hello there")).toBe(true);
+    expect(checkKeywordMatch(["/\\bhello\\b/i"], "say helloing there")).toBe(false);
+  });
+
+  test("regex with flags", () => {
+    expect(checkKeywordMatch(["/foo/i"], "FOO bar")).toBe(true);
+    expect(checkKeywordMatch(["/^hello/"], "hello world")).toBe(true);
+    expect(checkKeywordMatch(["/^hello/"], "say hello")).toBe(false);
+  });
+
+  test("invalid regex pattern is silently skipped", () => {
+    // ReDoS-unsafe patterns are rejected by validateRegexPattern
+    expect(checkKeywordMatch(["/(a+)+b/"], "aaab")).toBe(false);
+  });
+
+  test("empty lines in keyword list are skipped", () => {
+    expect(checkKeywordMatch(["", "hello", ""], "hello world")).toBe(true);
+  });
+
+  test("keyword_match in ExprContext reflects keyword list", () => {
+    const ctx = testContext({
+      messages: () => "hey aria, how are you?",
+      keywords: ["aria"],
+    });
+    expect(ctx.keyword_match).toBe(true);
+  });
+
+  test("keyword_match is false when no keywords match", () => {
+    const ctx = testContext({
+      messages: () => "just a regular message",
+      keywords: ["aria", "bot"],
+    });
+    expect(ctx.keyword_match).toBe(false);
+  });
+
+  test("keyword_match is false with no keywords configured", () => {
+    const ctx = testContext({ messages: () => "hello world" });
+    expect(ctx.keyword_match).toBe(false);
   });
 });

@@ -11,9 +11,10 @@ Pure logic layer with no database or Discord dependencies. Contains the `$if` ex
   - `evalExpr()` runs a boolean JavaScript expression in a restricted sandbox (blocked `Function`, `eval`, `process`, prototype access).
   - `compileContextExpr()` compiles a `$context` expression (e.g. `chars < 16000`) into a predicate applied to message history filtering.
   - `parsePermissionDirectives()`, `isUserAllowed()`, `isUserBlacklisted()`, `matchesUserEntry()` — permission checking helpers shared by commands and client.
+  - `checkKeywordMatch(keywords, content)` — tests a message against a keyword list (plain substring or `/regex/flags`). Used for trigger keyword config.
   - Exports all directive types: `ThinkingLevel`, `CollapseRoles`, `ContentFilter`, `SafetyCategory`, `SafetyThreshold`, `MemoryScope`, `EvaluatedFacts`, `ExprContext`.
 
-- `safe-regex.ts` — `validateRegexPattern()`: a single-pass recursive descent parser that rejects ReDoS-dangerous patterns before they reach `RegExp`. Key invariant: no quantifier may be applied to a sub-expression that itself contains a quantifier. Used by `expr.ts` to validate patterns in `has_fact()` calls authored by entity owners.
+- `safe-regex.ts` — `validateRegexPattern()`: a single-pass recursive descent parser that rejects ReDoS-dangerous patterns before they reach `RegExp`. Key invariant: no quantifier may be applied to a sub-expression that itself contains a quantifier. Used by `expr.ts` to validate patterns in `has_fact()` and `checkKeywordMatch()` calls authored by entity owners.
 
 ## Notes
 

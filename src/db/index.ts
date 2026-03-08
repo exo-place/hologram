@@ -263,6 +263,13 @@ function initSchema(db: Database) {
     // Column already exists
   }
 
+  // Add config_keywords column (trigger keywords for automatic response)
+  try {
+    db.exec(`ALTER TABLE entities ADD COLUMN config_keywords TEXT`);
+  } catch {
+    // Column already exists
+  }
+
   // Migrate webhook_messages to add FK constraint (ON DELETE CASCADE)
   // SQLite doesn't support ALTER TABLE ADD FOREIGN KEY, so recreate the table.
   try {

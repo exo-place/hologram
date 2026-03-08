@@ -49,7 +49,7 @@ import {
   deleteDiscordConfig,
   countUnreadMessages,
 } from "../../db/discord";
-import { parsePermissionDirectives, matchesUserEntry, isUserBlacklisted, isUserAllowed, evaluateFacts, createBaseContext, parseSafetyDirective } from "../../logic/expr";
+import { parsePermissionDirectives, matchesUserEntry, isUserBlacklisted, isUserAllowed, evaluateFacts, createBaseContext, parseSafetyDirective, checkKeywordMatch } from "../../logic/expr";
 import { formatEntityDisplay } from "../../ai/context";
 import { preparePromptContext } from "../../ai/prompt";
 import { sendResponse, getChannelMetadata, getGuildMetadata } from "../client";
@@ -655,6 +655,19 @@ registerCommand({
             placeholder: "off, channel.is_nsfw, false (clear), ...",
           },
         },
+        {
+          type: MessageComponentTypes.Label,
+          label: "Trigger Keywords",
+          description: "Entity responds when any keyword appears in a message. One per line. Use /pattern/flags for regex.",
+          component: {
+            type: MessageComponentTypes.TextInput,
+            customId: "keywords",
+            style: TextStyles.Paragraph,
+            value: config?.config_keywords || undefined,
+            required: false,
+            placeholder: "hello\ngood morning\n/\\bhey\\b/i",
+          },
+        },
       ];
 
       await respondWithV2Modal(ctx.bot, ctx.interaction, `edit-advanced:${entity.id}`, `Advanced: ${entity.name}`, advancedLabels);
@@ -1091,15 +1104,41 @@ registerModalHandler("edit-advanced", async (bot, interaction, _textValues) => {
     addFact(entityId, `$safety ${safetyRaw}`);
   }
 
+  // Validate and normalize keywords (reject invalid regex patterns)
+  const keywordsRaw = textValues.keywords?.trim() || null;
+  let keywordsNormalized: string | null = null;
+  if (keywordsRaw !== null) {
+    const lines = keywordsRaw.split("\n").map(k => k.trim()).filter(Boolean);
+    const invalidPatterns: string[] = [];
+    for (const kw of lines) {
+      const regexMatch = kw.match(/^\/(.+)\/([gimsuy]*)$/);
+      if (regexMatch) {
+        try {
+          checkKeywordMatch([kw], "");
+        } catch {
+          invalidPatterns.push(kw);
+        }
+      }
+    }
+    if (invalidPatterns.length > 0) {
+      await respond(bot, interaction, `Invalid regex pattern(s): ${invalidPatterns.map(p => `\`${p}\``).join(", ")}`, true);
+      return;
+    }
+    keywordsNormalized = lines.length > 0 ? lines.join("\n") : null;
+  }
+
   setEntityConfig(entityId, {
     config_thinking: thinking,
     config_collapse: collapseRaw,
+    config_keywords: keywordsNormalized,
   });
 
   const changes: string[] = [];
   if (thinking) changes.push(`thinking: ${thinking}`);
   if (collapseRaw) changes.push(`collapse: ${collapseRaw}`);
   if (safetyRaw !== null) changes.push(`safety: ${safetyRaw}`);
+  if (keywordsNormalized !== null) changes.push(`keywords: ${keywordsNormalized.split("\n").length} set`);
+  else if (keywordsRaw !== null) changes.push("keywords: cleared");
   if (changes.length === 0) changes.push("all cleared");
 
   await respond(bot, interaction, `Updated advanced config for "${entity.name}": ${changes.join(", ")}`, true);
