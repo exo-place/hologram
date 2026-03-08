@@ -407,8 +407,20 @@ export interface ParsedTemplateMessage {
 export interface ParsedTemplateOutput {
   /** All messages including system-role segments */
   messages: ParsedTemplateMessage[];
-  /** Nonce used for HMSG and HATT markers in this render */
+  /**
+   * Nonce used for HMSG role markers in this render.
+   * Only embedded in the send_as macro source code — never accessible from
+   * template context — so it cannot be extracted to forge fake HMSG markers.
+   */
   nonce: string;
+  /**
+   * Separate nonce used for HATT attachment markers (attach(), parse_emojis()).
+   * This nonce appears in callable function return values and is therefore
+   * accessible to template authors. Using a separate nonce from HMSG prevents
+   * template authors from extracting the HMSG nonce via string manipulation on
+   * attach() output and constructing forged send_as markers.
+   */
+  hattNonce: string;
 }
 
 /** The nonce prefix used for attachment markers — exported for use in resolveAttachmentMarkers */
@@ -641,8 +653,17 @@ export function renderStructuredTemplate(
   source: string,
   ctx: Record<string, unknown>,
 ): ParsedTemplateOutput {
-  const nonce = randomBytes(32).toString("hex");
-  const macroDef = buildSendAsMacro(nonce);
+  // Two separate nonces with independent 256-bit entropy:
+  //   hmsgNonce — only embedded in Nunjucks macro source code (never in the
+  //               callable context), so template authors cannot extract it via
+  //               string manipulation to forge send_as markers.
+  //   hattNonce — used in attach() / parse_emojis() return values, which ARE
+  //               accessible from template context. Keeping it separate from
+  //               hmsgNonce means learning the hattNonce reveals nothing about
+  //               which HMSG markers are legitimate.
+  const hmsgNonce = randomBytes(32).toString("hex");
+  const hattNonce = randomBytes(32).toString("hex");
+  const macroDef = buildSendAsMacro(hmsgNonce);
 
   // Augment user template: prepend macro if it doesn't start with {% extends %}
   let augmented: string;
@@ -653,24 +674,25 @@ export function renderStructuredTemplate(
   }
 
   // Register augmented template as internal parent
-  const parentName = `_render_${nonce}`;
+  const parentName = `_render_${hmsgNonce}`;
   loader.setInternal(parentName, augmented);
   loader.setMacroDef(macroDef);
 
-  // Inject template helpers with nonce captured in closures; don't mutate caller's ctx
+  // Inject template helpers with hattNonce captured in closures; don't mutate caller's ctx.
+  // The hmsgNonce is intentionally NOT passed here — it must stay out of template context.
   const augmentedCtx = {
     ...ctx,
-    attach: buildAttachFn(nonce),
+    attach: buildAttachFn(hattNonce),
     sticker_url: buildStickerUrlFn(),
     sticker_media_type: buildStickerMediaTypeFn(),
-    parse_emojis: buildParseEmojisFn(nonce),
+    parse_emojis: buildParseEmojisFn(hattNonce),
   };
 
   try {
     // Render via empty child that extends the parent — this triggers the parent
     // render and works uniformly whether or not the source uses {% extends %}
     const rendered = renderEntityTemplate(`{% extends "${parentName}" %}`, augmentedCtx);
-    return { ...parseStructuredOutput(rendered, nonce), nonce };
+    return { ...parseStructuredOutput(rendered, hmsgNonce), nonce: hmsgNonce, hattNonce };
   } finally {
     loader.clearInternal(parentName);
     loader.setMacroDef(null);
