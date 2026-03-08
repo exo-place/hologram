@@ -255,6 +255,10 @@ error("Message", err, { key: "value" });
 - **Do the work properly.** No undocumented workarounds. No copouts like "this is out of date, leaving it" - fix it or flag it.
 - **Update docs after every task.** Keep `docs/`, `README.md`, and `CLAUDE.md` in sync with code changes. Outdated docs are bugs.
 - **Always write tests for new features.** Every new feature, bug fix, or behavior change must include corresponding tests. Tests go in `*.test.ts` files next to the code they test. Run `bun test` to execute.
+- **Coverage refresh rule.** At the start of each session, read `test/coverage-meta.json`. If either condition is true, run `bun test --coverage`, update the file, and commit it:
+  - `git rev-list <meta.commit>..HEAD --count` ≥ 5 commits since last run, OR
+  - Days elapsed since `meta.date` ≥ 7
+  - Update format: `{ commit, date (YYYY-MM-DD), lines (%), functions (%), tests (count) }`
 
 **Conversation is not memory.** Anything said in chat evaporates at session end. If it implies future behavior change, write it to CLAUDE.md or a memory file immediately — or it will not happen.
 
