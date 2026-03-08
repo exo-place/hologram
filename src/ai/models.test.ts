@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { parseModelSpec, InferenceError, supportsImageOutput, buildNsfwOptions } from "./models";
+import { parseModelSpec, InferenceError, supportsImageOutput, buildSafetyOptions } from "./models";
+import type { ContentFilter } from "../logic/expr";
 
 describe("parseModelSpec", () => {
   test("parses provider:model format", () => {
@@ -86,41 +87,65 @@ describe("supportsImageOutput", () => {
   });
 });
 
-describe("buildNsfwOptions", () => {
-  test("google relaxed returns safetySettings with OFF thresholds", () => {
-    const result = buildNsfwOptions("google", true);
+describe("buildSafetyOptions", () => {
+  const allOff: ContentFilter[] = [
+    { category: "sexual",     threshold: "off" },
+    { category: "hate",       threshold: "off" },
+    { category: "harassment", threshold: "off" },
+    { category: "dangerous",  threshold: "off" },
+    { category: "civic",      threshold: "off" },
+  ];
+
+  test("empty filters returns undefined", () => {
+    expect(buildSafetyOptions("google", [])).toBeUndefined();
+  });
+
+  test("google: all-off filters → safetySettings with OFF thresholds", () => {
+    const result = buildSafetyOptions("google", allOff);
     expect(result).toBeDefined();
     expect(result!.google).toBeDefined();
     const settings = (result!.google as { safetySettings: unknown[] }).safetySettings;
     expect(Array.isArray(settings)).toBe(true);
-    expect(settings.length).toBeGreaterThan(0);
+    expect(settings.length).toBe(5);
     for (const s of settings) {
       expect((s as { threshold: string }).threshold).toBe("OFF");
     }
   });
 
-  test("google not relaxed returns undefined", () => {
-    expect(buildNsfwOptions("google", false)).toBeUndefined();
+  test("google: per-category threshold mapping", () => {
+    const filters: ContentFilter[] = [
+      { category: "sexual",     threshold: "none"   },
+      { category: "hate",       threshold: "low"    },
+      { category: "harassment", threshold: "medium" },
+      { category: "dangerous",  threshold: "high"   },
+    ];
+    const result = buildSafetyOptions("google", filters);
+    const settings = (result!.google as { safetySettings: { category: string; threshold: string }[] }).safetySettings;
+    expect(settings.find(s => s.category === "HARM_CATEGORY_SEXUALLY_EXPLICIT")?.threshold).toBe("BLOCK_NONE");
+    expect(settings.find(s => s.category === "HARM_CATEGORY_HATE_SPEECH")?.threshold).toBe("BLOCK_LOW_AND_ABOVE");
+    expect(settings.find(s => s.category === "HARM_CATEGORY_HARASSMENT")?.threshold).toBe("BLOCK_MEDIUM_AND_ABOVE");
+    expect(settings.find(s => s.category === "HARM_CATEGORY_DANGEROUS_CONTENT")?.threshold).toBe("BLOCK_ONLY_HIGH");
   });
 
-  test("google-vertex relaxed returns vertex.safetySettings", () => {
-    const result = buildNsfwOptions("google-vertex", true);
+  test("google-vertex: uses vertex key instead of google", () => {
+    const result = buildSafetyOptions("google-vertex", allOff);
     expect(result).toBeDefined();
     expect(result!.vertex).toBeDefined();
+    expect(result!.google).toBeUndefined();
     const settings = (result!.vertex as { safetySettings: unknown[] }).safetySettings;
     expect(Array.isArray(settings)).toBe(true);
-    expect(settings.length).toBeGreaterThan(0);
+    expect(settings.length).toBe(5);
   });
 
-  test("anthropic relaxed returns undefined (provider not supported)", () => {
-    expect(buildNsfwOptions("anthropic", true)).toBeUndefined();
+  test("anthropic returns undefined (not supported)", () => {
+    expect(buildSafetyOptions("anthropic", allOff)).toBeUndefined();
   });
 
-  test("openai relaxed returns undefined (provider not supported)", () => {
-    expect(buildNsfwOptions("openai", true)).toBeUndefined();
+  test("openai returns undefined (not supported)", () => {
+    expect(buildSafetyOptions("openai", allOff)).toBeUndefined();
   });
 
-  test("unknown provider relaxed returns undefined", () => {
-    expect(buildNsfwOptions("unknown-provider", true)).toBeUndefined();
+  test("unknown provider returns undefined", () => {
+    expect(buildSafetyOptions("unknown-provider", allOff)).toBeUndefined();
   });
 });

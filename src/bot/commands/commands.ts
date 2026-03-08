@@ -48,7 +48,7 @@ import {
   deleteDiscordConfig,
   countUnreadMessages,
 } from "../../db/discord";
-import { parsePermissionDirectives, matchesUserEntry, isUserBlacklisted, isUserAllowed, evaluateFacts, createBaseContext } from "../../logic/expr";
+import { parsePermissionDirectives, matchesUserEntry, isUserBlacklisted, isUserAllowed, evaluateFacts, createBaseContext, parseSafetyDirective } from "../../logic/expr";
 import { formatEntityDisplay } from "../../ai/context";
 import { preparePromptContext } from "../../ai/prompt";
 import { sendResponse, getChannelMetadata, getGuildMetadata } from "../client";
@@ -650,13 +650,18 @@ registerCommand({
         (config?.config_collapse ?? "").split(/\s+/).filter(Boolean)
       );
 
-      // Pre-populate $nsfw from entity facts
-      const nsfwFact = entity.facts.find(f => {
+      // Pre-populate safety filter from entity facts: find the first all-categories $safety or $nsfw fact
+      const safetyFact = entity.facts.find(f => {
         const c = f.content.trim();
-        return c === "$nsfw" || c.startsWith("$nsfw ");
+        const parsed = parseSafetyDirective(c);
+        return parsed !== null && parsed.category === "all";
       });
-      const nsfwValue = nsfwFact
-        ? nsfwFact.content.trim().slice("$nsfw".length).trim()
+      const safetyValue = safetyFact
+        ? (() => {
+            const c = safetyFact.content.trim();
+            const sigil = c.startsWith("$safety") ? "$safety" : "$nsfw";
+            return c.slice(sigil.length).trim();
+          })()
         : "";
 
       const advancedLabels = [
@@ -694,15 +699,15 @@ registerCommand({
         },
         {
           type: MessageComponentTypes.Label,
-          label: "Safety Filters (NSFW)",
-          description: "Expression for relaxing provider safety filters (default: channel.is_nsfw)",
+          label: "Content Filters",
+          description: "Safety filter expression for all categories (e.g. off, channel.is_nsfw). Per-category: use $safety sexual off in facts.",
           component: {
             type: MessageComponentTypes.TextInput,
-            customId: "nsfw",
+            customId: "safety",
             style: TextStyles.Short,
-            value: nsfwValue,
+            value: safetyValue,
             required: false,
-            placeholder: "channel.is_nsfw",
+            placeholder: "off, channel.is_nsfw, false (clear), ...",
           },
         },
       ];
@@ -1128,18 +1133,17 @@ registerModalHandler("edit-advanced", async (bot, interaction, _textValues) => {
       ? "none"
       : collapseSelected.join(" ");
 
-  // NSFW: expression stored as $nsfw fact (empty = remove directive, use implicit default)
-  const nsfwRaw = textValues.nsfw?.trim() || null;
-  // Remove any existing $nsfw facts, then add new one if non-empty
+  // Safety filters: remove all all-category $safety/$nsfw facts, add new $safety fact if non-empty
+  const safetyRaw = textValues.safety?.trim() || null;
   const existingFacts = entity.facts.map(f => f.content);
   for (const fc of existingFacts) {
-    const trimmed = fc.trim();
-    if (trimmed === "$nsfw" || trimmed.startsWith("$nsfw ")) {
+    const parsed = parseSafetyDirective(fc.trim());
+    if (parsed !== null && parsed.category === "all") {
       removeFactByContent(entityId, fc);
     }
   }
-  if (nsfwRaw !== null) {
-    addFact(entityId, `$nsfw ${nsfwRaw}`);
+  if (safetyRaw !== null) {
+    addFact(entityId, `$safety ${safetyRaw}`);
   }
 
   setEntityConfig(entityId, {
@@ -1150,7 +1154,7 @@ registerModalHandler("edit-advanced", async (bot, interaction, _textValues) => {
   const changes: string[] = [];
   if (thinking) changes.push(`thinking: ${thinking}`);
   if (collapseRaw) changes.push(`collapse: ${collapseRaw}`);
-  if (nsfwRaw !== null) changes.push(`nsfw: ${nsfwRaw}`);
+  if (safetyRaw !== null) changes.push(`safety: ${safetyRaw}`);
   if (changes.length === 0) changes.push("all cleared");
 
   await respond(bot, interaction, `Updated advanced config for "${entity.name}": ${changes.join(", ")}`, true);
@@ -2224,7 +2228,7 @@ registerCommand({
       stripPatterns: result.stripPatterns,
       thinkingLevel: result.thinkingLevel,
       collapseMessages: result.collapseMessages,
-      nsfwRelaxed: result.nsfwRelaxed,
+      contentFilters: result.contentFilters,
       template: entity.template,
       systemTemplate: entity.system_template,
       exprContext: ctx2,

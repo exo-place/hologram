@@ -12,6 +12,7 @@ import {
   formatDuration,
   parseOffset,
   type ExprContext,
+  type SafetyCategory,
 } from "./expr";
 
 // =============================================================================
@@ -2146,77 +2147,173 @@ describe("$collapse directive", () => {
   });
 });
 
-describe("$nsfw directive", () => {
-  test("$nsfw (bare) → nsfwRelaxed: true", () => {
-    const ctx = testContext({ channel: { id: "", name: "", description: "", is_nsfw: false, type: "text", mention: "" } });
-    const result = evaluateFacts(["$nsfw", "some fact"], ctx);
-    expect(result.nsfwRelaxed).toBe(true);
+describe("$safety directive", () => {
+  const nsfwCtx = testContext({ channel: { id: "", name: "", description: "", is_nsfw: true, type: "text", mention: "" } });
+  const safeCtx = testContext({ channel: { id: "", name: "", description: "", is_nsfw: false, type: "text", mention: "" } });
+  const ALL_CATS: SafetyCategory[] = ["sexual", "hate", "harassment", "dangerous", "civic"];
+
+  // --- $safety all-categories ---
+  test("$safety off → all categories OFF", () => {
+    const result = evaluateFacts(["$safety off", "fact"], safeCtx);
+    expect(result.contentFilters).toHaveLength(5);
+    for (const f of result.contentFilters) expect(f.threshold).toBe("off");
   });
 
-  test("$nsfw true → nsfwRelaxed: true", () => {
-    const ctx = testContext({ channel: { id: "", name: "", description: "", is_nsfw: false, type: "text", mention: "" } });
-    const result = evaluateFacts(["$nsfw true", "some fact"], ctx);
-    expect(result.nsfwRelaxed).toBe(true);
+  test("$safety true → all categories OFF (boolean true = off)", () => {
+    const result = evaluateFacts(["$safety true", "fact"], safeCtx);
+    expect(result.contentFilters).toHaveLength(5);
   });
 
-  test("$nsfw false → nsfwRelaxed: false", () => {
-    const ctx = testContext({ channel: { id: "", name: "", description: "", is_nsfw: true, type: "text", mention: "" } });
-    const result = evaluateFacts(["$nsfw false", "some fact"], ctx);
-    expect(result.nsfwRelaxed).toBe(false);
+  test("$safety false → no filters (boolean false = skip)", () => {
+    const result = evaluateFacts(["$safety false", "fact"], safeCtx);
+    expect(result.contentFilters).toHaveLength(0);
   });
 
-  test("$nsfw channel.is_nsfw with NSFW channel → nsfwRelaxed: true", () => {
-    const ctx = testContext({ channel: { id: "", name: "", description: "", is_nsfw: true, type: "text", mention: "" } });
-    const result = evaluateFacts(["$nsfw channel.is_nsfw", "some fact"], ctx);
-    expect(result.nsfwRelaxed).toBe(true);
+  test("$safety channel.is_nsfw in NSFW channel → all categories OFF", () => {
+    const result = evaluateFacts(["$safety channel.is_nsfw", "fact"], nsfwCtx);
+    expect(result.contentFilters).toHaveLength(5);
+    expect(result.contentFilters.every(f => f.threshold === "off")).toBe(true);
   });
 
-  test("$nsfw channel.is_nsfw with non-NSFW channel → nsfwRelaxed: false", () => {
-    const ctx = testContext({ channel: { id: "", name: "", description: "", is_nsfw: false, type: "text", mention: "" } });
-    const result = evaluateFacts(["$nsfw channel.is_nsfw", "some fact"], ctx);
-    expect(result.nsfwRelaxed).toBe(false);
+  test("$safety channel.is_nsfw in non-NSFW channel → no filters", () => {
+    const result = evaluateFacts(["$safety channel.is_nsfw", "fact"], safeCtx);
+    expect(result.contentFilters).toHaveLength(0);
   });
 
-  test("no directive, NSFW channel → nsfwRelaxed: true (implicit default)", () => {
-    const ctx = testContext({ channel: { id: "", name: "", description: "", is_nsfw: true, type: "text", mention: "" } });
-    const result = evaluateFacts(["some fact"], ctx);
-    expect(result.nsfwRelaxed).toBe(true);
+  test("no directive → no filters (no implicit default)", () => {
+    const result = evaluateFacts(["some fact"], nsfwCtx);
+    expect(result.contentFilters).toHaveLength(0);
   });
 
-  test("no directive, non-NSFW channel → nsfwRelaxed: false (implicit default)", () => {
-    const ctx = testContext({ channel: { id: "", name: "", description: "", is_nsfw: false, type: "text", mention: "" } });
-    const result = evaluateFacts(["some fact"], ctx);
-    expect(result.nsfwRelaxed).toBe(false);
+  test("$safety none → all categories BLOCK_NONE", () => {
+    const result = evaluateFacts(["$safety none", "fact"], safeCtx);
+    expect(result.contentFilters).toHaveLength(5);
+    for (const f of result.contentFilters) expect(f.threshold).toBe("none");
   });
 
-  test("$nsfw fact is stripped from LLM-visible facts", () => {
-    const ctx = testContext();
-    const result = evaluateFacts(["$nsfw true", "some fact"], ctx);
-    expect(result.facts).not.toContain("$nsfw true");
+  test("$safety medium → all categories medium", () => {
+    const result = evaluateFacts(["$safety medium", "fact"], safeCtx);
+    for (const f of result.contentFilters) expect(f.threshold).toBe("medium");
+  });
+
+  test("$safety fact is stripped from LLM-visible facts", () => {
+    const result = evaluateFacts(["$safety off", "some fact"], safeCtx);
+    expect(result.facts).not.toContain("$safety off");
     expect(result.facts).toEqual(["some fact"]);
   });
 
-  test("last $nsfw directive wins", () => {
-    const ctx = testContext({ channel: { id: "", name: "", description: "", is_nsfw: false, type: "text", mention: "" } });
-    const result = evaluateFacts(["$nsfw true", "$nsfw false"], ctx);
-    expect(result.nsfwRelaxed).toBe(false);
+  // --- $safety per-category ---
+  test("$safety sexual off → only sexual category", () => {
+    const result = evaluateFacts(["$safety sexual off", "fact"], safeCtx);
+    expect(result.contentFilters).toHaveLength(1);
+    expect(result.contentFilters[0]).toEqual({ category: "sexual", threshold: "off" });
   });
 
-  test("conditional $nsfw triggered → nsfwRelaxed: true", () => {
-    const result = evaluateFacts(["$if mentioned: $nsfw true", "some fact"], makeContext({ mentioned: true }));
-    expect(result.nsfwRelaxed).toBe(true);
+  test("$safety hate medium → only hate category", () => {
+    const result = evaluateFacts(["$safety hate medium", "fact"], safeCtx);
+    expect(result.contentFilters).toHaveLength(1);
+    expect(result.contentFilters[0]).toEqual({ category: "hate", threshold: "medium" });
   });
 
-  test("conditional $nsfw not triggered → falls back to implicit default (false)", () => {
-    const result = evaluateFacts(["$if mentioned: $nsfw true", "some fact"], makeContext({ mentioned: false }));
-    // No directive triggered; channel.is_nsfw not set in makeContext → false
-    expect(result.nsfwRelaxed).toBe(false);
+  test("$safety harassment low + $safety dangerous high → two filters", () => {
+    const result = evaluateFacts(["$safety harassment low", "$safety dangerous high", "fact"], safeCtx);
+    expect(result.contentFilters).toHaveLength(2);
+    expect(result.contentFilters.find(f => f.category === "harassment")?.threshold).toBe("low");
+    expect(result.contentFilters.find(f => f.category === "dangerous")?.threshold).toBe("high");
+  });
+
+  test("per-category overrides all-categories: $safety off then $safety hate medium", () => {
+    const result = evaluateFacts(["$safety off", "$safety hate medium", "fact"], safeCtx);
+    expect(result.contentFilters.find(f => f.category === "hate")?.threshold).toBe("medium");
+    expect(result.contentFilters.find(f => f.category === "sexual")?.threshold).toBe("off");
+  });
+
+  test("$safety off then $safety hate false → hate removed, others still off", () => {
+    const result = evaluateFacts(["$safety off", "$safety hate false", "fact"], safeCtx);
+    expect(result.contentFilters.find(f => f.category === "hate")).toBeUndefined();
+    expect(result.contentFilters.find(f => f.category === "sexual")?.threshold).toBe("off");
+    expect(result.contentFilters).toHaveLength(4);
+  });
+
+  test("last $safety for same category wins", () => {
+    const result = evaluateFacts(["$safety sexual off", "$safety sexual medium"], safeCtx);
+    expect(result.contentFilters).toHaveLength(1);
+    expect(result.contentFilters[0]?.threshold).toBe("medium");
+  });
+
+  test("all category keywords recognized", () => {
+    for (const cat of ALL_CATS) {
+      const result = evaluateFacts([`$safety ${cat} off`], safeCtx);
+      expect(result.contentFilters).toHaveLength(1);
+      expect(result.contentFilters[0]?.category).toBe(cat);
+    }
+  });
+
+  test("$safety civic channel.is_nsfw in NSFW channel → civic OFF", () => {
+    const result = evaluateFacts(["$safety civic channel.is_nsfw", "fact"], nsfwCtx);
+    expect(result.contentFilters).toHaveLength(1);
+    expect(result.contentFilters[0]).toEqual({ category: "civic", threshold: "off" });
+  });
+
+  // --- conditional $safety ---
+  test("conditional $safety triggered → all categories off", () => {
+    const result = evaluateFacts(["$if mentioned: $safety off", "fact"], makeContext({ mentioned: true }));
+    expect(result.contentFilters).toHaveLength(5);
+  });
+
+  test("conditional $safety not triggered → no filters", () => {
+    const result = evaluateFacts(["$if mentioned: $safety off", "fact"], makeContext({ mentioned: false }));
+    expect(result.contentFilters).toHaveLength(0);
+  });
+
+  test("conditional per-category: $if mentioned: $safety sexual off", () => {
+    const result = evaluateFacts(["$if mentioned: $safety sexual off", "fact"], makeContext({ mentioned: true }));
+    expect(result.contentFilters).toEqual([{ category: "sexual", threshold: "off" }]);
+  });
+
+  // --- $nsfw backward-compat alias ---
+  test("$nsfw (bare) → all categories off (alias)", () => {
+    const result = evaluateFacts(["$nsfw", "fact"], safeCtx);
+    expect(result.contentFilters).toHaveLength(5);
+    expect(result.contentFilters.every(f => f.threshold === "off")).toBe(true);
+  });
+
+  test("$nsfw true → all categories off", () => {
+    const result = evaluateFacts(["$nsfw true", "fact"], safeCtx);
+    expect(result.contentFilters).toHaveLength(5);
+  });
+
+  test("$nsfw false → no filters", () => {
+    const result = evaluateFacts(["$nsfw false", "fact"], safeCtx);
+    expect(result.contentFilters).toHaveLength(0);
+  });
+
+  test("$nsfw channel.is_nsfw in NSFW channel → all off", () => {
+    const result = evaluateFacts(["$nsfw channel.is_nsfw", "fact"], nsfwCtx);
+    expect(result.contentFilters).toHaveLength(5);
+  });
+
+  test("$nsfw fact is stripped from LLM context", () => {
+    const result = evaluateFacts(["$nsfw true", "some fact"], safeCtx);
+    expect(result.facts).toEqual(["some fact"]);
+  });
+
+  // --- edge cases ---
+  test("$safetyfoo is not treated as $safety directive", () => {
+    const result = evaluateFacts(["$safetyfoo", "some fact"], safeCtx);
+    expect(result.contentFilters).toHaveLength(0);
+    expect(result.facts).toContain("$safetyfoo");
   });
 
   test("$nsfwfoo is not treated as $nsfw directive", () => {
-    const ctx = testContext();
-    const result = evaluateFacts(["$nsfwfoo", "some fact"], ctx);
-    expect(result.nsfwRelaxed).toBe(false);
+    const result = evaluateFacts(["$nsfwfoo", "some fact"], safeCtx);
+    expect(result.contentFilters).toHaveLength(0);
     expect(result.facts).toContain("$nsfwfoo");
+  });
+
+  test("unknown threshold string → no filter added", () => {
+    const result = evaluateFacts(["$safety notavalue", "fact"], safeCtx);
+    expect(result.contentFilters).toHaveLength(0);
+    // treated as non-category word → all categories, expr="notavalue" → unknown string → null threshold → no override
   });
 });

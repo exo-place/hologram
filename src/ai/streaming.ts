@@ -1,5 +1,5 @@
 import { streamText, stepCountIs } from "ai";
-import { getLanguageModel, DEFAULT_MODEL, InferenceError, parseModelSpec, buildThinkingOptions, buildNsfwOptions } from "./models";
+import { getLanguageModel, DEFAULT_MODEL, InferenceError, parseModelSpec, buildThinkingOptions, buildSafetyOptions } from "./models";
 import { debug, error } from "../logger";
 import {
   type EvaluatedEntity,
@@ -106,7 +106,7 @@ export async function* handleMessageStreaming(
   const modelSpec = entities[0]?.modelSpec ?? DEFAULT_MODEL;
   const { providerName, modelName } = parseModelSpec(modelSpec);
   const thinkingLevel = entities[0]?.thinkingLevel;
-  const nsfwRelaxed = entities[0]?.nsfwRelaxed ?? false;
+  const contentFilters = entities[0]?.contentFilters ?? [];
 
   try {
     const model = getLanguageModel(modelSpec);
@@ -121,9 +121,9 @@ export async function* handleMessageStreaming(
     const normalizedMessages = normalizeMessagesForProvider(resolvedMessages, providerName);
 
     const thinkingOptions = buildThinkingOptions(providerName, modelName, thinkingLevel);
-    const nsfwOptions = buildNsfwOptions(providerName, nsfwRelaxed);
-    const providerOptions = (thinkingOptions || nsfwOptions)
-      ? { ...thinkingOptions, ...nsfwOptions }
+    const safetyOptions = buildSafetyOptions(providerName, contentFilters);
+    const providerOptions = (thinkingOptions || safetyOptions)
+      ? { ...thinkingOptions, ...safetyOptions }
       : undefined;
 
     const result = streamText({

@@ -84,7 +84,7 @@ export function buildEvaluatedEntity(
     stripPatterns: result.stripPatterns,
     thinkingLevel: result.thinkingLevel,
     collapseMessages: result.collapseMessages,
-    nsfwRelaxed: result.nsfwRelaxed,
+    contentFilters: result.contentFilters,
     template: entity.template,
     systemTemplate: entity.system_template,
     exprContext: ctx,
@@ -109,7 +109,7 @@ function categorize(raw: string): string {
   if (parsed.isStrip) return "$strip";
   if (parsed.isThinking) return "$thinking";
   if (parsed.isCollapse) return "$collapse";
-  if (parsed.isNsfw) return "$nsfw";
+  if (parsed.isSafety) return "$safety";
   return "fact";
 }
 
@@ -199,7 +199,7 @@ export function traceFacts(
       stripPatterns: null,
       thinkingLevel: null,
       collapseMessages: null,
-      nsfwRelaxed: false,
+      contentFilters: [],
     };
   }
 

@@ -1,3 +1,4 @@
+import type { ContentFilter, SafetyCategory, SafetyThreshold } from "../logic/expr";
 import { anthropic } from "@ai-sdk/anthropic";
 import { azure } from "@ai-sdk/azure";
 import { bedrock } from "@ai-sdk/amazon-bedrock";
@@ -246,32 +247,44 @@ export function buildThinkingOptions(
 }
 
 // =============================================================================
-// NSFW / Content Safety
+// Content Safety Filters
 // =============================================================================
 
-const GOOGLE_NSFW_SAFETY_SETTINGS: JSONObject[] = [
-  { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "OFF" },
-  { category: "HARM_CATEGORY_HATE_SPEECH",       threshold: "OFF" },
-  { category: "HARM_CATEGORY_HARASSMENT",        threshold: "OFF" },
-  { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "OFF" },
-  { category: "HARM_CATEGORY_CIVIC_INTEGRITY",   threshold: "OFF" },
-];
+const GOOGLE_CATEGORY_MAP: Record<SafetyCategory, string> = {
+  sexual:     "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+  hate:       "HARM_CATEGORY_HATE_SPEECH",
+  harassment: "HARM_CATEGORY_HARASSMENT",
+  dangerous:  "HARM_CATEGORY_DANGEROUS_CONTENT",
+  civic:      "HARM_CATEGORY_CIVIC_INTEGRITY",
+};
+
+const GOOGLE_THRESHOLD_MAP: Record<SafetyThreshold, string> = {
+  off:    "OFF",
+  none:   "BLOCK_NONE",
+  low:    "BLOCK_LOW_AND_ABOVE",
+  medium: "BLOCK_MEDIUM_AND_ABOVE",
+  high:   "BLOCK_ONLY_HIGH",
+};
 
 /**
- * Build provider-specific options to relax content safety filters.
- * Returns undefined if not relaxed or provider doesn't support safetySettings.
+ * Build provider-specific options for content safety filter overrides.
+ * Returns undefined if no filters or provider doesn't support safetySettings.
  * Currently only Google and Google Vertex expose safetySettings in the AI SDK.
  */
-export function buildNsfwOptions(
+export function buildSafetyOptions(
   providerName: string,
-  relaxed: boolean,
+  filters: ContentFilter[],
 ): Record<string, JSONObject> | undefined {
-  if (!relaxed) return undefined;
+  if (filters.length === 0) return undefined;
   switch (providerName) {
     case "google":
     case "google-vertex": {
       const key = providerName === "google-vertex" ? "vertex" : "google";
-      return { [key]: { safetySettings: GOOGLE_NSFW_SAFETY_SETTINGS } };
+      const safetySettings = filters.map(f => ({
+        category:  GOOGLE_CATEGORY_MAP[f.category],
+        threshold: GOOGLE_THRESHOLD_MAP[f.threshold],
+      }));
+      return { [key]: { safetySettings } };
     }
     default:
       return undefined;

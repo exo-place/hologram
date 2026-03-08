@@ -54,8 +54,8 @@ See `docs/postmortem/2026-01-26-ux-critique.md` for full analysis.
 
 ### Permissions
 
-- [ ] **Admin unbind** — server admins (Manage Channels) should be able to unbind any entity from any channel/guild in their server, even if they don't have edit/use permission on the entity. Currently unbind requires entity edit/use permission.
-- [ ] **$nsfw content filtering rework** — `$nsfw` is too coarse. Needs general content filtering with more granularity than on/off, and should be one of multiple possible filter dimensions (not NSFW-specific).
+- [x] **Admin unbind** — server admins (Manage Channels) should be able to unbind any entity from any channel/guild in their server, even if they don't have edit/use permission on the entity. Currently unbind requires entity edit/use permission.
+- [x] **$safety directive** — `$safety [category] threshold-or-expr` controls per-category content filter thresholds. Categories: `sexual`, `hate`, `harassment`, `dangerous`, `civic` (or omit for all). Threshold: `off`, `none`, `low`, `medium`, `high`, or a boolean expression (`channel.is_nsfw`, `true`/`false`). `$nsfw` remains as backward-compat alias for `$safety` (all categories). Removes implicit `channel.is_nsfw` default — explicit opt-in required.
 
 ### Features
 
