@@ -1569,13 +1569,21 @@ registerCommand({
 
     const isPersonaBind = target.startsWith("me:");
 
-    // Entity-side permission check
+    // Server admins (Manage Channels) can unbind entities from their own channels/server
+    // without needing entity-level edit permission.
+    const memberPerms = ctx.interaction.member?.permissions;
+    const hasManageChannels =
+      memberPerms != null &&
+      typeof memberPerms === "object" &&
+      (memberPerms.has("MANAGE_CHANNELS") || memberPerms.has("ADMINISTRATOR"));
+
+    // Entity-side permission check (skipped for non-persona binds if caller has Manage Channels)
     if (isPersonaBind) {
       if (!canUserUse(entity, ctx.userId, ctx.username, ctx.userRoles)) {
         await respond(ctx.bot, ctx.interaction, "You don't have permission to unbind this persona", true);
         return;
       }
-    } else {
+    } else if (!hasManageChannels) {
       if (!canUserEdit(entity, ctx.userId, ctx.username, ctx.userRoles)) {
         await respond(ctx.bot, ctx.interaction, "You don't have permission to unbind this entity", true);
         return;

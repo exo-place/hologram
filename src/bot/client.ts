@@ -174,6 +174,7 @@ export const bot = createBot({
     },
     member: {
       roles: true,
+      permissions: true,
     },
   },
 });

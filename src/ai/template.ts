@@ -625,7 +625,7 @@ function buildParseEmojisFn(nonce: string): (content: unknown) => string {
     const str = String(content ?? "");
     return str.replace(/<(a?):(\w+):(\d+)>/g, (match, animated, _name, id) => {
       const url = `https://cdn.discordapp.com/emojis/${id}.${animated ? "gif" : "webp"}`;
-      const mimeType = animated ? "image/gif" : "image/webp";
+      const mimeType = animated ? "image/gif" : "image";
       return `${match}${attachFn(url, mimeType)}`;
     });
   };
