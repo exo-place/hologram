@@ -11,10 +11,9 @@ import type { EvaluatedEntity } from "../ai/context";
 import { isModelAllowed } from "../ai/models";
 import { retrieveRelevantMemories, type MemoryScope } from "../db/memories";
 import { resolveDiscordEntity, resolveDiscordEntities, isNewUser, markUserWelcomed, addMessage, updateMessageByDiscordId, mergeMessageData, deleteMessageByDiscordId, trackWebhookMessage, getWebhookMessageEntity, getMessages, getFilteredMessages, formatMessagesForContext, recordEvalError, isOurWebhookUserId, countUnreadMessages, getLastMessageSnowflake, getAllBoundChannelIds, type MessageData } from "../db/discord";
-import { getEntity, getEntityWithFacts, getEntityConfig, getSystemEntity, getFactsForEntity, type EntityWithFacts } from "../db/entities";
+import { getEntity, getEntityWithFacts, getEntityConfig, getSystemEntity, getFactsForEntity, getEntityEvalDefaults, getPermissionDefaults, type EntityWithFacts, type EntityConfig } from "../db/entities";
 import { evaluateFacts, createBaseContext, parsePermissionDirectives, isUserBlacklisted, isUserAllowed, compileContextExpr, parseCollapseRoles, ExprError, type EvaluatedFactsDefaults, type PermissionDefaults } from "../logic/expr";
 import { DEFAULT_CONTEXT_EXPR } from "../ai/context";
-import type { EntityConfig } from "../db/entities";
 import { executeWebhook, editWebhookMessage, setBot } from "./webhooks";
 import "./commands/commands"; // Register all commands
 import { ensureHelpEntities } from "./commands/help";
@@ -388,48 +387,20 @@ export async function getGuildMetadata(guildId: string): Promise<Omit<GuildMeta,
 
 // Track consecutive self-response chain depth per channel (resets on real user message)
 const responseChainDepth = new Map<string, number>();
-const MAX_RESPONSE_CHAIN = process.env.MAX_RESPONSE_CHAIN
+const _maxResponseChainRaw = process.env.MAX_RESPONSE_CHAIN
   ? parseInt(process.env.MAX_RESPONSE_CHAIN, 10)
   : 3;
+if (_maxResponseChainRaw === 0) {
+  warn(
+    "MAX_RESPONSE_CHAIN=0 is invalid (it would disable the self-response loop guard entirely). " +
+    "Defaulting to 3. Use a positive integer or unset the variable to use the default."
+  );
+}
+const MAX_RESPONSE_CHAIN = _maxResponseChainRaw === 0 ? 3 : _maxResponseChainRaw;
 
 // Pending retry timers per channel:entity
 const retryTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-/** Parse JSON with a fallback value on failure (handles corrupted DB data) */
-function safeJsonParse<T>(json: string | null, fallback: T): T {
-  if (!json) return fallback;
-  try { return JSON.parse(json) as T; }
-  catch { return fallback; }
-}
-
-/** Convert entity config columns to evaluateFacts defaults */
-function configToDefaults(config: EntityConfig | null): EvaluatedFactsDefaults {
-  if (!config) return {};
-  return {
-    contextExpr: config.config_context,
-    modelSpec: config.config_model,
-    avatarUrl: config.config_avatar,
-    streamMode: config.config_stream_mode as "lines" | "full" | null,
-    streamDelimiter: safeJsonParse(config.config_stream_delimiters, null),
-    memoryScope: (config.config_memory as "none" | "channel" | "guild" | "global") ?? "none",
-    isFreeform: !!config.config_freeform,
-    stripPatterns: safeJsonParse(config.config_strip, null),
-    shouldRespond: config.config_respond === "true" ? true : config.config_respond === "false" ? false : null,
-    thinkingLevel: config.config_thinking as import("../logic/expr").ThinkingLevel | null,
-    collapseMessages: config.config_collapse ? parseCollapseRoles(config.config_collapse) : null,
-  };
-}
-
-/** Convert entity config columns to permission defaults */
-function configToPermissionDefaults(config: EntityConfig | null): PermissionDefaults {
-  if (!config) return {};
-  return {
-    editList: safeJsonParse(config.config_edit, null),
-    viewList: safeJsonParse(config.config_view, null),
-    useList: safeJsonParse(config.config_use, null),
-    blacklist: safeJsonParse(config.config_blacklist, []),
-  };
-}
 
 function retryKey(channelId: string, entityId: number): string {
   return `${channelId}:${entityId}`;
@@ -641,7 +612,7 @@ bot.events.messageCreate = async (message) => {
     // This is our own webhook - increment chain depth
     const depth = (responseChainDepth.get(channelId) ?? 0) + 1;
     responseChainDepth.set(channelId, depth);
-    if (MAX_RESPONSE_CHAIN > 0 && depth > MAX_RESPONSE_CHAIN) {
+    if (depth > MAX_RESPONSE_CHAIN) {
       debug("Response chain limit reached", { channel: channelId, depth, max: MAX_RESPONSE_CHAIN });
       return;
     }
@@ -749,12 +720,9 @@ bot.events.messageCreate = async (message) => {
       retryTimers.delete(key);
     }
 
-    // Load entity config columns
-    const entityConfig = getEntityConfig(entity.id);
-
     // Check if message author is blacklisted from this entity
     const facts = entity.facts.map(f => f.content);
-    const permissions = parsePermissionDirectives(facts, configToPermissionDefaults(entityConfig));
+    const permissions = parsePermissionDirectives(facts, getPermissionDefaults(entity.id));
     if (isUserBlacklisted(permissions, authorId, authorName, entity.owned_by, authorRoles)) {
       debug("User blacklisted from entity", { entity: entity.name, user: authorName });
       continue;
@@ -767,9 +735,24 @@ bot.events.messageCreate = async (message) => {
     }
 
     // Build expression context for this entity
-    // Check if this is the entity's own webhook message (self-triggered)
-    const isSelf = !!message.webhookId &&
-      entity.name.toLowerCase() === authorName.toLowerCase();
+    // Check if this is the entity's own webhook message (self-triggered).
+    // Prefer entity ID lookup via webhook_messages table over name comparison,
+    // which breaks when two entities share a name or the webhook is renamed externally.
+    let isSelf = false;
+    if (message.webhookId) {
+      const webhookEntity = getWebhookMessageEntity(message.id.toString());
+      if (webhookEntity !== null) {
+        isSelf = webhookEntity.entityId === entity.id;
+      } else {
+        // Fallback: webhook message not tracked (e.g. sent before bot started)
+        isSelf = entity.name.toLowerCase() === authorName.toLowerCase();
+        debug('isSelf fallback to name comparison (message not in webhook_messages)', {
+          entity: entity.name,
+          authorName,
+          messageId: message.id.toString(),
+        });
+      }
+    }
     const ctx = createBaseContext({
       facts,
       has_fact: (pattern: string) => {
@@ -799,7 +782,7 @@ bot.events.messageCreate = async (message) => {
 
     let result;
     try {
-      result = evaluateFacts(facts, ctx, configToDefaults(entityConfig));
+      result = evaluateFacts(facts, ctx, getEntityEvalDefaults(entity.id));
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       warn("Fact evaluation failed", {
@@ -959,10 +942,9 @@ async function processEntityRetry(
     server: guildMeta,
   });
 
-  const retryConfig = getEntityConfig(entityId);
   let result;
   try {
-    result = evaluateFacts(facts, ctx, configToDefaults(retryConfig));
+    result = evaluateFacts(facts, ctx, getEntityEvalDefaults(entityId));
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     warn("Fact evaluation failed during retry", {
@@ -1705,7 +1687,7 @@ function getEditorsToNotify(entityId: number, ownerId: string | null, facts: str
     editors.add(ownerId);
   }
 
-  const permissions = parsePermissionDirectives(facts, configToPermissionDefaults(getEntityConfig(entityId)));
+  const permissions = parsePermissionDirectives(facts, getPermissionDefaults(entityId));
   if (Array.isArray(permissions.editList)) {
     for (const userId of permissions.editList) {
       editors.add(userId);
