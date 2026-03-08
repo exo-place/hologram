@@ -3,7 +3,7 @@ import { getActiveEffectFacts } from "./effects";
 import { parseCollapseRoles, type EvaluatedFactsDefaults, type MemoryScope, type ThinkingLevel } from "../logic/expr";
 
 /** Parse JSON with a fallback value on failure (handles corrupted DB data) */
-function safeParseFallback<T>(json: string | null, fallback: T): T {
+export function safeParseFallback<T>(json: string | null, fallback: T): T {
   if (!json) return fallback;
   try { return JSON.parse(json) as T; }
   catch { return fallback; }

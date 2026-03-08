@@ -1,4 +1,5 @@
 import { getDb } from "./index";
+import { safeParseFallback } from "./entities";
 
 // =============================================================================
 // Discord Entity Mapping
@@ -397,9 +398,9 @@ export function resolveDiscordConfig(channelId: string | undefined, guildId: str
     const channelConfig = getDiscordConfig(channelId, "channel");
     if (channelConfig) {
       return {
-        bind: channelConfig.config_bind ? JSON.parse(channelConfig.config_bind) : null,
-        persona: channelConfig.config_persona ? JSON.parse(channelConfig.config_persona) : null,
-        blacklist: channelConfig.config_blacklist ? JSON.parse(channelConfig.config_blacklist) : null,
+        bind: safeParseFallback<string[] | null>(channelConfig.config_bind, null),
+        persona: safeParseFallback<string[] | null>(channelConfig.config_persona, null),
+        blacklist: safeParseFallback<string[] | null>(channelConfig.config_blacklist, null),
       };
     }
   }
@@ -409,9 +410,9 @@ export function resolveDiscordConfig(channelId: string | undefined, guildId: str
     const guildConfig = getDiscordConfig(guildId, "guild");
     if (guildConfig) {
       return {
-        bind: guildConfig.config_bind ? JSON.parse(guildConfig.config_bind) : null,
-        persona: guildConfig.config_persona ? JSON.parse(guildConfig.config_persona) : null,
-        blacklist: guildConfig.config_blacklist ? JSON.parse(guildConfig.config_blacklist) : null,
+        bind: safeParseFallback<string[] | null>(guildConfig.config_bind, null),
+        persona: safeParseFallback<string[] | null>(guildConfig.config_persona, null),
+        blacklist: safeParseFallback<string[] | null>(guildConfig.config_blacklist, null),
       };
     }
   }

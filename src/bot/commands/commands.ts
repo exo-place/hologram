@@ -28,6 +28,7 @@ import {
   getEntityEvalDefaults,
   getEntityConfig,
   setEntityConfig,
+  safeParseFallback,
 } from "../../db/entities";
 import {
   getMemoriesForEntity,
@@ -1684,7 +1685,7 @@ function buildConfigLabels(discordId: string, discordType: "channel" | "guild"):
 
   return CONFIG_FIELDS.map(field => {
     const rawValue = config?.[`config_${field}`] ?? null;
-    const parsed: string[] | null = rawValue ? JSON.parse(rawValue) : null;
+    const parsed: string[] | null = safeParseFallback<string[] | null>(rawValue, null);
     const defaultValues = buildDefaultValues(parsed);
 
     const select: Record<string, unknown> = {
