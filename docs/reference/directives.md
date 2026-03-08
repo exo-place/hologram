@@ -9,7 +9,8 @@ Directives fall into three distinct categories:
 | Category | Directives | Purpose |
 |----------|------------|---------|
 | **Flow Control** | `$if`, `$respond`, `$retry` | When and whether to respond |
-| **Output** | `$stream`, `$freeform`, `$model`, `$context`, `$strip`, `$thinking` | How and what the LLM produces |
+| **Output** | `$stream`, `$freeform`, `$model`, `$context`, `$strip`, `$thinking`, `$collapse` | How and what the LLM produces |
+| **Safety** | `$safety`, `$nsfw` | Provider content filter control |
 | **Metadata** | `$avatar`, `$memory` | Entity presentation and memory |
 | **Permissions** | `$locked`, `$edit`, `$view`, `$use`, `$blacklist` | Access control |
 
@@ -114,6 +115,74 @@ Google models think by default, so `minimal` actively suppresses thinking. Anthr
 
 Can also be set via `/edit <entity> type:Advanced`.
 
+### `$collapse` / `$collapse <roles>`
+
+Control which adjacent same-role messages are merged into a single message when building LLM context. By default all roles are collapsed.
+
+```
+$collapse                          # Collapse all roles (explicit default)
+$collapse all                      # Same as bare $collapse
+$collapse none                     # Disable all collapsing — every message is a distinct turn
+$collapse user                     # Only collapse adjacent user messages
+$collapse assistant                # Only collapse adjacent assistant messages
+$collapse user assistant           # Collapse user and assistant, not system
+$if channel.name == "log": $collapse none  # Conditional: keep turns separate in #log
+```
+
+**Roles:** `user`, `assistant`, `system`. Space-separated for multiple. `none` and `all` are special keywords.
+
+**Default behavior:** All roles are collapsed when no `$collapse` directive is present. Multiple `$collapse` directives are evaluated in order; the last one wins.
+
+Can also be set via `/edit <entity> type:Advanced`.
+
+## Safety
+
+### `$safety [category] <threshold-or-expr>`
+
+Override provider content filter thresholds per category. Multiple directives accumulate; the last one per category wins.
+
+```
+$safety off                        # Disable all safety filters
+$safety none                       # Block nothing (least restrictive)
+$safety high                       # Block most aggressively
+$safety sexual off                 # Disable sexual content filter only
+$safety hate medium                # Hate speech at medium threshold
+$safety channel.is_nsfw            # All categories: relax when channel is NSFW
+$safety sexual channel.is_nsfw     # Sexual only, relax in NSFW channels
+$if channel.is_nsfw: $safety off   # Conditional override
+```
+
+**Categories:** `sexual`, `hate`, `harassment`, `dangerous`, `civic`. Omit for all categories.
+
+**Thresholds:**
+
+| Threshold | Meaning |
+|-----------|---------|
+| `off` | Disable filter entirely (least safe) |
+| `none` | Block nothing |
+| `low` | Block low-severity and above |
+| `medium` | Block medium-severity and above |
+| `high` | Block only high-severity content (most permissive) |
+
+**Boolean expressions:** When a boolean expression is used (e.g. `channel.is_nsfw`), `true` maps to `off` and `false` means "no override." This matches the old `$nsfw channel.is_nsfw` behavior.
+
+**Provider mapping (Google):** `off`→`OFF`, `none`→`BLOCK_NONE`, `low`→`BLOCK_LOW_AND_ABOVE`, `medium`→`BLOCK_MEDIUM_AND_ABOVE`, `high`→`BLOCK_ONLY_HIGH`. Other providers currently ignore safety directives.
+
+Can also be set via `/edit <entity> type:Advanced`.
+
+### `$nsfw` / `$nsfw <expr>`
+
+Backward-compatible alias for `$safety` (all categories). Accepts boolean expressions; `true` maps to `off` threshold.
+
+```
+$nsfw                              # Disable all safety filters (same as $safety off)
+$nsfw true                         # Same
+$nsfw false                        # No override
+$nsfw channel.is_nsfw              # Relax when channel is NSFW
+```
+
+Prefer `$safety` for new facts — `$nsfw` is kept for backward compatibility.
+
 ## Permissions
 
 ### `$locked`
@@ -208,7 +277,9 @@ The directive system was built incrementally, which raised concerns about cohere
 
 2. **Metadata** (`$avatar`) - Presentation concerns, separate from behavior. Could expand to `$name`, `$color`, etc. without touching other categories.
 
-3. **Permissions** (`$locked`, `$edit`, `$view`, `$use`) - Access control is orthogonal to behavior. `$locked` controls LLM access; `$edit`/`$view`/`$use` control Discord user access. These don't interfere with each other or with flow control.
+3. **Safety** (`$safety`, `$nsfw`) - Provider filter control is separate from output shape. One directive, one concern.
+
+4. **Permissions** (`$locked`, `$edit`, `$view`, `$use`) - Access control is orthogonal to behavior. `$locked` controls LLM access; `$edit`/`$view`/`$use` control Discord user access. These don't interfere with each other or with flow control.
 
 **Why `$retry` isn't a bandaid:**
 
