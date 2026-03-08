@@ -24,13 +24,6 @@ mock.module("../db/index", () => ({
   closeDb: () => {},
 }));
 
-// memories module uses embeddings; stub it out to avoid native extension loads
-mock.module("../db/memories", () => ({
-  addMemory: async (entityId: number, content: string) => ({ id: 1, entity_id: entityId, content }),
-  updateMemoryByContent: async () => ({ id: 1 }),
-  removeMemoryByContent: () => true,
-}));
-
 mock.module("../ai/embeddings", () => ({
   embed: async () => new Float32Array(384),
   similarityMatrix: () => new Float32Array(0),
@@ -88,6 +81,25 @@ function createTestSchema(db: Database) {
       source TEXT,
       expires_at TEXT NOT NULL,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS entity_memories (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      entity_id INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+      content TEXT NOT NULL,
+      source_message_id TEXT,
+      source_channel_id TEXT,
+      source_guild_id TEXT,
+      frecency REAL DEFAULT 1.0,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS memory_embeddings (
+      memory_id INTEGER PRIMARY KEY,
+      embedding BLOB NOT NULL
     )
   `);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_facts_entity ON facts(entity_id)`);
@@ -412,16 +424,18 @@ describe("createTools — successful operations on unlocked entity", () => {
     expect(result.memoryId).toBeDefined();
   });
 
-  test("update_memory succeeds", async () => {
+  test("update_memory succeeds when memory exists", async () => {
     const entity = createEntity("Aria");
     const tools = createTools();
+    await callSaveMemory(tools, { entityId: entity.id, content: "old event" });
     const result = await callUpdateMemory(tools, { entityId: entity.id, oldContent: "old event", newContent: "updated event" });
     expect(result.success).toBe(true);
   });
 
-  test("remove_memory succeeds", async () => {
+  test("remove_memory succeeds when memory exists", async () => {
     const entity = createEntity("Aria");
     const tools = createTools();
+    await callSaveMemory(tools, { entityId: entity.id, content: "some event" });
     const result = await callRemoveMemory(tools, { entityId: entity.id, content: "some event" });
     expect(result.success).toBe(true);
   });
