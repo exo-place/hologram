@@ -16,16 +16,22 @@ hero:
 features:
   - icon: 🎭
     title: Everything is an Entity
-    details: Characters, locations, items - all entities with attached facts. No rigid schemas, just flexible descriptions.
+    details: Characters, locations, items, factions — all entities with attached facts. No rigid schemas, just freeform descriptions that the LLM reasons over.
   - icon: 🔗
     title: Simple Bindings
-    details: Bind channels to characters for AI responses. Bind yourself to a persona to speak as different characters.
+    details: Bind channels to entities for AI responses. Bind yourself to a persona to speak as different characters. Scope to a channel, server, or globally.
   - icon: ⚡
     title: Conditional Logic
-    details: Use $if expressions for random effects, time-based behavior, and dynamic facts.
+    details: Use $if expressions for random effects, time-based behavior, @mention triggers, and dynamic facts evaluated at message time.
+  - icon: 🧠
+    title: Custom Templates
+    details: Override the system prompt with Nunjucks templates. Control message roles, inject memory, and share templates between entities via inheritance.
+  - icon: 🤖
+    title: 16+ LLM Providers
+    details: Google, Anthropic, OpenAI, Groq, Mistral, xAI, and more. Per-entity model selection, thinking level control, streaming, and image generation.
   - icon: ✨
     title: Transformations
-    details: Characters can change form with TF items, gradual progress tracking, and saved loadouts.
+    details: Characters can change form with TF items, gradual progress tracking, and saved loadouts. Items apply guaranteed and random effects.
 ---
 
 ## Quick Example
@@ -38,29 +44,46 @@ Facts:
   - works as a traveling merchant
   - speaks with a slight accent
   - is cautious around strangers
+  - $if mentioned: $respond
 ```
 
-Bind Aria to a channel, and she'll respond based on her facts. That's it.
+Bind Aria to a channel, and she'll respond in character. Facts are freeform — the LLM reasons over them directly.
 
-## Transformation Example
+## Conditional Facts
 
 ```
-Entity: Vulpine Elixir
+Entity: The Void Shrine
 Facts:
-  - is a transformation potion
-  - grants fox ears (orange with white tips)
-  - grants a fluffy fox tail
-  - $if random() < 0.3: grants soft fur on arms
-  - is consumed on use
+  - is an ancient place of power
+  - $if time.is_night: hums with eldritch energy
+  - $if time.is_night && random() < 0.2: $respond
+  - $if unread_count > 5: something stirs in the silence
 ```
 
-Items can have guaranteed and random effects. The character's body facts update when used.
+Facts can be conditional. The shrine only chimes in at night, and only occasionally.
+
+## Custom Templates
+
+```nunjucks
+{% call send_as("system") %}
+You are {{ char.name }}. Today is {{ time.date }}.
+{% endcall %}
+
+{% call send_as("user") %}
+{{ char.name }}'s facts:
+{% for fact in char.facts %}
+- {{ fact }}
+{% endfor %}
+{% endcall %}
+```
+
+Nunjucks templates give full control over the system prompt: message roles, entity references, memory injection, and template inheritance.
 
 ## Getting Started
 
 1. **Create a character**: `/create Aria`
 2. **Add personality**: `/edit Aria` → Add facts describing who Aria is
 3. **Bind to channel**: `/bind channel Aria`
-4. **Chat**: Just talk - Aria responds in character
+4. **Chat**: Just talk — Aria responds in character
 
 [Read the full guide →](/guide/)
