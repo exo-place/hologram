@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseModelSpec, InferenceError, supportsImageOutput, buildSafetyOptions } from "./models";
+import { parseModelSpec, InferenceError, supportsImageOutput, buildSafetyOptions, buildThinkingOptions } from "./models";
 import type { ContentFilter } from "../logic/expr";
 
 describe("parseModelSpec", () => {
@@ -147,5 +147,110 @@ describe("buildSafetyOptions", () => {
 
   test("unknown provider returns undefined", () => {
     expect(buildSafetyOptions("unknown-provider", allOff)).toBeUndefined();
+  });
+});
+
+describe("buildThinkingOptions", () => {
+  // --- Google (gemini-2.5) uses thinkingBudget ---
+  test("google gemini-2.5: minimal → budget 0", () => {
+    const result = buildThinkingOptions("google", "gemini-2.5-flash", "minimal");
+    expect(result?.google).toEqual({ thinkingConfig: { thinkingBudget: 0 } });
+  });
+
+  test("google gemini-2.5: low → budget 1024", () => {
+    const result = buildThinkingOptions("google", "gemini-2.5-pro", "low");
+    expect(result?.google).toEqual({ thinkingConfig: { thinkingBudget: 1024 } });
+  });
+
+  test("google gemini-2.5: medium → budget 8192", () => {
+    const result = buildThinkingOptions("google", "gemini-2.5-flash", "medium");
+    expect(result?.google).toEqual({ thinkingConfig: { thinkingBudget: 8192 } });
+  });
+
+  test("google gemini-2.5: high → budget 24576", () => {
+    const result = buildThinkingOptions("google", "gemini-2.5-pro", "high");
+    expect(result?.google).toEqual({ thinkingConfig: { thinkingBudget: 24576 } });
+  });
+
+  // --- Google (gemini-3+) uses thinkingLevel string ---
+  test("google gemini-3: minimal → thinkingLevel minimal", () => {
+    const result = buildThinkingOptions("google", "gemini-3-flash-preview", "minimal");
+    expect(result?.google).toEqual({ thinkingConfig: { thinkingLevel: "minimal" } });
+  });
+
+  test("google gemini-3: high → thinkingLevel high", () => {
+    const result = buildThinkingOptions("google", "gemini-3-flash-preview", "high");
+    expect(result?.google).toEqual({ thinkingConfig: { thinkingLevel: "high" } });
+  });
+
+  test("google: null level defaults to minimal", () => {
+    const result = buildThinkingOptions("google", "gemini-3-flash-preview", null);
+    expect(result?.google).toEqual({ thinkingConfig: { thinkingLevel: "minimal" } });
+  });
+
+  // --- google-vertex uses vertex key ---
+  test("google-vertex: uses vertex key", () => {
+    const result = buildThinkingOptions("google-vertex", "gemini-2.5-flash", "low");
+    expect(result?.vertex).toEqual({ thinkingConfig: { thinkingBudget: 1024 } });
+    expect(result?.google).toBeUndefined();
+  });
+
+  test("google-vertex gemini-3: uses vertex key with thinkingLevel", () => {
+    const result = buildThinkingOptions("google-vertex", "gemini-3-pro", "medium");
+    expect(result?.vertex).toEqual({ thinkingConfig: { thinkingLevel: "medium" } });
+  });
+
+  // --- Anthropic ---
+  test("anthropic: minimal → undefined (don't enable thinking)", () => {
+    expect(buildThinkingOptions("anthropic", "claude-3.5-sonnet", "minimal")).toBeUndefined();
+  });
+
+  test("anthropic: null → undefined", () => {
+    expect(buildThinkingOptions("anthropic", "claude-3.5-sonnet", null)).toBeUndefined();
+  });
+
+  test("anthropic: low → budgetTokens 2048", () => {
+    const result = buildThinkingOptions("anthropic", "claude-3.5-sonnet", "low");
+    expect(result?.anthropic).toEqual({ thinking: { type: "enabled", budgetTokens: 2048 } });
+  });
+
+  test("anthropic: medium → budgetTokens 10000", () => {
+    const result = buildThinkingOptions("anthropic", "claude-3.5-sonnet", "medium");
+    expect(result?.anthropic).toEqual({ thinking: { type: "enabled", budgetTokens: 10_000 } });
+  });
+
+  test("anthropic: high → budgetTokens 32000", () => {
+    const result = buildThinkingOptions("anthropic", "claude-3.7-sonnet", "high");
+    expect(result?.anthropic).toEqual({ thinking: { type: "enabled", budgetTokens: 32_000 } });
+  });
+
+  // --- OpenAI ---
+  test("openai: minimal → undefined (don't enable reasoning)", () => {
+    expect(buildThinkingOptions("openai", "o3-mini", "minimal")).toBeUndefined();
+  });
+
+  test("openai: null → undefined", () => {
+    expect(buildThinkingOptions("openai", "o3-mini", null)).toBeUndefined();
+  });
+
+  test("openai: low → reasoningEffort low", () => {
+    const result = buildThinkingOptions("openai", "o3-mini", "low");
+    expect(result?.openai).toEqual({ reasoningEffort: "low" });
+  });
+
+  test("openai: medium → reasoningEffort medium", () => {
+    const result = buildThinkingOptions("openai", "o3-mini", "medium");
+    expect(result?.openai).toEqual({ reasoningEffort: "medium" });
+  });
+
+  test("openai: high → reasoningEffort high", () => {
+    const result = buildThinkingOptions("openai", "o3", "high");
+    expect(result?.openai).toEqual({ reasoningEffort: "high" });
+  });
+
+  // --- Unknown provider ---
+  test("unknown provider → undefined", () => {
+    expect(buildThinkingOptions("mistral", "mistral-large", "high")).toBeUndefined();
+    expect(buildThinkingOptions("groq", "llama-3.3-70b", "medium")).toBeUndefined();
   });
 });

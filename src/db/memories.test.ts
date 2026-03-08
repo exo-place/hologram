@@ -47,6 +47,10 @@ import {
   getRetrievalCacheStats,
   setMemoryCacheMaxEntities,
   formatMemoriesForContext,
+  searchMemoriesBySimilarity,
+  retrieveRelevantMemories,
+  getMemoryEmbedding,
+  storeMemoryEmbedding,
 } from "./memories";
 
 function createTestSchema(db: Database) {
@@ -534,5 +538,241 @@ describe("formatMemoriesForContext", () => {
     expect(result).toContain(`id="${entityId}"`);
     expect(result).toContain("first memory");
     expect(result).toContain("second memory");
+  });
+});
+
+// =============================================================================
+// getMemoryEmbedding / storeMemoryEmbedding
+// =============================================================================
+
+describe("getMemoryEmbedding / storeMemoryEmbedding", () => {
+  beforeEach(() => {
+    testDb = new Database(":memory:");
+    createTestSchema(testDb);
+    clearRetrievalCaches();
+  });
+
+  test("returns null for missing memory ID", () => {
+    expect(getMemoryEmbedding(9999)).toBeNull();
+  });
+
+  test("stores and retrieves a Float32Array embedding", async () => {
+    const entityId = insertEntity(testDb);
+    const memory = await addMemory(entityId, "test memory");
+
+    const original = new Float32Array([0.1, 0.2, 0.3, 0.4]);
+    await storeMemoryEmbedding(memory.id, original);
+
+    const retrieved = getMemoryEmbedding(memory.id);
+    expect(retrieved).not.toBeNull();
+    expect(retrieved!.length).toBe(4);
+    // Values should be approximately equal (float precision)
+    for (let i = 0; i < 4; i++) {
+      expect(retrieved![i]).toBeCloseTo(original[i], 5);
+    }
+  });
+
+  test("replaces existing embedding on re-store", async () => {
+    const entityId = insertEntity(testDb);
+    const memory = await addMemory(entityId, "test memory");
+
+    await storeMemoryEmbedding(memory.id, new Float32Array([1, 2, 3, 4]));
+    await storeMemoryEmbedding(memory.id, new Float32Array([5, 6, 7, 8]));
+
+    const retrieved = getMemoryEmbedding(memory.id);
+    expect(retrieved![0]).toBeCloseTo(5, 5);
+    expect(retrieved![3]).toBeCloseTo(8, 5);
+  });
+});
+
+// =============================================================================
+// searchMemoriesBySimilarity
+// =============================================================================
+
+describe("searchMemoriesBySimilarity", () => {
+  beforeEach(() => {
+    testDb = new Database(":memory:");
+    createTestSchema(testDb);
+    clearRetrievalCaches();
+  });
+
+  test("returns empty array when scope=none", async () => {
+    const entityId = insertEntity(testDb);
+    const result = await searchMemoriesBySimilarity(entityId, ["hello"], "none");
+    expect(result).toEqual([]);
+  });
+
+  test("returns empty array when no query texts", async () => {
+    const entityId = insertEntity(testDb);
+    const result = await searchMemoriesBySimilarity(entityId, [], "global");
+    expect(result).toEqual([]);
+  });
+
+  test("returns empty array when entity has no memories", async () => {
+    const entityId = insertEntity(testDb);
+    const result = await searchMemoriesBySimilarity(entityId, ["hello"], "global");
+    expect(result).toEqual([]);
+  });
+
+  test("returns empty array when memory embedding is deleted", async () => {
+    const entityId = insertEntity(testDb);
+    const memory = await addMemory(entityId, "a memory");
+    // Delete the embedding that addMemory auto-stored
+    testDb.prepare(`DELETE FROM memory_embeddings WHERE memory_id = ?`).run(memory.id);
+    clearRetrievalCaches();
+
+    const result = await searchMemoriesBySimilarity(entityId, ["hello"], "global");
+    expect(result).toEqual([]);
+  });
+
+  test("returns memories with similarity score above threshold", async () => {
+    const entityId = insertEntity(testDb);
+    const memory = await addMemory(entityId, "relevant memory");
+    // Store a real Float32Array embedding (mock similarityMatrix returns 1.0)
+    await storeMemoryEmbedding(memory.id, mockEmbedding);
+
+    const results = await searchMemoriesBySimilarity(entityId, ["query text"], "global");
+    expect(results).toHaveLength(1);
+    expect(results[0].memory.id).toBe(memory.id);
+    expect(results[0].similarity).toBe(1); // mock returns 1.0
+  });
+
+  test("returns multiple memories sorted by similarity desc", async () => {
+    const entityId = insertEntity(testDb);
+    const m1 = await addMemory(entityId, "memory one");
+    const m2 = await addMemory(entityId, "memory two");
+    await storeMemoryEmbedding(m1.id, mockEmbedding);
+    await storeMemoryEmbedding(m2.id, mockEmbedding);
+
+    const results = await searchMemoriesBySimilarity(entityId, ["query"], "global");
+    expect(results).toHaveLength(2);
+    // All similarities are 1.0 from mock, so any order is fine but both present
+    const ids = results.map(r => r.memory.id);
+    expect(ids).toContain(m1.id);
+    expect(ids).toContain(m2.id);
+  });
+
+  test("uses cached result on second call with same queries", async () => {
+    const entityId = insertEntity(testDb);
+    const memory = await addMemory(entityId, "cached memory");
+    await storeMemoryEmbedding(memory.id, mockEmbedding);
+
+    // First call populates cache
+    const r1 = await searchMemoriesBySimilarity(entityId, ["q1"], "global");
+    // Second call should use cache (incrementally update)
+    const r2 = await searchMemoriesBySimilarity(entityId, ["q1"], "global");
+
+    expect(r1).toHaveLength(1);
+    expect(r2).toHaveLength(1);
+    expect(r2[0].memory.id).toBe(r1[0].memory.id);
+
+    // Cache should have 1 embedding entry and 1 similarity entry
+    const stats = getRetrievalCacheStats();
+    expect(stats.embeddingEntries).toBeGreaterThanOrEqual(1);
+    expect(stats.similarityEntries).toBeGreaterThanOrEqual(1);
+  });
+
+  test("incrementally updates cache for new messages", async () => {
+    const entityId = insertEntity(testDb);
+    const memory = await addMemory(entityId, "a memory");
+    await storeMemoryEmbedding(memory.id, mockEmbedding);
+
+    // First call with one message
+    await searchMemoriesBySimilarity(entityId, ["msg1"], "global");
+    // Second call adds a new message — should compute only new message's similarity
+    const results = await searchMemoriesBySimilarity(entityId, ["msg1", "msg2"], "global");
+    expect(results).toHaveLength(1);
+  });
+
+  test("removes stale messages from cache when context shrinks", async () => {
+    const entityId = insertEntity(testDb);
+    const memory = await addMemory(entityId, "a memory");
+    await storeMemoryEmbedding(memory.id, mockEmbedding);
+
+    await searchMemoriesBySimilarity(entityId, ["msg1", "msg2"], "global");
+    // Next call with only msg2 — msg1 should be evicted from cache
+    const results = await searchMemoriesBySimilarity(entityId, ["msg2"], "global");
+    expect(results).toHaveLength(1);
+  });
+
+  test("scope=channel filters by channel (no matching memories → empty)", async () => {
+    const entityId = insertEntity(testDb);
+    // Memory has no source_channel_id, so channel scope won't find it
+    const memory = await addMemory(entityId, "global memory");
+    await storeMemoryEmbedding(memory.id, mockEmbedding);
+
+    const results = await searchMemoriesBySimilarity(entityId, ["q"], "channel", "ch-123");
+    expect(results).toEqual([]);
+  });
+
+  test("invalidates cache when memories change via clearRetrievalCaches", async () => {
+    const entityId = insertEntity(testDb);
+    const memory = await addMemory(entityId, "a memory");
+    await storeMemoryEmbedding(memory.id, mockEmbedding);
+
+    await searchMemoriesBySimilarity(entityId, ["q"], "global");
+    expect(getRetrievalCacheStats().embeddingEntries).toBeGreaterThanOrEqual(1);
+
+    clearRetrievalCaches();
+    expect(getRetrievalCacheStats().embeddingEntries).toBe(0);
+    expect(getRetrievalCacheStats().similarityEntries).toBe(0);
+  });
+});
+
+// =============================================================================
+// retrieveRelevantMemories
+// =============================================================================
+
+describe("retrieveRelevantMemories", () => {
+  beforeEach(() => {
+    testDb = new Database(":memory:");
+    createTestSchema(testDb);
+    clearRetrievalCaches();
+  });
+
+  test("returns relevant memories", async () => {
+    const entityId = insertEntity(testDb);
+    const memory = await addMemory(entityId, "retrievable memory");
+    await storeMemoryEmbedding(memory.id, mockEmbedding);
+
+    const results = await retrieveRelevantMemories(entityId, ["query"], "global");
+    expect(results).toHaveLength(1);
+    expect(results[0].id).toBe(memory.id);
+  });
+
+  test("returns empty array when embedding is deleted", async () => {
+    const entityId = insertEntity(testDb);
+    const memory = await addMemory(entityId, "no embedding");
+    testDb.prepare(`DELETE FROM memory_embeddings WHERE memory_id = ?`).run(memory.id);
+    clearRetrievalCaches();
+
+    const results = await retrieveRelevantMemories(entityId, ["query"], "global");
+    expect(results).toEqual([]);
+  });
+
+  test("boosts frecency for retrieved memories", async () => {
+    const entityId = insertEntity(testDb);
+    const memory = await addMemory(entityId, "boosted memory");
+    await storeMemoryEmbedding(memory.id, mockEmbedding);
+
+    await addMemory(entityId, "x"); // fresh memory as frecency baseline ~1.0
+    await retrieveRelevantMemories(entityId, ["query"], "global");
+
+    // After retrieval, frecency should be boosted above initial
+    const updated = testDb
+      .prepare(`SELECT frecency FROM entity_memories WHERE id = ?`)
+      .get(memory.id) as { frecency: number };
+    expect(updated.frecency).toBeGreaterThan(1.0);
+  });
+
+  test("returns memories without duplicates for repeated queries", async () => {
+    const entityId = insertEntity(testDb);
+    const memory = await addMemory(entityId, "a memory");
+    await storeMemoryEmbedding(memory.id, mockEmbedding);
+
+    const r1 = await retrieveRelevantMemories(entityId, ["q"], "global");
+    const r2 = await retrieveRelevantMemories(entityId, ["q"], "global");
+    expect(r1).toHaveLength(1);
+    expect(r2).toHaveLength(1);
   });
 });

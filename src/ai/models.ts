@@ -155,10 +155,10 @@ const ALLOWED_MODELS: string[] | null = process.env.ALLOWED_MODELS
  * Returns true if no allowlist is configured, or if the spec matches an entry.
  * Supports exact match ("google:gemini-2.0-flash") and provider wildcard ("google:*").
  */
-export function isModelAllowed(modelSpec: string): boolean {
-  if (!ALLOWED_MODELS) return true;
+export function isModelAllowed(modelSpec: string, allowList: string[] | null = ALLOWED_MODELS): boolean {
+  if (!allowList) return true;
   const { providerName } = parseModelSpec(modelSpec);
-  return ALLOWED_MODELS.some(entry => {
+  return allowList.some(entry => {
     if (entry === modelSpec) return true;
     if (entry.endsWith(":*")) {
       return entry.slice(0, -2) === providerName;

@@ -12,7 +12,8 @@ mock.module("../db/index", () => ({
   closeDb: () => {},
 }));
 
-import { withToJSON, processRawFacts, expandEntityRefs, type MacroMeta } from "./prompt";
+import { withToJSON, processRawFacts, expandEntityRefs, withEmbedDefaults, withAttachmentDefaults, collapseAdjacentMessages, type MacroMeta } from "./prompt";
+import type { EmbedData, AttachmentData } from "../db/discord";
 import type { ExprContext } from "../logic/expr";
 
 function createTestSchema(db: Database) {
@@ -478,5 +479,210 @@ describe("expandEntityRefs", () => {
     const entity = { name: "Aria", facts: ["value: {{some.unknown.var}}"] };
     expandEntityRefs(entity, new Set());
     expect(entity.facts[0]).toBe("value: {{some.unknown.var}}");
+  });
+
+  // --- Macros without exprContext (fallback branches) ---
+
+  test("{{weekday}} without exprContext returns a day name", () => {
+    const entity = { name: "Aria", facts: ["today is {{weekday}}"] };
+    expandEntityRefs(entity, new Set());
+    const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+    const val = entity.facts[0].replace("today is ", "");
+    expect(days).toContain(val);
+  });
+
+  test("{{isodate}} without exprContext returns YYYY-MM-DD", () => {
+    const entity = { name: "Aria", facts: ["date: {{isodate}}"] };
+    expandEntityRefs(entity, new Set());
+    expect(entity.facts[0]).toMatch(/^date: \d{4}-\d{2}-\d{2}$/);
+  });
+
+  test("{{isotime}} without exprContext returns HH:MM", () => {
+    const entity = { name: "Aria", facts: ["time: {{isotime}}"] };
+    expandEntityRefs(entity, new Set());
+    expect(entity.facts[0]).toMatch(/^time: \d{2}:\d{2}$/);
+  });
+
+  test("{{idle_duration}} without exprContext keeps original macro", () => {
+    const entity = { name: "Aria", facts: ["idle: {{idle_duration}}"] };
+    expandEntityRefs(entity, new Set());
+    expect(entity.facts[0]).toBe("idle: {{idle_duration}}");
+  });
+
+  test("{{group}} without exprContext keeps original macro", () => {
+    const entity = { name: "Aria", facts: ["group: {{group}}"] };
+    expandEntityRefs(entity, new Set());
+    expect(entity.facts[0]).toBe("group: {{group}}");
+  });
+
+  test("{{lastmessage}} without exprContext keeps original macro", () => {
+    const entity = { name: "Aria", facts: ["last: {{lastmessage}}"] };
+    expandEntityRefs(entity, new Set());
+    expect(entity.facts[0]).toBe("last: {{lastmessage}}");
+  });
+
+  test("{{lastusermessage}} without exprContext keeps original macro", () => {
+    const entity = { name: "Aria", facts: ["user said: {{lastusermessage}}"] };
+    expandEntityRefs(entity, new Set());
+    expect(entity.facts[0]).toBe("user said: {{lastusermessage}}");
+  });
+
+  test("{{lastcharmessage}} without exprContext keeps original macro", () => {
+    const entity = { name: "Aria", facts: ["char said: {{lastcharmessage}}"] };
+    expandEntityRefs(entity, new Set());
+    expect(entity.facts[0]).toBe("char said: {{lastcharmessage}}");
+  });
+
+  test("{{notchar}} without exprContext returns empty string", () => {
+    const entity = { name: "Aria", facts: ["others: {{notchar}}"] };
+    expandEntityRefs(entity, new Set());
+    expect(entity.facts[0]).toBe("others: ");
+  });
+
+  test("{{roll:invalid}} keeps original on rollDice error", () => {
+    const entity = { name: "Aria", facts: ["rolled {{roll:notadice}}"] };
+    expandEntityRefs(entity, new Set());
+    // rollDice throws on invalid input — should fall back to original match
+    expect(entity.facts[0]).toBe("rolled {{roll:notadice}}");
+  });
+});
+
+// =============================================================================
+// withEmbedDefaults
+// =============================================================================
+
+describe("withEmbedDefaults", () => {
+  test("adds empty-string defaults for missing fields", () => {
+    const embed = { title: "Hello" } as EmbedData;
+    const result = withEmbedDefaults([embed]);
+    expect(result[0].title).toBe("Hello");
+    expect(result[0].description).toBe("");
+    expect(result[0].type).toBe("");
+    expect(result[0].url).toBe("");
+  });
+
+  test("existing fields are not overwritten", () => {
+    const embed = { title: "T", description: "D", url: "U", type: "rich" } as EmbedData;
+    const result = withEmbedDefaults([embed]);
+    expect(result[0].description).toBe("D");
+    expect(result[0].url).toBe("U");
+  });
+
+  test("handles empty array", () => {
+    expect(withEmbedDefaults([])).toEqual([]);
+  });
+
+  test("handles multiple embeds", () => {
+    const embeds = [{ title: "A" }, { title: "B", url: "https://x" }] as EmbedData[];
+    const result = withEmbedDefaults(embeds);
+    expect(result).toHaveLength(2);
+    expect(result[0].url).toBe("");
+    expect(result[1].url).toBe("https://x");
+  });
+});
+
+// =============================================================================
+// withAttachmentDefaults
+// =============================================================================
+
+describe("withAttachmentDefaults", () => {
+  test("adds empty-string defaults for missing fields", () => {
+    const attachment = { url: "https://x/file.png", filename: "file.png" } as AttachmentData;
+    const result = withAttachmentDefaults([attachment]);
+    expect(result[0].content_type).toBe("");
+    expect(result[0].title).toBe("");
+    expect(result[0].description).toBe("");
+  });
+
+  test("existing fields are not overwritten", () => {
+    const attachment = { url: "x", filename: "f", content_type: "image/png", description: "desc" } as AttachmentData;
+    const result = withAttachmentDefaults([attachment]);
+    expect(result[0].content_type).toBe("image/png");
+    expect(result[0].description).toBe("desc");
+  });
+
+  test("handles empty array", () => {
+    expect(withAttachmentDefaults([])).toEqual([]);
+  });
+});
+
+// =============================================================================
+// collapseAdjacentMessages
+// =============================================================================
+
+describe("collapseAdjacentMessages", () => {
+  test("returns single message unchanged", () => {
+    const msgs = [{ role: "user" as const, content: "hello" }];
+    expect(collapseAdjacentMessages(msgs, new Set(["user"]))).toEqual(msgs);
+  });
+
+  test("returns unchanged when collapseRoles is empty", () => {
+    const msgs = [
+      { role: "user" as const, content: "a" },
+      { role: "user" as const, content: "b" },
+    ];
+    expect(collapseAdjacentMessages(msgs, new Set())).toEqual(msgs);
+  });
+
+  test("collapses consecutive same-role messages", () => {
+    const msgs = [
+      { role: "user" as const, content: "a" },
+      { role: "user" as const, content: "b" },
+      { role: "user" as const, content: "c" },
+    ];
+    const result = collapseAdjacentMessages(msgs, new Set(["user"]));
+    expect(result).toHaveLength(1);
+    expect(result[0].content).toBe("a\nb\nc");
+  });
+
+  test("does not collapse different roles", () => {
+    const msgs = [
+      { role: "user" as const, content: "a" },
+      { role: "assistant" as const, content: "b" },
+      { role: "user" as const, content: "c" },
+    ];
+    const result = collapseAdjacentMessages(msgs, new Set(["user", "assistant"]));
+    expect(result).toHaveLength(3);
+  });
+
+  test("only collapses roles in the collapseRoles set", () => {
+    const msgs = [
+      { role: "system" as const, content: "x" },
+      { role: "system" as const, content: "y" },
+      { role: "user" as const, content: "a" },
+      { role: "user" as const, content: "b" },
+    ];
+    // Only collapse user, not system
+    const result = collapseAdjacentMessages(msgs, new Set(["user"]));
+    expect(result).toHaveLength(3); // 2 systems + 1 collapsed user
+    expect(result[0].content).toBe("x");
+    expect(result[1].content).toBe("y");
+    expect(result[2].content).toBe("a\nb");
+  });
+
+  test("mixed run with some non-collapsible role breaking the run", () => {
+    const msgs = [
+      { role: "user" as const, content: "a" },
+      { role: "user" as const, content: "b" },
+      { role: "assistant" as const, content: "resp" },
+      { role: "user" as const, content: "c" },
+      { role: "user" as const, content: "d" },
+    ];
+    const result = collapseAdjacentMessages(msgs, new Set(["user"]));
+    expect(result).toHaveLength(3);
+    expect(result[0].content).toBe("a\nb");
+    expect(result[1].content).toBe("resp");
+    expect(result[2].content).toBe("c\nd");
+  });
+
+  test("does not add extra elements to result beyond collapsed", () => {
+    const msgs = [
+      { role: "user" as const, content: "a" },
+      { role: "user" as const, content: "b" },
+      { role: "user" as const, content: "c" },
+    ];
+    const result = collapseAdjacentMessages(msgs, new Set(["user"]));
+    expect(result).toHaveLength(1);
+    expect(result[0].content).toBe("a\nb\nc");
   });
 });

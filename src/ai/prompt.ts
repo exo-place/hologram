@@ -21,7 +21,7 @@ import {
 // =============================================================================
 
 /** Add empty-string defaults for optional embed properties so templates can safely output them */
-function withEmbedDefaults(embeds: EmbedData[]): EmbedData[] {
+export function withEmbedDefaults(embeds: EmbedData[]): EmbedData[] {
   return embeds.map(e => ({
     title: "",
     type: "",
@@ -32,7 +32,7 @@ function withEmbedDefaults(embeds: EmbedData[]): EmbedData[] {
 }
 
 /** Add empty-string defaults for optional attachment properties */
-function withAttachmentDefaults(attachments: AttachmentData[]): AttachmentData[] {
+export function withAttachmentDefaults(attachments: AttachmentData[]): AttachmentData[] {
   return attachments.map(a => ({
     content_type: "",
     title: "",
@@ -293,7 +293,7 @@ const ALL_COLLAPSE_ROLES: CollapseRoles = new Set(["user", "assistant", "system"
  * Content is joined with newline. Empty messages are preserved (they may
  * carry structural meaning to the template author).
  */
-function collapseAdjacentMessages(messages: StructuredMessage[], collapseRoles: CollapseRoles): StructuredMessage[] {
+export function collapseAdjacentMessages(messages: StructuredMessage[], collapseRoles: CollapseRoles): StructuredMessage[] {
   if (messages.length <= 1 || collapseRoles.size === 0) return messages;
   const result: StructuredMessage[] = [messages[0]];
   for (let i = 1; i < messages.length; i++) {
