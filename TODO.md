@@ -6,30 +6,30 @@ Findings from parallel consistency + gaps + adversarial audit across entire code
 
 ### Critical
 
-- [ ] **`resolveDiscordConfig()` bare `JSON.parse`** — `discord.ts:400-414` calls `JSON.parse(channelConfig.config_bind/persona/blacklist)` without try-catch. Corrupt config row → unhandled throw → `/bind`, `/config`, and all permission checks crash. Fix: use `safeParseFallback()` already defined in `entities.ts:6`.
-- [ ] **`buildConfigLabels()` bare `JSON.parse`** — `commands.ts:1687` same issue in the config UI. Corrupt data means you can't open the modal to fix it. Fix: `safeParseFallback()`.
-- [ ] **Role detection permission bypass** — `commands.ts:1209,1770`: `resolved?.roles?.has?.(BigInt(id)) ?? false` defaults to `false` (treated as user ID) when Discord omits resolved role data. Role IDs get stored as plain user IDs in permission lists, allowing anyone whose snowflake matches to gain those permissions. Fix: treat missing `resolved?.roles` as an error state, not a permissive default.
-- [ ] **`responseChainDepth` never resets** — `client.ts:642`: depth counter increments on self-response but is never cleared when a non-webhook (human) message arrives. Once a channel hits `MAX_RESPONSE_CHAIN`, it stays blocked forever until bot restart. Fix: reset depth to 0 when a non-webhook message is processed in that channel.
-- [ ] **Failing test: emoji HATT mime type** — `src/ai/attachments.test.ts:167`: emoji URL produces `image` instead of `image/webp`. Fix the mime type detection for `.webp` emoji URLs.
-- [ ] **`webhook_messages` missing FK constraint** — `db/index.ts:154-162`: only table with `entity_id` that lacks `REFERENCES entities(id) ON DELETE CASCADE`. Rows orphan permanently on entity deletion. Fix: add the FK + migration.
+- [x] **`resolveDiscordConfig()` bare `JSON.parse`** — fixed: uses `safeParseFallback()` throughout `discord.ts`.
+- [x] **`buildConfigLabels()` bare `JSON.parse`** — fixed: `safeParseFallback()` in `commands.ts`.
+- [x] **Role detection permission bypass** — fixed: `buildEntries` uses `flatMap`; drops IDs not found in either `resolved.roles` or `resolved.users` rather than silently treating them as user IDs.
+- [x] **`responseChainDepth` never resets** — fixed: unconditionally deleted on any non-bot, non-webhook message before depth check.
+- [x] **Failing test: emoji HATT mime type** — fixed: `buildParseEmojisFn` now emits `image/webp` for static emojis.
+- [x] **`webhook_messages` missing FK constraint** — fixed: `REFERENCES entities(id) ON DELETE CASCADE` added + migration for existing DBs.
 
 ### High
 
-- [ ] **Duplicate safe-JSON helpers** — `safeParseFallback` (`entities.ts:6`) and `safeJsonParse` (`client.ts:399`) are identical. Similarly `getEntityEvalDefaults` (`entities.ts:156`) and `configToDefaults` (`client.ts:406`) duplicate each other. Consolidate each pair into one canonical export; `client.ts` local copies should import instead.
-- [ ] **Nunjucks `callWrap` sandbox uses regex name extraction** — `template.ts:102-122` blocks `.call/.apply/.bind` by extracting method names via regex. Blocklist + regex approach is fragile. Consider a whitelist-based approach or reflection-based validation of the result.
-- [ ] **`expr.ts` property traversal uses blocklist** — `expr.ts:666-677` blocks `__proto__` etc. by name. Blocklists are weaker than whitelists; future property additions could miss names. Document accepted risk or switch to whitelist.
+- [x] **Duplicate safe-JSON helpers** — fixed: `safeJsonParse` deleted; `configToDefaults`/`configToPermissionDefaults` deleted; all callers use `safeParseFallback`/`getEntityEvalDefaults`/`getPermissionDefaults` from `entities.ts`.
+- [ ] **Nunjucks `callWrap` sandbox uses regex name extraction** — `template.ts`: blocks `.call/.apply/.bind` by extracting method names via regex. Blocklist + regex approach is fragile. Consider a whitelist-based approach or reflection-based validation.
+- [ ] **`expr.ts` property traversal uses blocklist** — `expr.ts:666-677` blocks `__proto__` etc. by name. Blocklists weaker than whitelists. Document accepted risk or switch to whitelist.
 - [ ] **0% test coverage on 23 slash commands** — `commands.ts` (2252 lines) has zero tests. All permission checks, bind/unbind logic, config modals, and permission functions (`canUserEdit`, `canUserView`, `canUserUse`, `canUserBindInLocation`, `canUserPersonaInLocation`) are unvalidated.
 - [ ] **Critical-path modules at near-zero coverage** — streaming (4%), tools (5%), memories (8%), attachment-cache (12%), effects (20%), DB schema init (1%), webhooks (0%). All are core to the bot's operation.
 
 ### Medium
 
-- [ ] **`MAX_RESPONSE_CHAIN=0` allows infinite self-response** — `client.ts:644`: check is `if (MAX_RESPONSE_CHAIN > 0 && ...)`, so setting to 0 disables the guard entirely. An entity with `$if is_hologram: $respond` becomes a runaway loop consuming tokens/rate limits. Consider rejecting 0 at startup or treating it as "use default".
-- [ ] **`safe-regex.ts` parser has no depth/node limit** — `safe-regex.ts:88-96`: `parseAlternation` loop processes unbounded input. A 1MB string of `a|b|c|...` hangs the evaluator. Fix: add a max node count or input length check before parsing.
-- [ ] **Template nonce marker injection** — `template.ts:425-432`: nonce markers are detected by regex, but a template can output strings matching `<<<HMSG:NONCE:role>>>`. An entity owner could craft template output that injects fake message boundaries. Consider a non-printable or binary delimiter that templates can't produce.
+- [x] **`MAX_RESPONSE_CHAIN=0` allows infinite self-response** — fixed: 0 is rejected at startup, defaults to 3 with a warning.
+- [x] **`safe-regex.ts` parser has no depth/node limit** — fixed: 500-char input limit + 2000-node count limit added with tests.
+- [x] **Template nonce marker injection** — fixed: split into two independent nonces per render (`hmsgNonce` never exposed to templates; `hattNonce` used by `attach()`/`parse_emojis()`). Forgery attack blocked and tested.
 
 ### Low
 
-- [ ] **`is_self` by name comparison** — `client.ts:768-769`: self-detection compares entity name to webhook author name. Two entities with the same name, or a renamed webhook, can cause false positives/negatives. Use entity ID from `webhook_messages` table instead.
+- [x] **`is_self` by name comparison** — fixed: uses `getWebhookMessageEntity()` for ID-based lookup; falls back to name comparison only for pre-bot messages (with debug log).
 
 ---
 
