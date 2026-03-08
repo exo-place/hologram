@@ -62,6 +62,7 @@ export default defineConfig({
           { text: 'Fact Patterns', link: '/reference/facts' },
           { text: 'Triggers', link: '/reference/triggers' },
           { text: 'Custom Templates', link: '/reference/templates' },
+          { text: 'Configuration', link: '/reference/configuration' },
           { text: 'Expression Security', link: '/reference/expression-security' },
           { text: 'Safe Regex', link: '/reference/safe-regex' },
         ]

@@ -394,6 +394,25 @@ Group: {% for e in batch %}{{ e.name }}{% if not loop.last %}, {% endif %}{% end
 {%- endfor -%}
 ```
 
+## Image Output
+
+Some LLM models can generate images directly. When an entity uses an image-generation model, any images in the response are automatically sent as Discord attachments — no template changes needed.
+
+**Supported models:**
+
+| Model | Provider spec |
+|-------|--------------|
+| Gemini 2.5 Flash (image) | `google:gemini-2.5-flash-image` |
+| Gemini 2.0 Flash Image Generation | `google:gemini-2.0-flash-image-generation` |
+
+Set the model with `$model` on the entity:
+
+```
+$model google:gemini-2.0-flash-image-generation
+```
+
+Generated images are sent as file attachments on the first response chunk. They can be combined with text — the model may return both.
+
 ## Security
 
 Templates use Nunjucks with runtime security patches:
