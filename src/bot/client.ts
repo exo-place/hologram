@@ -1148,10 +1148,6 @@ async function handleStreamingResponse(
 
   const isSingleEntity = entities.length === 1;
   const entity = isSingleEntity ? entities[0] : null;
-  // In DMs, webhooks don't work so "lines" mode would send a flood of tiny **Name:** messages
-  // with no separator. Instead, buffer all lines and send as one joined message at the end.
-  const isDm = !ctx.guildId;
-  const dmLineBuffer = new Map<string, string[]>(); // entityName → buffered lines
 
   for await (const event of handleMessageStreaming({
     ...ctx,
@@ -1163,14 +1159,8 @@ async function handleStreamingResponse(
       case "line": {
         // Single entity lines mode: new message per chunk
         if (entity) {
-          if (isDm) {
-            const buf = dmLineBuffer.get(entity.name) ?? [];
-            buf.push(event.content);
-            dmLineBuffer.set(entity.name, buf);
-          } else {
-            const msgId = await sendStreamMessage(channelId, event.content, entity);
-            if (msgId) allMessageIds.push(msgId);
-          }
+          const msgId = await sendStreamMessage(channelId, event.content, entity);
+          if (msgId) allMessageIds.push(msgId);
         }
         break;
       }
@@ -1242,16 +1232,11 @@ async function handleStreamingResponse(
         // Multi-character lines mode: new line/chunk for this character
         const charEntity = entities.find(e => e.name === event.name);
         if (charEntity) {
-          if (isDm) {
-            const buf = dmLineBuffer.get(charEntity.name) ?? [];
-            buf.push(event.content);
-            dmLineBuffer.set(charEntity.name, buf);
-          } else {
-            const msgId = await sendStreamMessage(channelId, event.content, charEntity);
-            if (msgId) {
-              allMessageIds.push(msgId);
-              charLinesSent.add(event.name);
-            }
+          // New message per chunk
+          const msgId = await sendStreamMessage(channelId, event.content, charEntity);
+          if (msgId) {
+            allMessageIds.push(msgId);
+            charLinesSent.add(event.name);
           }
         }
         break;
@@ -1370,15 +1355,6 @@ async function handleStreamingResponse(
       }
 
       case "done": {
-        // Flush DM line buffers — send each entity's buffered lines as one joined message
-        for (const [name, lines] of dmLineBuffer) {
-          if (lines.length === 0) continue;
-          const bufEntity = entities.find(e => e.name === name);
-          if (bufEntity) {
-            const msgId = await sendStreamMessage(channelId, lines.join("\n\n"), bufEntity);
-            if (msgId) allMessageIds.push(msgId);
-          }
-        }
         // Update single-entity full mode message with final content
         if (fullMessage) {
           updateMessageByDiscordId(fullMessage.messageId, fullMessage.content);
