@@ -169,7 +169,6 @@ export async function respondWithContext(
   // textLen tracks displayable chars for batching; component is what gets sent to Discord.
   type Item = { component: unknown; textLen: number };
 
-  const SEPARATOR: Item = { component: { type: MessageComponentTypes.Separator, divider: true }, textLen: 0 };
 
   // Emit a text segment as one or more TextDisplays, splitting at TEXT_PER_MESSAGE.
   // The role label (emoji prefix) is prepended to the first chunk only.
@@ -189,8 +188,6 @@ export async function respondWithContext(
     const emoji = ROLE_EMOJI[m.role] ?? "⚪";
     const label = `${emoji} ${m.role}`;
     const needsLabel = { value: true };
-
-    if (items.length > 0) items.push(SEPARATOR);
 
     // Walk through content in order, splitting at HATT markers.
     // Text segments become TextDisplays; HATTs become MediaGallery or file TextDisplays.
