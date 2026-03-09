@@ -167,11 +167,11 @@ export async function respondWithContext(
   const flags = 64 | (1 << 15);
 
   type HattItem = { url: string; mimeType: string };
-  type Container = { type: number; accentColor: number; components: unknown[]; textLen: number };
+  // A top-level item is either a text Container or a standalone attachment component.
+  // textLen tracks displayable chars for batching; component is what gets sent to Discord.
+  type Item = { component: unknown; textLen: number };
 
-  // Build one Container per LLM message, tracking total displayable text length.
-  // A single LLM message may produce multiple containers if its text exceeds TEXT_PER_MESSAGE.
-  const containers: Container[] = [];
+  const items: Item[] = [];
   for (const m of messages) {
     const accentColor = ROLE_COLORS[m.role] ?? 0x808080;
     const label = `— ${m.role} —`;
@@ -185,12 +185,9 @@ export async function respondWithContext(
 
     const images = hatts.filter(h => h.mimeType.startsWith("image/"));
     const files  = hatts.filter(h => !h.mimeType.startsWith("image/"));
-    const fileText = files.map(f => `📎 ${f.url}`).join("\n");
 
-    // Split content so each container's total text fits within TEXT_PER_MESSAGE.
-    // Reserve space for the role label (+ newline) and any file URL lines.
-    const overhead = label.length + (fileText ? fileText.length + 1 : 0);
-    const chunkSize = TEXT_PER_MESSAGE - overhead;
+    // Split text into chunks that fit per-message limit (label counts toward first chunk).
+    const chunkSize = TEXT_PER_MESSAGE - label.length;
     const chunks: string[] = [];
     for (let offset = 0; offset < cleanText.length; offset += chunkSize) {
       chunks.push(cleanText.slice(offset, offset + chunkSize));
@@ -199,26 +196,33 @@ export async function respondWithContext(
     for (let ci = 0; ci < chunks.length; ci++) {
       const chunk = chunks[ci];
       const isFirst = ci === 0;
-      const isLast  = ci === chunks.length - 1;
-      const innerComponents: unknown[] = [
-        { type: MessageComponentTypes.TextDisplay, content: isFirst ? label : `— ${m.role} (cont.) —` },
-        { type: MessageComponentTypes.TextDisplay, content: chunk },
-      ];
-      if (isLast && images.length > 0) {
-        innerComponents.push({
-          type: MessageComponentTypes.MediaGallery,
-          items: images.map(img => ({ media: { url: img.url }, description: img.mimeType })),
-        });
-      }
-      if (isLast && files.length > 0) {
-        innerComponents.push({ type: MessageComponentTypes.TextDisplay, content: fileText });
-      }
-      const textLen = (isFirst ? label : `— ${m.role} (cont.) —`).length + chunk.length + (isLast ? fileText.length : 0);
-      containers.push({ type: MessageComponentTypes.Container, accentColor, components: innerComponents, textLen });
+      const chunkLabel = isFirst ? label : `— ${m.role} (cont.) —`;
+      const component = {
+        type: MessageComponentTypes.Container,
+        accentColor,
+        components: [
+          { type: MessageComponentTypes.TextDisplay, content: chunkLabel },
+          { type: MessageComponentTypes.TextDisplay, content: chunk },
+        ],
+      };
+      items.push({ component, textLen: chunkLabel.length + chunk.length });
+    }
+
+    // Attachments as top-level siblings after the text containers
+    if (images.length > 0) {
+      const component = {
+        type: MessageComponentTypes.MediaGallery,
+        items: images.map(img => ({ media: { url: img.url }, description: img.mimeType })),
+      };
+      items.push({ component, textLen: 0 });
+    }
+    for (const f of files) {
+      const content = `📎 ${f.url}`;
+      items.push({ component: { type: MessageComponentTypes.TextDisplay, content }, textLen: content.length });
     }
   }
 
-  if (containers.length === 0) {
+  if (items.length === 0) {
     await respond(bot, interaction, "(no messages)", true);
     return;
   }
@@ -226,18 +230,18 @@ export async function respondWithContext(
   const interactionKey = interaction.id.toString();
   const isDeferred = deferredInteractions.has(interactionKey);
 
-  // Batch containers into Discord messages, respecting both TEXT_PER_MESSAGE and CONTAINERS_PER_MESSAGE.
-  const batches: Container[][] = [];
-  let currentBatch: Container[] = [];
+  // Batch items into Discord messages, respecting TEXT_PER_MESSAGE and CONTAINERS_PER_MESSAGE.
+  const batches: unknown[][] = [];
+  let currentBatch: unknown[] = [];
   let currentText = 0;
-  for (const container of containers) {
-    if (currentBatch.length > 0 && (currentText + container.textLen > TEXT_PER_MESSAGE || currentBatch.length >= CONTAINERS_PER_MESSAGE)) {
+  for (const item of items) {
+    if (currentBatch.length > 0 && (currentText + item.textLen > TEXT_PER_MESSAGE || currentBatch.length >= CONTAINERS_PER_MESSAGE)) {
       batches.push(currentBatch);
       currentBatch = [];
       currentText = 0;
     }
-    currentBatch.push(container);
-    currentText += container.textLen;
+    currentBatch.push(item.component);
+    currentText += item.textLen;
   }
   if (currentBatch.length > 0) batches.push(currentBatch);
 
