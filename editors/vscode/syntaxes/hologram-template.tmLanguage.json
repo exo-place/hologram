@@ -5,8 +5,7 @@
   "patterns": [
     { "include": "#comment-block" },
     { "include": "#expression-block" },
-    { "include": "#tag-block" },
-    { "include": "#xml-tag" }
+    { "include": "#tag-block" }
   ],
   "repository": {
     "comment-block": {
@@ -141,27 +140,5 @@
         "2": { "name": "variable.other.property.hologram-template" }
       }
     },
-    "xml-tag": {
-      "patterns": [
-        {
-          "match": "(<)(/?)(defs|memories)((?:\\s+[a-zA-Z_][a-zA-Z0-9_-]*(?:=(?:\"[^\"]*\"|'[^']*'))?)*\\s*)(>)",
-          "captures": {
-            "1": { "name": "punctuation.definition.tag.begin.hologram-template" },
-            "2": { "name": "punctuation.definition.tag.close.hologram-template" },
-            "3": { "name": "entity.name.tag.hologram-template" },
-            "4": { "name": "meta.tag.attributes.hologram-template", "patterns": [{ "include": "#xml-attribute" }] },
-            "5": { "name": "punctuation.definition.tag.end.hologram-template" }
-          }
-        }
-      ]
-    },
-    "xml-attribute": {
-      "match": "\\b([a-zA-Z_][a-zA-Z0-9_-]*)(=)(\"[^\"]*\"|'[^']*')",
-      "captures": {
-        "1": { "name": "entity.other.attribute-name.hologram-template" },
-        "2": { "name": "punctuation.separator.key-value.hologram-template" },
-        "3": { "name": "string.quoted.hologram-template" }
-      }
-    }
   }
 }

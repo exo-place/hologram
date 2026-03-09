@@ -50,9 +50,6 @@ export const hologramTemplateLanguage: languages.IMonarchLanguage = {
       // Tag blocks: {% ... %}
       [/\{%-?/, { token: 'delimiter.tag', next: '@tagBlock' }],
 
-      // XML tags: <defs ...> </defs> <memories ...> </memories>
-      [/(<)(\/?)(defs|memories)\b/, ['delimiter.tag.xml', 'delimiter.tag.xml', { token: 'tag', next: '@xmlTag' }]],
-
       // Plain text
       [/./, ''],
     ],
@@ -72,12 +69,6 @@ export const hologramTemplateLanguage: languages.IMonarchLanguage = {
       [/-?%\}/, { token: 'delimiter.tag', next: '@pop' }],
       [/\b(?:if|elif|else|endif|for|endfor|block|endblock|extends|call|endcall|macro|endmacro|set|raw|endraw)\b/, 'keyword'],
       { include: '@expressionTokens' },
-    ],
-
-    xmlTag: [
-      [/>/, { token: 'delimiter.tag.xml', next: '@pop' }],
-      [/\b([a-zA-Z_][a-zA-Z0-9_-]*)(=)("[^"]*"|'[^']*')/, ['attribute.name', 'delimiter', 'string']],
-      [/\s+/, ''],
     ],
 
     expressionTokens: [

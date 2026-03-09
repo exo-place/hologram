@@ -1,17 +1,16 @@
 {#- Entity Definitions -#}
+{#- Markdown format. XML (<tag>) is avoided because it conflicts with LLM tool call syntax,
+    causing the model to confuse entity definitions with function call responses. -#}
 {% block definitions %}
   {% if entities | length > 0 %}
     {#- All entities (responding first, then referenced/user) -#}
     {% for entity in entities %}
-      {{- "\n\n" if not loop.first -}}
-<defs for="{{ entity.name }}" id="{{ entity.id }}">
+      {{- "\n\n" if not loop.first -}}## {{ entity.name }} [id: {{ entity.id }}]
 {{ entity.facts | join("\n") }}
-</defs>
       {% if entity.responding and memories[entity.id] and memories[entity.id] | length > 0 %}
 
-<memories for="{{ entity.name }}" id="{{ entity.id }}">
+### Memories
 {{ memories[entity.id] | join("\n") }}
-</memories>
       {% endif %}
     {% endfor %}
 
@@ -52,11 +51,11 @@ Not everyone needs to respond to every message. Only respond as those who would 
       [embed description: {{ embed.description }}]
       {%- endif %}
       {%- else %}
-      <embed>{{ embed.toJSON() }}</embed>
+      [embed] {{ embed.toJSON() }}
       {%- endif %}
       {%- endfor %}
       {%- for component in msg.components %}
-      <component>{{ component.toJSON() }}</component>
+      [component] {{ component.toJSON() }}
       {%- endfor %}
       {%- endif %}
       {%- for attachment in msg.attachments %}
