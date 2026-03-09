@@ -1611,7 +1611,7 @@ export async function sendResponse(
           const isNew = recordEvalError(entity.id, editors[0] ?? "", errorMsg);
           if (isNew) {
             for (const uid of editors) {
-              notifyUserOfError(uid, entity.name, errorMsg).catch(() => {});
+              notifyUserOfError(uid, entity.name, errorMsg, "LLM error", `Check the model config with \`/edit ${entity.name} type:config\`.`).catch(() => {});
             }
           }
         }
@@ -1742,11 +1742,17 @@ function getEditorsToNotify(entityId: number, ownerId: string | null, facts: str
   return [...editors];
 }
 
-async function notifyUserOfError(userId: string, entityName: string, errorMsg: string): Promise<void> {
+async function notifyUserOfError(
+  userId: string,
+  entityName: string,
+  errorMsg: string,
+  title = "Condition error",
+  suggestion = `Use \`/edit ${entityName}\` to fix the condition.`,
+): Promise<void> {
   try {
     const dmChannel = await bot.helpers.getDmChannel(BigInt(userId));
     await bot.helpers.sendMessage(dmChannel.id, {
-      content: `**Condition error in ${entityName}**\n\`\`\`\n${errorMsg}\n\`\`\`\nUse \`/edit ${entityName}\` to fix the condition.`,
+      content: `**${title} in ${entityName}**\n\`\`\`\n${errorMsg}\n\`\`\`\n${suggestion}`,
     });
     debug("Sent error DM", { userId, entityName });
   } catch (err) {
