@@ -145,10 +145,8 @@ const ROLE_EMOJI: Record<string, string> = {
   assistant: "🟢",
 };
 
-/** Max total displayable text across all components per Discord message */
-const TEXT_PER_MESSAGE = 4000;
-/** Max top-level components per Discord message (Discord enforces 5) */
-const CONTAINERS_PER_MESSAGE = 5;
+/** Max top-level components per Discord message */
+const COMPONENTS_PER_MESSAGE = 40;
 
 /** Pattern to match HATT attachment markers in message content */
 const HATT_PATTERN = /<<<HATT:[a-f0-9]+\|([^|>]+)\|([^>]+)>>>/g;
@@ -167,20 +165,13 @@ export async function respondWithContext(
   const flags = 64 | (1 << 15);
 
   // textLen tracks displayable chars for batching; component is what gets sent to Discord.
-  type Item = { component: unknown; textLen: number };
+  type Item = { component: unknown };
 
-
-  // Emit a text segment as one or more TextDisplays, splitting at TEXT_PER_MESSAGE.
-  // The role label (emoji prefix) is prepended to the first chunk only.
+  // Emit a text segment as a single TextDisplay, prepending the role label if needed.
   function pushText(dest: Item[], text: string, label: string, needsLabel: { value: boolean }) {
-    const overhead = needsLabel.value ? label.length + 1 : 0; // +1 for newline
-    const chunkSize = TEXT_PER_MESSAGE - overhead;
-    for (let offset = 0; offset < text.length; offset += chunkSize) {
-      const chunk = text.slice(offset, offset + chunkSize);
-      const content = (needsLabel.value && offset === 0) ? `${label}\n${chunk}` : chunk;
-      dest.push({ component: { type: MessageComponentTypes.TextDisplay, content }, textLen: content.length });
-      needsLabel.value = false;
-    }
+    const content = needsLabel.value ? `${label}\n${text}` : text;
+    dest.push({ component: { type: MessageComponentTypes.TextDisplay, content } });
+    needsLabel.value = false;
   }
 
   const items: Item[] = [];
@@ -201,14 +192,13 @@ export async function respondWithContext(
       const url = match[1]!, mimeType = match[2]!;
       // Emit a label-only TextDisplay before the first attachment if no text preceded it
       if (needsLabel.value) {
-        items.push({ component: { type: MessageComponentTypes.TextDisplay, content: label }, textLen: label.length });
+        items.push({ component: { type: MessageComponentTypes.TextDisplay, content: label } });
         needsLabel.value = false;
       }
       if (mimeType.startsWith("image/")) {
-        items.push({ component: { type: MessageComponentTypes.MediaGallery, items: [{ media: { url } }] }, textLen: 0 });
+        items.push({ component: { type: MessageComponentTypes.MediaGallery, items: [{ media: { url } }] } });
       } else {
-        const content = `📎 ${url}`;
-        items.push({ component: { type: MessageComponentTypes.TextDisplay, content }, textLen: content.length });
+        items.push({ component: { type: MessageComponentTypes.TextDisplay, content: `📎 ${url}` } });
       }
       lastIndex = match.index + match[0].length;
     }
@@ -218,9 +208,7 @@ export async function respondWithContext(
     if (trailing) {
       pushText(items, trailing, label, needsLabel);
     } else if (needsLabel.value) {
-      // No text and no HATTs — emit label + (empty)
-      const content = `${label}\n(empty)`;
-      items.push({ component: { type: MessageComponentTypes.TextDisplay, content }, textLen: content.length });
+      items.push({ component: { type: MessageComponentTypes.TextDisplay, content: `${label}\n(empty)` } });
     }
   }
 
@@ -232,20 +220,11 @@ export async function respondWithContext(
   const interactionKey = interaction.id.toString();
   const isDeferred = deferredInteractions.has(interactionKey);
 
-  // Batch items into Discord messages, respecting TEXT_PER_MESSAGE and CONTAINERS_PER_MESSAGE.
+  // Batch items into Discord messages, up to COMPONENTS_PER_MESSAGE each.
   const batches: unknown[][] = [];
-  let currentBatch: unknown[] = [];
-  let currentText = 0;
-  for (const item of items) {
-    if (currentBatch.length > 0 && (currentText + item.textLen > TEXT_PER_MESSAGE || currentBatch.length >= CONTAINERS_PER_MESSAGE)) {
-      batches.push(currentBatch);
-      currentBatch = [];
-      currentText = 0;
-    }
-    currentBatch.push(item.component);
-    currentText += item.textLen;
+  for (let i = 0; i < items.length; i += COMPONENTS_PER_MESSAGE) {
+    batches.push(items.slice(i, i + COMPONENTS_PER_MESSAGE).map(it => it.component));
   }
-  if (currentBatch.length > 0) batches.push(currentBatch);
 
   for (let i = 0; i < batches.length; i++) {
     const batch = batches[i];
