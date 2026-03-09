@@ -138,52 +138,76 @@ export async function respond(
   }
 }
 
-/** Role colors for debug context display */
+/** Role colors for debug context display (Components v2 container accent) */
 const ROLE_COLORS: Record<string, number> = {
   system:    0x808080,
   user:      0x5865F2,
   assistant: 0x57F287,
 };
 
-/** Discord embed description limit */
-const EMBED_DESC_LIMIT = 4096;
-/** Overhead for wrapping content in a code block (```\n + \n```) */
-const CODE_BLOCK_OVERHEAD = 8;
-/** Max embed items per message */
-const EMBEDS_PER_MESSAGE = 10;
+/** Max TextDisplay content length */
+const TEXT_DISPLAY_LIMIT = 4000;
+/** Max top-level components per Discord message */
+const CONTAINERS_PER_MESSAGE = 10;
+
+/** Regex to extract HATT attachment markers from message content */
+const HATT_RE = /<<<HATT:[a-f0-9]+\|([^|>]+)\|([^>]+)>>>/g;
 
 /**
- * Format a StructuredMessage array as Discord embeds for the /debug context display.
- * Each message role becomes an embed title; content is shown verbatim in a code block.
- * Long content is split across multiple embeds.
+ * Format a StructuredMessage array as Components v2 for the /debug context display.
+ * Each LLM message becomes a Container with a role label, plaintext content, and
+ * optional inline MediaGallery for image attachments.
  */
 export async function respondWithContext(
   bot: Bot,
   interaction: Interaction,
   messages: Array<{ role: string; content: string }>,
 ) {
-  const flags = 64; // ephemeral
-  const maxContent = EMBED_DESC_LIMIT - CODE_BLOCK_OVERHEAD;
+  // flags: 64 (ephemeral) | (1 << 15) (IS_COMPONENTS_V2)
+  const flags = 64 | (1 << 15);
 
-  type EmbedItem = { title: string; description: string; color: number };
-  const embeds: EmbedItem[] = [];
+  type HattItem = { url: string; mimeType: string };
 
+  // Build one Container component per LLM message
+  const containers: unknown[] = [];
   for (const m of messages) {
-    const color = ROLE_COLORS[m.role] ?? 0x808080;
-    const content = m.content || "(empty)";
-    // Split content into chunks that fit within embed description limit
-    for (let offset = 0; offset < content.length; offset += maxContent) {
-      const chunk = content.slice(offset, offset + maxContent);
-      const isContinued = offset > 0;
-      embeds.push({
-        title: isContinued ? `[${m.role} (cont.)]` : `[${m.role}]`,
-        description: "```\n" + chunk + "\n```",
-        color,
+    const accentColor = ROLE_COLORS[m.role] ?? 0x808080;
+
+    // Extract HATT markers and collect attachments
+    const hatts: HattItem[] = [];
+    const cleanText = m.content.replace(HATT_RE, (_match, url: string, mimeType: string) => {
+      hatts.push({ url, mimeType });
+      return "";
+    }).trim() || "(empty)";
+
+    const images = hatts.filter(h => h.mimeType.startsWith("image/"));
+    const files  = hatts.filter(h => !h.mimeType.startsWith("image/"));
+
+    // Split clean text into chunks ≤ TEXT_DISPLAY_LIMIT chars
+    const textChunks: string[] = [];
+    for (let offset = 0; offset < cleanText.length; offset += TEXT_DISPLAY_LIMIT) {
+      textChunks.push(cleanText.slice(offset, offset + TEXT_DISPLAY_LIMIT));
+    }
+
+    const innerComponents: unknown[] = [
+      { type: 10, content: `— ${m.role} —` },
+      ...textChunks.map(chunk => ({ type: 10, content: chunk })),
+    ];
+
+    if (images.length > 0) {
+      innerComponents.push({
+        type: 16,
+        items: images.map(img => ({ media: { url: img.url }, description: img.mimeType })),
       });
     }
+    for (const f of files) {
+      innerComponents.push({ type: 10, content: `📎 ${f.url}` });
+    }
+
+    containers.push({ type: 17, accentColor, components: innerComponents });
   }
 
-  if (embeds.length === 0) {
+  if (containers.length === 0) {
     await respond(bot, interaction, "(no messages)", true);
     return;
   }
@@ -191,21 +215,30 @@ export async function respondWithContext(
   const interactionKey = interaction.id.toString();
   const isDeferred = deferredInteractions.has(interactionKey);
 
-  // Send in batches of EMBEDS_PER_MESSAGE
-  for (let i = 0; i < embeds.length; i += EMBEDS_PER_MESSAGE) {
-    const batch = embeds.slice(i, i + EMBEDS_PER_MESSAGE);
+  // Send in batches of CONTAINERS_PER_MESSAGE
+  for (let i = 0; i < containers.length; i += CONTAINERS_PER_MESSAGE) {
+    const batch = containers.slice(i, i + CONTAINERS_PER_MESSAGE);
     if (i === 0) {
       if (isDeferred) {
         deferredInteractions.delete(interactionKey);
-        await bot.helpers.editOriginalInteractionResponse(interaction.token, { embeds: batch });
+        await bot.helpers.editOriginalInteractionResponse(interaction.token, {
+          flags,
+          components: batch as Parameters<typeof bot.helpers.editOriginalInteractionResponse>[1]["components"],
+        });
       } else {
         await bot.helpers.sendInteractionResponse(interaction.id, interaction.token, {
           type: InteractionResponseTypes.ChannelMessageWithSource,
-          data: { embeds: batch, flags },
+          data: {
+            flags,
+            components: batch as NonNullable<Parameters<typeof bot.helpers.sendInteractionResponse>[2]["data"]>["components"],
+          },
         });
       }
     } else {
-      await bot.helpers.sendFollowupMessage(interaction.token, { embeds: batch, flags });
+      await bot.helpers.sendFollowupMessage(interaction.token, {
+        flags,
+        components: batch as Parameters<typeof bot.helpers.sendFollowupMessage>[1]["components"],
+      });
     }
   }
 }
