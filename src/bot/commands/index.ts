@@ -150,8 +150,8 @@ const TEXT_PER_MESSAGE = 4000;
 /** Max top-level components per Discord message */
 const CONTAINERS_PER_MESSAGE = 10;
 
-/** Regex to extract HATT attachment markers from message content */
-const HATT_RE = /<<<HATT:[a-f0-9]+\|([^|>]+)\|([^>]+)>>>/g;
+/** Pattern to match HATT attachment markers in message content */
+const HATT_PATTERN = /<<<HATT:[a-f0-9]+\|([^|>]+)\|([^>]+)>>>/g;
 
 /**
  * Format a StructuredMessage array as Components v2 for the /debug context display.
@@ -166,59 +166,78 @@ export async function respondWithContext(
   // flags: 64 (ephemeral) | (1 << 15) (IS_COMPONENTS_V2)
   const flags = 64 | (1 << 15);
 
-  type HattItem = { url: string; mimeType: string };
   // A top-level item is either a text Container or a standalone attachment component.
   // textLen tracks displayable chars for batching; component is what gets sent to Discord.
   type Item = { component: unknown; textLen: number };
+
+  // Emit a text segment as one or more Containers, splitting at TEXT_PER_MESSAGE.
+  // The role label appears only on the first Container per message (needsLabel flag).
+  function pushText(
+    dest: Item[],
+    text: string,
+    accentColor: number,
+    label: string,
+    needsLabel: { value: boolean },
+  ) {
+    const overhead = needsLabel.value ? label.length : 0;
+    const chunkSize = TEXT_PER_MESSAGE - overhead;
+    for (let offset = 0; offset < text.length; offset += chunkSize) {
+      const chunk = text.slice(offset, offset + chunkSize);
+      const useLabel = needsLabel.value && offset === 0;
+      const innerComponents: unknown[] = [];
+      if (useLabel) innerComponents.push({ type: MessageComponentTypes.TextDisplay, content: label });
+      innerComponents.push({ type: MessageComponentTypes.TextDisplay, content: chunk });
+      dest.push({
+        component: { type: MessageComponentTypes.Container, accentColor, components: innerComponents },
+        textLen: (useLabel ? label.length : 0) + chunk.length,
+      });
+      needsLabel.value = false;
+    }
+  }
 
   const items: Item[] = [];
   for (const m of messages) {
     const accentColor = ROLE_COLORS[m.role] ?? 0x808080;
     const label = `— ${m.role} —`;
+    const needsLabel = { value: true };
 
-    // Extract HATT markers
-    const hatts: HattItem[] = [];
-    const cleanText = m.content.replace(HATT_RE, (_match, url: string, mimeType: string) => {
-      hatts.push({ url, mimeType });
-      return "";
-    }).trim() || "(empty)";
+    // Walk through content in order, splitting at HATT markers.
+    // Each text segment becomes Container(s); each HATT becomes an attachment component.
+    const re = new RegExp(HATT_PATTERN.source, "g");
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(m.content)) !== null) {
+      const textBefore = m.content.slice(lastIndex, match.index).trim();
+      if (textBefore) pushText(items, textBefore, accentColor, label, needsLabel);
 
-    const images = hatts.filter(h => h.mimeType.startsWith("image/"));
-    const files  = hatts.filter(h => !h.mimeType.startsWith("image/"));
-
-    // Split text into chunks that fit per-message limit (label counts toward first chunk).
-    const chunkSize = TEXT_PER_MESSAGE - label.length;
-    const chunks: string[] = [];
-    for (let offset = 0; offset < cleanText.length; offset += chunkSize) {
-      chunks.push(cleanText.slice(offset, offset + chunkSize));
+      const url = match[1]!, mimeType = match[2]!;
+      // Ensure a label container exists before the first attachment if no text preceded it
+      if (needsLabel.value) {
+        items.push({
+          component: { type: MessageComponentTypes.Container, accentColor, components: [{ type: MessageComponentTypes.TextDisplay, content: label }] },
+          textLen: label.length,
+        });
+        needsLabel.value = false;
+      }
+      if (mimeType.startsWith("image/")) {
+        items.push({ component: { type: MessageComponentTypes.MediaGallery, items: [{ media: { url }, description: mimeType }] }, textLen: 0 });
+      } else {
+        const content = `📎 ${url}`;
+        items.push({ component: { type: MessageComponentTypes.TextDisplay, content }, textLen: content.length });
+      }
+      lastIndex = match.index + match[0].length;
     }
 
-    for (let ci = 0; ci < chunks.length; ci++) {
-      const chunk = chunks[ci];
-      const isFirst = ci === 0;
-      const chunkLabel = isFirst ? label : `— ${m.role} (cont.) —`;
-      const component = {
-        type: MessageComponentTypes.Container,
-        accentColor,
-        components: [
-          { type: MessageComponentTypes.TextDisplay, content: chunkLabel },
-          { type: MessageComponentTypes.TextDisplay, content: chunk },
-        ],
-      };
-      items.push({ component, textLen: chunkLabel.length + chunk.length });
-    }
-
-    // Attachments as top-level siblings after the text containers
-    if (images.length > 0) {
-      const component = {
-        type: MessageComponentTypes.MediaGallery,
-        items: images.map(img => ({ media: { url: img.url }, description: img.mimeType })),
-      };
-      items.push({ component, textLen: 0 });
-    }
-    for (const f of files) {
-      const content = `📎 ${f.url}`;
-      items.push({ component: { type: MessageComponentTypes.TextDisplay, content }, textLen: content.length });
+    // Remaining text after last HATT (or all text if no HATTs)
+    const trailing = m.content.slice(lastIndex).trim();
+    if (trailing) {
+      pushText(items, trailing, accentColor, label, needsLabel);
+    } else if (needsLabel.value) {
+      // No text at all — emit a label-only container
+      items.push({
+        component: { type: MessageComponentTypes.Container, accentColor, components: [{ type: MessageComponentTypes.TextDisplay, content: label }, { type: MessageComponentTypes.TextDisplay, content: "(empty)" }] },
+        textLen: label.length + "(empty)".length,
+      });
     }
   }
 
