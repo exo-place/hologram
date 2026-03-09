@@ -147,8 +147,8 @@ const ROLE_EMOJI: Record<string, string> = {
 
 /** Max total displayable text across all components per Discord message */
 const TEXT_PER_MESSAGE = 4000;
-/** Max top-level components per Discord message */
-const CONTAINERS_PER_MESSAGE = 10;
+/** Max top-level components per Discord message (Discord enforces 5) */
+const CONTAINERS_PER_MESSAGE = 5;
 
 /** Pattern to match HATT attachment markers in message content */
 const HATT_PATTERN = /<<<HATT:[a-f0-9]+\|([^|>]+)\|([^>]+)>>>/g;
