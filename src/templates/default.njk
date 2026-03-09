@@ -39,19 +39,31 @@ Not everyone needs to respond to every message. Only respond as those who would 
   {{- "\n" -}}
   {% for msg in history %}
     {{- "\n" if not loop.first -}}
-    {% call send_as("assistant" if responders[msg.entity_id] else "user") -%}
+    {% set is_assistant = true if responders[msg.entity_id] else false %}
+    {% call send_as("assistant" if is_assistant else "user") -%}
       {{ msg.author }}: {{ parse_emojis(msg.content) }}
+      {%- if not is_assistant %}
       {%- for embed in msg.embeds %}
+      {%- if embed.type == "image" or embed.type == "gifv" or embed.type == "video" %}
+      {%- if embed.title %}
+      [embed title: {{ embed.title }}]
+      {%- endif %}
+      {%- if embed.description %}
+      [embed description: {{ embed.description }}]
+      {%- endif %}
+      {%- else %}
       <embed>{{ embed.toJSON() }}</embed>
+      {%- endif %}
       {%- endfor %}
+      {%- for component in msg.components %}
+      <component>{{ component.toJSON() }}</component>
+      {%- endfor %}
+      {%- endif %}
       {%- for attachment in msg.attachments %}
       {{ attach(attachment.url, attachment.content_type) }}
       {%- endfor %}
       {%- for sticker in msg.stickers %}
       [sticker: {{ sticker.name }}]{% if sticker_url(sticker) %}{{ attach(sticker_url(sticker), sticker_media_type(sticker)) }}{% endif %}
-      {%- endfor %}
-      {%- for component in msg.components %}
-      <component>{{ component.toJSON() }}</component>
       {%- endfor %}
     {%- endcall %}
   {% endfor %}

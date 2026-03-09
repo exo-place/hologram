@@ -92,6 +92,7 @@ function buildTemplateContext(
       embeds: [],
       stickers: [],
       attachments: [],
+      components: [],
     })),
     responders: Object.fromEntries(respondingObjs.map(e => [e.id, e])),
     _single_entity: entities.length <= 1,
@@ -759,6 +760,145 @@ describe("template access to embeds/stickers/attachments", () => {
     const template = `{% for msg in history %}{{ msg.content }} (embeds={{ msg.embeds | length }}, stickers={{ msg.stickers | length }}, attachments={{ msg.attachments | length }}){% endfor %}`;
     const output = renderStructuredTemplate(template, ctx);
     expect(output.messages[0].content).toContain("hello (embeds=0, stickers=0, attachments=0)");
+  });
+});
+
+// =============================================================================
+// DEFAULT_TEMPLATE: embed/component rendering rules
+// =============================================================================
+
+describe("DEFAULT_TEMPLATE: embed and component rendering", () => {
+  function makeHistory(opts: {
+    author: string;
+    content: string;
+    author_id: string;
+    entity_id?: number | null;
+    embeds?: object[];
+    components?: object[];
+  }) {
+    return [{
+      author: opts.author,
+      content: opts.content,
+      author_id: opts.author_id,
+      created_at: "2024-01-01",
+      is_bot: false,
+      entity_id: opts.entity_id ?? null,
+      embeds: withToJSON(opts.embeds ?? []),
+      stickers: withToJSON([]),
+      attachments: withToJSON([]),
+      components: withToJSON(opts.components ?? []),
+    }];
+  }
+
+  test("user message: image embed renders title and description only", () => {
+    const entities = [mockEntity({ id: 1, name: "Aria", facts: ["is a character"] })];
+    const ctx = buildTemplateContext(entities, []);
+    ctx.history = makeHistory({
+      author: "User", content: "check this", author_id: "1",
+      embeds: [{ type: "image", title: "Cat Photo", description: "A fluffy cat", url: "https://example.com/cat.png" }],
+    });
+    const output = renderStructuredTemplate(DEFAULT_TEMPLATE, ctx);
+    const userMsg = output.messages.find(m => m.role === "user");
+    expect(userMsg).toBeDefined();
+    expect(userMsg!.content).toContain("[embed title: Cat Photo]");
+    expect(userMsg!.content).toContain("[embed description: A fluffy cat]");
+    expect(userMsg!.content).not.toContain("https://example.com/cat.png");
+    expect(userMsg!.content).not.toContain("toJSON");
+  });
+
+  test("user message: gifv embed renders title and description only", () => {
+    const entities = [mockEntity({ id: 1, name: "Aria", facts: ["is a character"] })];
+    const ctx = buildTemplateContext(entities, []);
+    ctx.history = makeHistory({
+      author: "User", content: "lol", author_id: "1",
+      embeds: [{ type: "gifv", title: "Funny GIF", url: "https://tenor.com/gif123" }],
+    });
+    const output = renderStructuredTemplate(DEFAULT_TEMPLATE, ctx);
+    const userMsg = output.messages.find(m => m.role === "user");
+    expect(userMsg!.content).toContain("[embed title: Funny GIF]");
+    expect(userMsg!.content).not.toContain("tenor.com");
+  });
+
+  test("user message: video embed renders title and description only", () => {
+    const entities = [mockEntity({ id: 1, name: "Aria", facts: ["is a character"] })];
+    const ctx = buildTemplateContext(entities, []);
+    ctx.history = makeHistory({
+      author: "User", content: "watch this", author_id: "1",
+      embeds: [{ type: "video", title: "Cool Video", description: "From YouTube", url: "https://youtube.com/watch?v=abc" }],
+    });
+    const output = renderStructuredTemplate(DEFAULT_TEMPLATE, ctx);
+    const userMsg = output.messages.find(m => m.role === "user");
+    expect(userMsg!.content).toContain("[embed title: Cool Video]");
+    expect(userMsg!.content).toContain("[embed description: From YouTube]");
+    expect(userMsg!.content).not.toContain("youtube.com");
+  });
+
+  test("user message: image embed with no title or description renders nothing for that embed", () => {
+    const entities = [mockEntity({ id: 1, name: "Aria", facts: ["is a character"] })];
+    const ctx = buildTemplateContext(entities, []);
+    ctx.history = makeHistory({
+      author: "User", content: "look", author_id: "1",
+      embeds: [{ type: "image", url: "https://example.com/img.png" }],
+    });
+    const output = renderStructuredTemplate(DEFAULT_TEMPLATE, ctx);
+    const userMsg = output.messages.find(m => m.role === "user");
+    expect(userMsg!.content).not.toContain("[embed title:");
+    expect(userMsg!.content).not.toContain("[embed description:");
+    expect(userMsg!.content).not.toContain("example.com");
+  });
+
+  test("user message: non-media embed (link/rich) still uses toJSON()", () => {
+    const entities = [mockEntity({ id: 1, name: "Aria", facts: ["is a character"] })];
+    const ctx = buildTemplateContext(entities, []);
+    ctx.history = makeHistory({
+      author: "User", content: "see this link", author_id: "1",
+      embeds: [{ type: "rich", title: "A Rich Embed", description: "desc", url: "https://example.com" }],
+    });
+    const output = renderStructuredTemplate(DEFAULT_TEMPLATE, ctx);
+    const userMsg = output.messages.find(m => m.role === "user");
+    expect(userMsg!.content).toContain('"type":"rich"');
+    expect(userMsg!.content).not.toContain("[embed title:");
+  });
+
+  test("assistant message: embeds are not rendered", () => {
+    const entities = [mockEntity({ id: 1, name: "Aria", facts: ["is a character"] })];
+    const ctx = buildTemplateContext(entities, []);
+    ctx.history = makeHistory({
+      author: "Aria", content: "hello there", author_id: "999", entity_id: 1,
+      embeds: [{ type: "rich", title: "Bot Embed", description: "some data", url: "https://example.com" }],
+    });
+    const output = renderStructuredTemplate(DEFAULT_TEMPLATE, ctx);
+    const assistantMsg = output.messages.find(m => m.role === "assistant");
+    expect(assistantMsg).toBeDefined();
+    expect(assistantMsg!.content).toContain("hello there");
+    expect(assistantMsg!.content).not.toContain("Bot Embed");
+    expect(assistantMsg!.content).not.toContain("<embed>");
+  });
+
+  test("assistant message: components are not rendered", () => {
+    const entities = [mockEntity({ id: 1, name: "Aria", facts: ["is a character"] })];
+    const ctx = buildTemplateContext(entities, []);
+    ctx.history = makeHistory({
+      author: "Aria", content: "pick one", author_id: "999", entity_id: 1,
+      components: [{ type: 1, components: [{ type: 2, label: "Click me", style: 1, custom_id: "btn" }] }],
+    });
+    const output = renderStructuredTemplate(DEFAULT_TEMPLATE, ctx);
+    const assistantMsg = output.messages.find(m => m.role === "assistant");
+    expect(assistantMsg!.content).not.toContain("<component>");
+    expect(assistantMsg!.content).not.toContain("Click me");
+  });
+
+  test("user message: components are rendered", () => {
+    const entities = [mockEntity({ id: 1, name: "Aria", facts: ["is a character"] })];
+    const ctx = buildTemplateContext(entities, []);
+    ctx.history = makeHistory({
+      author: "User", content: "I clicked", author_id: "1",
+      components: [{ type: 1, components: [{ type: 2, label: "Clicked", style: 1, custom_id: "btn" }] }],
+    });
+    const output = renderStructuredTemplate(DEFAULT_TEMPLATE, ctx);
+    const userMsg = output.messages.find(m => m.role === "user");
+    expect(userMsg!.content).toContain("<component>");
+    expect(userMsg!.content).toContain("Clicked");
   });
 });
 
