@@ -43,7 +43,7 @@ Syntax highlighting for custom templates (the files in `src/templates/` and temp
 - **Filters** — `default`, `length`, `join`, `first`, `last`, `upper`, `lower`, `trim`, `nl2br`, `int`, `float`, `abs`, `round`, `reverse`, `sort`, `batch`
 - **Functions** — `random()`, `has_fact()`, `roll()`, `messages()`, `duration()`, `mentioned_in_dialogue()`, `date_str()`, `time_str()`, `isodate()`, `isotime()`, `weekday()`, `send_as()`, `caller()`
 - **Loop variables** — `loop.index`, `loop.index0`, `loop.first`, `loop.last`, `loop.length`
-- **Markdown section headers** — `## Name [id: N]`, `### Memories`
+- **XML tags** — `<defs>`, `<memories>` with attributes
 
 </div>
 

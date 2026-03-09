@@ -327,18 +327,19 @@ function startsWithExtends(source: string): boolean {
 // =============================================================================
 
 export const DEFAULT_TEMPLATE = `{#- Entity Definitions -#}
-{#- Markdown format. XML (<tag>) is avoided because it conflicts with LLM tool call syntax,
-    causing the model to confuse entity definitions with function call responses. -#}
 {% block definitions %}
   {% if entities | length > 0 %}
     {#- All entities (responding first, then referenced/user) -#}
     {% for entity in entities %}
-      {{- "\\n\\n" if not loop.first -}}## {{ entity.name }} [id: {{ entity.id }}]
+      {{- "\\n\\n" if not loop.first -}}
+<defs for="{{ entity.name }}" id="{{ entity.id }}">
 {{ entity.facts | join("\\n") }}
+</defs>
       {% if entity.responding and memories[entity.id] and memories[entity.id] | length > 0 %}
 
-### Memories
+<memories for="{{ entity.name }}" id="{{ entity.id }}">
 {{ memories[entity.id] | join("\\n") }}
+</memories>
       {% endif %}
     {% endfor %}
 
@@ -369,10 +370,10 @@ Not everyone needs to respond to every message. Only respond as those who would 
     {% call send_as("assistant" if responders[msg.entity_id] else "user") -%}
       {{ msg.author }}: {{ msg.content }}
       {%- for embed in msg.embeds %}
-      [embed] {{ embed.toJSON() }}
+      <embed>{{ embed.toJSON() }}</embed>
       {%- endfor %}
       {%- for attachment in msg.attachments %}
-      [attachment: {{ attachment.filename }}{{ " (" + attachment.content_type + ")" if attachment.content_type }}]
+      <attachment name="{{ attachment.filename }}"{{ ' type="' + attachment.content_type + '"' if attachment.content_type }} url="{{ attachment.url }}" />
       {%- endfor %}
       {%- for sticker in msg.stickers %}
       [sticker: {{ sticker.name }}]
