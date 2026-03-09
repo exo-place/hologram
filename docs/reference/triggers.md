@@ -43,10 +43,18 @@ $if content.includes(hello): $respond
 | Variable | Type | Description |
 |----------|------|-------------|
 | `mentioned` | boolean | Bot was @mentioned |
+| `replied` | boolean | Message is a reply to this entity's message |
+| `replied_to` | string | Name of entity that was replied to (empty if not a webhook reply) |
 | `is_self` | boolean | Message is from this entity's own webhook |
 | `is_hologram` | boolean | Message is from any hologram entity (our webhook) |
+| `is_forward` | boolean | Message is a Discord forward |
+| `keyword_match` | boolean | Message matched one of this entity's configured trigger keywords |
 | `content` | string | Message content (alias for `messages(1, "%m")`) |
 | `author` | string | Message author name (alias for `messages(1, "%a")`) |
+| `interaction_type` | string | Interaction type if applicable (e.g. `"drink"`, `"eat"`, `"throw"`) |
+| `name` | string | This entity's name |
+| `chars` | string[] | Names of all entities bound to this channel |
+| `group` | string | All bound character names, comma-separated |
 | `response_ms` | number | Milliseconds since last response |
 | `retry_ms` | number | Milliseconds since triggering message (for retries) |
 | `idle_ms` | number | Milliseconds since any message in channel |
@@ -54,6 +62,7 @@ $if content.includes(hello): $respond
 | `random()` | function | Float [0,1), or int with `random(max)` [1,max] / `random(min,max)` [min,max] |
 | `has_fact(pattern)` | function | Check if entity has matching fact |
 | `roll(dice)` | function | Dice roll (roll20 syntax: `"2d6+3"`, `"4d6kh3"`, `"1d6!"`, `"8d6>=5"`) |
+| `pick(array)` | function | Pick a random element from an array |
 | `mentioned_in_dialogue(name)` | function | Check if name appears in quoted dialogue |
 | `messages(n, format, filter)` | function | Last n messages. Format: `%a`=author, `%m`=message. Filter: `"$user"`, `"$char"`, or author name |
 | `duration(ms)` | function | Human-readable duration (e.g. `duration(idle_ms)` → "5 minutes") |
@@ -62,17 +71,20 @@ $if content.includes(hello): $respond
 | `isodate(offset?)` | function | ISO date (e.g. "2026-01-30"). Optional offset |
 | `isotime(offset?)` | function | ISO time (e.g. "18:00"). Optional offset |
 | `weekday(offset?)` | function | Day name (e.g. "Thursday"). Optional offset |
-| `group` | string | All bound character names, comma-separated |
 | `time.hour` | number | Current hour (0-23) |
 | `time.is_day` | boolean | 6am-6pm |
 | `time.is_night` | boolean | 6pm-6am |
 | `channel.id` | string | Channel snowflake ID |
 | `channel.name` | string | Channel name |
 | `channel.description` | string | Channel topic |
+| `channel.is_nsfw` | boolean | Whether the channel is NSFW |
+| `channel.type` | string | Channel type (`"text"`, `"vc"`, `"thread"`, `"forum"`, `"announcement"`, `"dm"`, etc.) |
 | `channel.mention` | string | Channel mention (e.g. `<#123>`) |
 | `server.id` | string | Server snowflake ID |
 | `server.name` | string | Server name |
 | `server.description` | string | Server description |
+| `server.nsfw_level` | string | Server NSFW level (`"default"`, `"explicit"`, `"safe"`, `"age_restricted"`) |
+| `Date` | object | Safe date constructor: `Date.now()`, `Date.new(...)`, `Date.parse(...)`, `Date.UTC(...)` |
 | `self.*` | varies | Entity's own `key: value` facts |
 
 ### Examples
@@ -109,7 +121,11 @@ $if response_ms > 30000: $respond
 
 ## Default Behavior
 
-If no `$respond` directive is present, the bot responds when @mentioned.
+If no `$respond` directive is present, the bot responds when:
+- The bot is @mentioned (and only one entity is bound to the channel)
+- A message replies directly to this entity's message
+- This entity's name is mentioned in dialogue
+- A message matches this entity's configured trigger keywords
 
 To respond to all messages, add:
 ```
