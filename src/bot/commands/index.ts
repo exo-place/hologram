@@ -145,8 +145,8 @@ const ROLE_COLORS: Record<string, number> = {
   assistant: 0x57F287,
 };
 
-/** Max TextDisplay content length */
-const TEXT_DISPLAY_LIMIT = 4000;
+/** Max total displayable text across all components per Discord message */
+const TEXT_PER_MESSAGE = 4000;
 /** Max top-level components per Discord message */
 const CONTAINERS_PER_MESSAGE = 10;
 
@@ -167,13 +167,16 @@ export async function respondWithContext(
   const flags = 64 | (1 << 15);
 
   type HattItem = { url: string; mimeType: string };
+  type Container = { type: number; accentColor: number; components: unknown[]; textLen: number };
 
-  // Build one Container component per LLM message
-  const containers: unknown[] = [];
+  // Build one Container per LLM message, tracking total displayable text length.
+  // A single LLM message may produce multiple containers if its text exceeds TEXT_PER_MESSAGE.
+  const containers: Container[] = [];
   for (const m of messages) {
     const accentColor = ROLE_COLORS[m.role] ?? 0x808080;
+    const label = `— ${m.role} —`;
 
-    // Extract HATT markers and collect attachments
+    // Extract HATT markers
     const hatts: HattItem[] = [];
     const cleanText = m.content.replace(HATT_RE, (_match, url: string, mimeType: string) => {
       hatts.push({ url, mimeType });
@@ -182,29 +185,37 @@ export async function respondWithContext(
 
     const images = hatts.filter(h => h.mimeType.startsWith("image/"));
     const files  = hatts.filter(h => !h.mimeType.startsWith("image/"));
+    const fileText = files.map(f => `📎 ${f.url}`).join("\n");
 
-    // Split clean text into chunks ≤ TEXT_DISPLAY_LIMIT chars
-    const textChunks: string[] = [];
-    for (let offset = 0; offset < cleanText.length; offset += TEXT_DISPLAY_LIMIT) {
-      textChunks.push(cleanText.slice(offset, offset + TEXT_DISPLAY_LIMIT));
+    // Split content so each container's total text fits within TEXT_PER_MESSAGE.
+    // Reserve space for the role label (+ newline) and any file URL lines.
+    const overhead = label.length + (fileText ? fileText.length + 1 : 0);
+    const chunkSize = TEXT_PER_MESSAGE - overhead;
+    const chunks: string[] = [];
+    for (let offset = 0; offset < cleanText.length; offset += chunkSize) {
+      chunks.push(cleanText.slice(offset, offset + chunkSize));
     }
 
-    const innerComponents: unknown[] = [
-      { type: MessageComponentTypes.TextDisplay, content: `— ${m.role} —` },
-      ...textChunks.map(chunk => ({ type: MessageComponentTypes.TextDisplay, content: chunk })),
-    ];
-
-    if (images.length > 0) {
-      innerComponents.push({
-        type: MessageComponentTypes.MediaGallery,
-        items: images.map(img => ({ media: { url: img.url }, description: img.mimeType })),
-      });
+    for (let ci = 0; ci < chunks.length; ci++) {
+      const chunk = chunks[ci];
+      const isFirst = ci === 0;
+      const isLast  = ci === chunks.length - 1;
+      const innerComponents: unknown[] = [
+        { type: MessageComponentTypes.TextDisplay, content: isFirst ? label : `— ${m.role} (cont.) —` },
+        { type: MessageComponentTypes.TextDisplay, content: chunk },
+      ];
+      if (isLast && images.length > 0) {
+        innerComponents.push({
+          type: MessageComponentTypes.MediaGallery,
+          items: images.map(img => ({ media: { url: img.url }, description: img.mimeType })),
+        });
+      }
+      if (isLast && files.length > 0) {
+        innerComponents.push({ type: MessageComponentTypes.TextDisplay, content: fileText });
+      }
+      const textLen = (isFirst ? label : `— ${m.role} (cont.) —`).length + chunk.length + (isLast ? fileText.length : 0);
+      containers.push({ type: MessageComponentTypes.Container, accentColor, components: innerComponents, textLen });
     }
-    for (const f of files) {
-      innerComponents.push({ type: MessageComponentTypes.TextDisplay, content: `📎 ${f.url}` });
-    }
-
-    containers.push({ type: MessageComponentTypes.Container, accentColor, components: innerComponents });
   }
 
   if (containers.length === 0) {
@@ -215,9 +226,23 @@ export async function respondWithContext(
   const interactionKey = interaction.id.toString();
   const isDeferred = deferredInteractions.has(interactionKey);
 
-  // Send in batches of CONTAINERS_PER_MESSAGE
-  for (let i = 0; i < containers.length; i += CONTAINERS_PER_MESSAGE) {
-    const batch = containers.slice(i, i + CONTAINERS_PER_MESSAGE);
+  // Batch containers into Discord messages, respecting both TEXT_PER_MESSAGE and CONTAINERS_PER_MESSAGE.
+  const batches: Container[][] = [];
+  let currentBatch: Container[] = [];
+  let currentText = 0;
+  for (const container of containers) {
+    if (currentBatch.length > 0 && (currentText + container.textLen > TEXT_PER_MESSAGE || currentBatch.length >= CONTAINERS_PER_MESSAGE)) {
+      batches.push(currentBatch);
+      currentBatch = [];
+      currentText = 0;
+    }
+    currentBatch.push(container);
+    currentText += container.textLen;
+  }
+  if (currentBatch.length > 0) batches.push(currentBatch);
+
+  for (let i = 0; i < batches.length; i++) {
+    const batch = batches[i];
     if (i === 0) {
       if (isDeferred) {
         deferredInteractions.delete(interactionKey);
