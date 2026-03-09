@@ -196,7 +196,7 @@ export async function respondWithContext(
 
     if (images.length > 0) {
       innerComponents.push({
-        type: 16,
+        type: 12,
         items: images.map(img => ({ media: { url: img.url }, description: img.mimeType })),
       });
     }
