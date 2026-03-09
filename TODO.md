@@ -78,7 +78,6 @@ See `docs/postmortem/2026-01-26-ux-critique.md` for full analysis.
 
 ### Prompt & Context
 
-- [ ] Strip prompt scaffolding - remove `<defs>` XML tags and unnecessary structure from system prompt
 - [ ] Silent failure elimination - when no entities are bound, explain why nothing happened instead of silently returning
 - [x] Dynamic token allocation - `$context` now supports expression predicates (`chars`, `count`, `age_h`, etc.) with default `chars < 4000 || count < 20`
 
