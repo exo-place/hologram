@@ -63,7 +63,7 @@ $if content.includes(hello): $respond
 | `has_fact(pattern)` | function | Check if entity has matching fact |
 | `roll(dice)` | function | Dice roll (roll20 syntax: `"2d6+3"`, `"4d6kh3"`, `"1d6!"`, `"8d6>=5"`) |
 | `pick(array)` | function | Pick a random element from an array |
-| `mentioned_in_dialogue(name)` | function | Check if name appears in quoted dialogue |
+| `mentioned_in_dialogue(name)` | function | Check if name appears in the message. Single-line messages: checks full text. Messages with quotes (`"..."` / `'...'`): checks only inside quoted portions. Multi-line messages without quotes: returns `false`. Uses word-boundary matching (case-insensitive). |
 | `messages(n, format, filter)` | function | Last n messages. Format: `%a`=author, `%m`=message. Filter: `"$user"`, `"$char"`, or author name |
 | `duration(ms)` | function | Human-readable duration (e.g. `duration(idle_ms)` → "5 minutes") |
 | `date_str(offset?)` | function | Date string (e.g. "Thu Jan 30 2026"). Optional offset: `"1d"`, `"-1w"` |
