@@ -1367,6 +1367,8 @@ async function handleStreamingResponse(
                 trackOwnWebhookMessage(id, fileEntity.id, fileEntity.name);
                 allMessageIds.push(id);
               }
+            } else {
+              await sendFallbackMessage(channelId, fileEntity.name, "", streamingFiles);
             }
           }
         }
@@ -1576,7 +1578,7 @@ export async function sendResponse(
           if (messageIds && entity) {
             trackWebhookMessages(messageIds, entity.id, entity.name);
           } else if (!messageIds) {
-            await sendFallbackMessage(channelId, entityResponse.name, entityResponse.content);
+            await sendFallbackMessage(channelId, entityResponse.name, entityResponse.content, i === 0 ? result.files : undefined);
           }
         }
       } else {
@@ -1592,7 +1594,7 @@ export async function sendResponse(
         if (messageIds) {
           trackWebhookMessages(messageIds, entity.id, entity.name);
         } else {
-          await sendFallbackMessage(channelId, entity.name, result.response);
+          await sendFallbackMessage(channelId, entity.name, result.response, result.files);
         }
       }
     } else {
@@ -1663,11 +1665,16 @@ async function sendRegularMessage(channelId: string, content: string): Promise<v
 
 /** Send fallback message with character name prefix.
  * Stores in message history since bot messages bypass messageCreate. */
-async function sendFallbackMessage(channelId: string, name: string, content: string): Promise<void> {
-  if (!content.trim()) return;
+async function sendFallbackMessage(channelId: string, name: string, content: string, files?: GeneratedFile[]): Promise<void> {
+  if (!content.trim() && (!files || files.length === 0)) return;
   try {
+    const discordFiles = files?.map((f, i) => {
+      const ext = f.mediaType.split("/")[1] ?? "png";
+      return { blob: new Blob([f.data], { type: f.mediaType }), name: `image_${i + 1}.${ext}` };
+    });
     const sent = await bot.helpers.sendMessage(BigInt(channelId), {
-      content: `**${name}:** ${content}`,
+      content: content.trim() ? `**${name}:** ${content}` : undefined,
+      files: discordFiles,
     });
     trackBotMessage(sent.id);
     // Bot messages skip messageCreate (filtered by botUserId check),
