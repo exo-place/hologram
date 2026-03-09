@@ -1607,7 +1607,8 @@ export async function sendResponse(
         const entityData = getEntityWithFacts(entity.id);
         if (entityData) {
           const editors = getEditorsToNotify(entity.id, entityData.owned_by, entityData.facts.map(f => f.content));
-          const errorMsg = `LLM error with model "${err.modelSpec}": ${err.message}`;
+          const blockReason = extractBlockReason(err.cause);
+          const errorMsg = `LLM error with model "${err.modelSpec}": ${err.message}${blockReason ? ` (${blockReason})` : ""}`;
           const isNew = recordEvalError(entity.id, editors[0] ?? "", errorMsg);
           if (isNew) {
             for (const uid of editors) {
@@ -1740,6 +1741,21 @@ function getEditorsToNotify(entityId: number, ownerId: string | null, facts: str
   }
 
   return [...editors];
+}
+
+/** Walk the error cause chain looking for a Google promptFeedback blockReason. */
+function extractBlockReason(err: unknown): string | undefined {
+  if (!err || typeof err !== "object") return undefined;
+  const e = err as Record<string, unknown>;
+  const val = e["value"];
+  if (val && typeof val === "object") {
+    const pf = (val as Record<string, unknown>)["promptFeedback"];
+    if (pf && typeof pf === "object") {
+      const br = (pf as Record<string, unknown>)["blockReason"];
+      if (typeof br === "string") return br;
+    }
+  }
+  return extractBlockReason(e["cause"]);
 }
 
 async function notifyUserOfError(
