@@ -646,7 +646,7 @@ registerCommand({
         {
           type: MessageComponentTypes.Label,
           label: "Content Filters",
-          description: "Safety filter expression for all categories (e.g. off, channel.is_nsfw). Per-category: use $safety sexual off in facts.",
+          description: "Safety filter for all categories (e.g. off, channel.is_nsfw). Per-category: use $safety in facts.",
           component: {
             type: MessageComponentTypes.TextInput,
             customId: "safety",
