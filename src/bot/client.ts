@@ -1863,6 +1863,8 @@ bot.handlers.MESSAGE_UPDATE = (bot, data, shardId) => {
   if (payload.embeds?.length && payload.id) {
     const messageId = payload.id;
     if (isOwnWebhookMessage(messageId)) return;
+    // Skip bot's own non-webhook messages (e.g. interaction responses that get URL-preview updates)
+    if (botUserId && payload.author?.id === botUserId.toString()) return;
 
     const serialized = payload.embeds.map(serializeDiscordEmbed);
     if (serialized.length > 0) {
