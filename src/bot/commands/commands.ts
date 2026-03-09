@@ -786,6 +786,21 @@ registerCommand({
 
       fields.push(...contentFields);
 
+      // Add a blank overflow field if there's a spare slot and the last field has content
+      const nameFieldCount = editType === "facts" ? 1 : 0;
+      const maxContentFields = MAX_FIELDS - nameFieldCount;
+      const lastField = contentFields[contentFields.length - 1];
+      if (contentFields.length < maxContentFields && lastField.value) {
+        fields.push({
+          customId: `${editType}${contentFields.length}`,
+          label: `Additional ${contentLabel}`,
+          style: TextStyles.Paragraph,
+          value: "",
+          required: false,
+          placeholder: "Add more here (appended to above)",
+        });
+      }
+
       const modalId = editType === "memories" ? `edit-memories:${entity.id}` : `edit:${entity.id}`;
       const modalTitle = editType === "memories" ? `Edit Memories: ${entity.name}` : `Edit: ${entity.name}`;
       await respondWithModal(ctx.bot, ctx.interaction, modalId, modalTitle, fields);
