@@ -5,7 +5,8 @@ Discord bot for collaborative worldbuilding and roleplay. Built on an entity-fac
 ## Key Directories
 
 - `src/` — All runtime source (TypeScript, Bun)
-  - `src/ai/` — LLM pipeline: prompt building, streaming, templates, tools, models
+  - `src/ai/` — LLM pipeline: prompt building, streaming, template engine, tools, models
+  - `src/templates/` — Nunjucks template sources (default.njk)
   - `src/bot/` — Discord client (Discordeno) + 7 slash commands
   - `src/db/` — SQLite schema (9 tables), entity/fact CRUD, message history
   - `src/logic/` — `$if` expression evaluator, safe-regex validator
