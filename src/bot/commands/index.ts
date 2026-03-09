@@ -138,11 +138,11 @@ export async function respond(
   }
 }
 
-/** Role colors for debug context display (Components v2 container accent) */
-const ROLE_COLORS: Record<string, number> = {
-  system:    0x808080,
-  user:      0x5865F2,
-  assistant: 0x57F287,
+/** Role emoji prefix for debug context display */
+const ROLE_EMOJI: Record<string, string> = {
+  system:    "⚪",
+  user:      "🔵",
+  assistant: "🟢",
 };
 
 /** Max total displayable text across all components per Discord message */
@@ -155,8 +155,8 @@ const HATT_PATTERN = /<<<HATT:[a-f0-9]+\|([^|>]+)\|([^>]+)>>>/g;
 
 /**
  * Format a StructuredMessage array as Components v2 for the /debug context display.
- * Each LLM message becomes a Container with a role label, plaintext content, and
- * optional inline MediaGallery for image attachments.
+ * Each LLM message is shown as plain TextDisplay components with a colored emoji role
+ * prefix, separated by Separator components between messages.
  */
 export async function respondWithContext(
   bot: Bot,
@@ -166,57 +166,45 @@ export async function respondWithContext(
   // flags: 64 (ephemeral) | (1 << 15) (IS_COMPONENTS_V2)
   const flags = 64 | (1 << 15);
 
-  // A top-level item is either a text Container or a standalone attachment component.
   // textLen tracks displayable chars for batching; component is what gets sent to Discord.
   type Item = { component: unknown; textLen: number };
 
-  // Emit a text segment as one or more Containers, splitting at TEXT_PER_MESSAGE.
-  // The role label appears only on the first Container per message (needsLabel flag).
-  function pushText(
-    dest: Item[],
-    text: string,
-    accentColor: number,
-    label: string,
-    needsLabel: { value: boolean },
-  ) {
-    const overhead = needsLabel.value ? label.length : 0;
+  const SEPARATOR: Item = { component: { type: MessageComponentTypes.Separator, divider: true }, textLen: 0 };
+
+  // Emit a text segment as one or more TextDisplays, splitting at TEXT_PER_MESSAGE.
+  // The role label (emoji prefix) is prepended to the first chunk only.
+  function pushText(dest: Item[], text: string, label: string, needsLabel: { value: boolean }) {
+    const overhead = needsLabel.value ? label.length + 1 : 0; // +1 for newline
     const chunkSize = TEXT_PER_MESSAGE - overhead;
     for (let offset = 0; offset < text.length; offset += chunkSize) {
       const chunk = text.slice(offset, offset + chunkSize);
-      const useLabel = needsLabel.value && offset === 0;
-      const innerComponents: unknown[] = [];
-      if (useLabel) innerComponents.push({ type: MessageComponentTypes.TextDisplay, content: label });
-      innerComponents.push({ type: MessageComponentTypes.TextDisplay, content: chunk });
-      dest.push({
-        component: { type: MessageComponentTypes.Container, accentColor, components: innerComponents },
-        textLen: (useLabel ? label.length : 0) + chunk.length,
-      });
+      const content = (needsLabel.value && offset === 0) ? `${label}\n${chunk}` : chunk;
+      dest.push({ component: { type: MessageComponentTypes.TextDisplay, content }, textLen: content.length });
       needsLabel.value = false;
     }
   }
 
   const items: Item[] = [];
   for (const m of messages) {
-    const accentColor = ROLE_COLORS[m.role] ?? 0x808080;
-    const label = `— ${m.role} —`;
+    const emoji = ROLE_EMOJI[m.role] ?? "⚪";
+    const label = `${emoji} ${m.role}`;
     const needsLabel = { value: true };
 
+    if (items.length > 0) items.push(SEPARATOR);
+
     // Walk through content in order, splitting at HATT markers.
-    // Each text segment becomes Container(s); each HATT becomes an attachment component.
+    // Text segments become TextDisplays; HATTs become MediaGallery or file TextDisplays.
     const re = new RegExp(HATT_PATTERN.source, "g");
     let lastIndex = 0;
     let match: RegExpExecArray | null;
     while ((match = re.exec(m.content)) !== null) {
       const textBefore = m.content.slice(lastIndex, match.index).trim();
-      if (textBefore) pushText(items, textBefore, accentColor, label, needsLabel);
+      if (textBefore) pushText(items, textBefore, label, needsLabel);
 
       const url = match[1]!, mimeType = match[2]!;
-      // Ensure a label container exists before the first attachment if no text preceded it
+      // Emit a label-only TextDisplay before the first attachment if no text preceded it
       if (needsLabel.value) {
-        items.push({
-          component: { type: MessageComponentTypes.Container, accentColor, components: [{ type: MessageComponentTypes.TextDisplay, content: label }] },
-          textLen: label.length,
-        });
+        items.push({ component: { type: MessageComponentTypes.TextDisplay, content: label }, textLen: label.length });
         needsLabel.value = false;
       }
       if (mimeType.startsWith("image/")) {
@@ -231,13 +219,11 @@ export async function respondWithContext(
     // Remaining text after last HATT (or all text if no HATTs)
     const trailing = m.content.slice(lastIndex).trim();
     if (trailing) {
-      pushText(items, trailing, accentColor, label, needsLabel);
+      pushText(items, trailing, label, needsLabel);
     } else if (needsLabel.value) {
-      // No text at all — emit a label-only container
-      items.push({
-        component: { type: MessageComponentTypes.Container, accentColor, components: [{ type: MessageComponentTypes.TextDisplay, content: label }, { type: MessageComponentTypes.TextDisplay, content: "(empty)" }] },
-        textLen: label.length + "(empty)".length,
-      });
+      // No text and no HATTs — emit label + (empty)
+      const content = `${label}\n(empty)`;
+      items.push({ component: { type: MessageComponentTypes.TextDisplay, content }, textLen: content.length });
     }
   }
 
