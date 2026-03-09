@@ -190,21 +190,21 @@ export async function respondWithContext(
     }
 
     const innerComponents: unknown[] = [
-      { type: 10, content: `— ${m.role} —` },
-      ...textChunks.map(chunk => ({ type: 10, content: chunk })),
+      { type: MessageComponentTypes.TextDisplay, content: `— ${m.role} —` },
+      ...textChunks.map(chunk => ({ type: MessageComponentTypes.TextDisplay, content: chunk })),
     ];
 
     if (images.length > 0) {
       innerComponents.push({
-        type: 12,
+        type: MessageComponentTypes.MediaGallery,
         items: images.map(img => ({ media: { url: img.url }, description: img.mimeType })),
       });
     }
     for (const f of files) {
-      innerComponents.push({ type: 10, content: `📎 ${f.url}` });
+      innerComponents.push({ type: MessageComponentTypes.TextDisplay, content: `📎 ${f.url}` });
     }
 
-    containers.push({ type: 17, accentColor, components: innerComponents });
+    containers.push({ type: MessageComponentTypes.Container, accentColor, components: innerComponents });
   }
 
   if (containers.length === 0) {
