@@ -1133,8 +1133,6 @@ async function handleStreamingResponse(
   }
 ): Promise<void> {
   const allMessageIds: string[] = [];
-  // Stash files yielded by the "files" event; sent after streaming completes
-  let streamingFiles: GeneratedFile[] | undefined;
 
   // Track current message per entity (for editing in full mode)
   const entityMessages = new Map<string, { messageId: string; content: string }>();
@@ -1332,8 +1330,18 @@ async function handleStreamingResponse(
       }
 
       case "files": {
-        // Stash generated files to send after streaming completes
-        streamingFiles = event.files;
+        const fileEntity = entity ?? entities[0];
+        if (fileEntity) {
+          const ids = await executeWebhook(channelId, "", fileEntity.name, fileEntity.avatarUrl ?? undefined, event.files);
+          if (ids) {
+            for (const id of ids) {
+              trackOwnWebhookMessage(id, fileEntity.id, fileEntity.name);
+              allMessageIds.push(id);
+            }
+          } else {
+            await sendFallbackMessage(channelId, fileEntity.name, "", event.files);
+          }
+        }
         break;
       }
 
@@ -1350,27 +1358,6 @@ async function handleStreamingResponse(
         // Update single-entity full mode message with final content
         if (fullMessage) {
           updateMessageByDiscordId(fullMessage.messageId, fullMessage.content);
-        }
-        // Send stashed files as a separate webhook message attached to first entity
-        if (streamingFiles && streamingFiles.length > 0) {
-          const fileEntity = entity ?? entities[0];
-          if (fileEntity) {
-            const ids = await executeWebhook(
-              channelId,
-              "",
-              fileEntity.name,
-              fileEntity.avatarUrl ?? undefined,
-              streamingFiles
-            );
-            if (ids) {
-              for (const id of ids) {
-                trackOwnWebhookMessage(id, fileEntity.id, fileEntity.name);
-                allMessageIds.push(id);
-              }
-            } else {
-              await sendFallbackMessage(channelId, fileEntity.name, "", streamingFiles);
-            }
-          }
         }
         debug("Streaming complete", { fullTextLength: event.fullText.length });
         break;
