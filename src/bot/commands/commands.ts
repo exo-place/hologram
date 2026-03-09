@@ -5,6 +5,7 @@ import {
   respond,
   respondWithModal,
   respondWithV2Modal,
+  respondWithContext,
   type CommandContext,
 } from "./index";
 import {
@@ -2038,9 +2039,9 @@ async function handleInfoContext(ctx: CommandContext, options: Record<string, un
     [evaluated], ctx.channelId, ctx.guildId, ctx.userId,
   );
 
-  // Show all messages (system, user, assistant) — the full conversation the LLM sees
-  const formatted = messages.map(m => `[${m.role}] ${m.content}`).join("\n\n");
-  await respond(ctx.bot, ctx.interaction, elideText(formatted || "(no messages)"), true);
+  // Show all messages (system, user, assistant) — each as a separate embed
+  // with the role as title and content verbatim in a code block.
+  await respondWithContext(ctx.bot, ctx.interaction, messages);
 }
 
 async function handleInfoRag(ctx: CommandContext, options: Record<string, unknown>) {

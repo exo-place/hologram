@@ -138,6 +138,78 @@ export async function respond(
   }
 }
 
+/** Role colors for debug context display */
+const ROLE_COLORS: Record<string, number> = {
+  system:    0x808080,
+  user:      0x5865F2,
+  assistant: 0x57F287,
+};
+
+/** Discord embed description limit */
+const EMBED_DESC_LIMIT = 4096;
+/** Overhead for wrapping content in a code block (```\n + \n```) */
+const CODE_BLOCK_OVERHEAD = 8;
+/** Max embed items per message */
+const EMBEDS_PER_MESSAGE = 10;
+
+/**
+ * Format a StructuredMessage array as Discord embeds for the /debug context display.
+ * Each message role becomes an embed title; content is shown verbatim in a code block.
+ * Long content is split across multiple embeds.
+ */
+export async function respondWithContext(
+  bot: Bot,
+  interaction: Interaction,
+  messages: Array<{ role: string; content: string }>,
+) {
+  const flags = 64; // ephemeral
+  const maxContent = EMBED_DESC_LIMIT - CODE_BLOCK_OVERHEAD;
+
+  type EmbedItem = { title: string; description: string; color: number };
+  const embeds: EmbedItem[] = [];
+
+  for (const m of messages) {
+    const color = ROLE_COLORS[m.role] ?? 0x808080;
+    const content = m.content || "(empty)";
+    // Split content into chunks that fit within embed description limit
+    for (let offset = 0; offset < content.length; offset += maxContent) {
+      const chunk = content.slice(offset, offset + maxContent);
+      const isContinued = offset > 0;
+      embeds.push({
+        title: isContinued ? `[${m.role} (cont.)]` : `[${m.role}]`,
+        description: "```\n" + chunk + "\n```",
+        color,
+      });
+    }
+  }
+
+  if (embeds.length === 0) {
+    await respond(bot, interaction, "(no messages)", true);
+    return;
+  }
+
+  const interactionKey = interaction.id.toString();
+  const isDeferred = deferredInteractions.has(interactionKey);
+
+  // Send in batches of EMBEDS_PER_MESSAGE
+  for (let i = 0; i < embeds.length; i += EMBEDS_PER_MESSAGE) {
+    const batch = embeds.slice(i, i + EMBEDS_PER_MESSAGE);
+    if (i === 0) {
+      if (isDeferred) {
+        deferredInteractions.delete(interactionKey);
+        await bot.helpers.editOriginalInteractionResponse(interaction.token, { embeds: batch });
+      } else {
+        await bot.helpers.sendInteractionResponse(interaction.id, interaction.token, {
+          type: InteractionResponseTypes.ChannelMessageWithSource,
+          data: { embeds: batch, flags },
+        });
+      }
+    } else {
+      await bot.helpers.sendFollowupMessage(interaction.token, { embeds: batch, flags });
+    }
+  }
+}
+
 export async function respondWithModal(
   bot: Bot,
   interaction: Interaction,

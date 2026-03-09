@@ -42,7 +42,13 @@ Not everyone needs to respond to every message. Only respond as those who would 
     {% call send_as("assistant" if responders[msg.entity_id] else "user") -%}
       {{ msg.author }}: {{ parse_emojis(msg.content) }}
       {%- for embed in msg.embeds %}
-      <embed>{{ embed.toJSON() }}</embed>
+      {%- if embed.title or embed.description or embed.fields | length %}
+      [embed{% if embed.title %}: {{ embed.title }}{% endif %}]{% if embed.description %}
+      {{ embed.description }}{% endif %}
+      {%- for field in embed.fields %}
+      {{ field.name }}: {{ field.value }}
+      {%- endfor %}
+      {%- endif %}
       {%- if embed.image and embed.image.url %}
       {{ attach(embed.image.url, "image") }}
       {%- endif %}
