@@ -147,6 +147,8 @@ const ROLE_EMOJI: Record<string, string> = {
 
 /** Max top-level components per Discord message */
 const COMPONENTS_PER_MESSAGE = 40;
+/** Max total displayable text chars across all components per Discord message */
+const TEXT_PER_MESSAGE = 4000;
 
 /** Pattern to match HATT attachment markers in message content */
 const HATT_PATTERN = /<<<HATT:[a-f0-9]+\|([^|>]+)\|([^>]+)>>>/g;
@@ -164,14 +166,24 @@ export async function respondWithContext(
   // flags: 64 (ephemeral) | (1 << 15) (IS_COMPONENTS_V2)
   const flags = 64 | (1 << 15);
 
-  // textLen tracks displayable chars for batching; component is what gets sent to Discord.
-  type Item = { component: unknown };
+  // textLen is the displayable char count for batching purposes.
+  type Item = { component: unknown; textLen: number };
 
-  // Emit a text segment as a single TextDisplay, prepending the role label if needed.
+  // Emit a text segment as one or more TextDisplays (splitting at TEXT_PER_MESSAGE chars).
+  // The role label is prepended to the first chunk only.
   function pushText(dest: Item[], text: string, label: string, needsLabel: { value: boolean }) {
-    const content = needsLabel.value ? `${label}\n${text}` : text;
-    dest.push({ component: { type: MessageComponentTypes.TextDisplay, content } });
+    const firstOverhead = needsLabel.value ? label.length + 1 : 0;
+    const firstChunkSize = TEXT_PER_MESSAGE - firstOverhead;
+    // First chunk (may have label prefix)
+    const firstChunk = text.slice(0, firstChunkSize);
+    const firstContent = needsLabel.value ? `${label}\n${firstChunk}` : firstChunk;
+    dest.push({ component: { type: MessageComponentTypes.TextDisplay, content: firstContent }, textLen: firstContent.length });
     needsLabel.value = false;
+    // Remaining chunks (no label)
+    for (let offset = firstChunkSize; offset < text.length; offset += TEXT_PER_MESSAGE) {
+      const chunk = text.slice(offset, offset + TEXT_PER_MESSAGE);
+      dest.push({ component: { type: MessageComponentTypes.TextDisplay, content: chunk }, textLen: chunk.length });
+    }
   }
 
   const items: Item[] = [];
@@ -192,13 +204,14 @@ export async function respondWithContext(
       const url = match[1]!, mimeType = match[2]!;
       // Emit a label-only TextDisplay before the first attachment if no text preceded it
       if (needsLabel.value) {
-        items.push({ component: { type: MessageComponentTypes.TextDisplay, content: label } });
+        items.push({ component: { type: MessageComponentTypes.TextDisplay, content: label }, textLen: label.length });
         needsLabel.value = false;
       }
       if (mimeType.startsWith("image/")) {
-        items.push({ component: { type: MessageComponentTypes.MediaGallery, items: [{ media: { url } }] } });
+        items.push({ component: { type: MessageComponentTypes.MediaGallery, items: [{ media: { url } }] }, textLen: 0 });
       } else {
-        items.push({ component: { type: MessageComponentTypes.TextDisplay, content: `📎 ${url}` } });
+        const content = `📎 ${url}`;
+        items.push({ component: { type: MessageComponentTypes.TextDisplay, content }, textLen: content.length });
       }
       lastIndex = match.index + match[0].length;
     }
@@ -208,7 +221,8 @@ export async function respondWithContext(
     if (trailing) {
       pushText(items, trailing, label, needsLabel);
     } else if (needsLabel.value) {
-      items.push({ component: { type: MessageComponentTypes.TextDisplay, content: `${label}\n(empty)` } });
+      const content = `${label}\n(empty)`;
+      items.push({ component: { type: MessageComponentTypes.TextDisplay, content }, textLen: content.length });
     }
   }
 
@@ -220,11 +234,20 @@ export async function respondWithContext(
   const interactionKey = interaction.id.toString();
   const isDeferred = deferredInteractions.has(interactionKey);
 
-  // Batch items into Discord messages, up to COMPONENTS_PER_MESSAGE each.
+  // Batch items respecting both COMPONENTS_PER_MESSAGE and TEXT_PER_MESSAGE.
   const batches: unknown[][] = [];
-  for (let i = 0; i < items.length; i += COMPONENTS_PER_MESSAGE) {
-    batches.push(items.slice(i, i + COMPONENTS_PER_MESSAGE).map(it => it.component));
+  let currentBatch: unknown[] = [];
+  let currentText = 0;
+  for (const item of items) {
+    if (currentBatch.length > 0 && (currentBatch.length >= COMPONENTS_PER_MESSAGE || currentText + item.textLen > TEXT_PER_MESSAGE)) {
+      batches.push(currentBatch);
+      currentBatch = [];
+      currentText = 0;
+    }
+    currentBatch.push(item.component);
+    currentText += item.textLen;
   }
+  if (currentBatch.length > 0) batches.push(currentBatch);
 
   for (let i = 0; i < batches.length; i++) {
     const batch = batches[i];
