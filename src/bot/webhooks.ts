@@ -28,6 +28,12 @@ const THREAD_TYPES = new Set([
   10, // NEWS_THREAD (announcement thread)
 ]);
 
+// Channel types that don't support webhooks
+const NO_WEBHOOK_TYPES = new Set([
+  1, // DM
+  3, // GROUP_DM
+]);
+
 /**
  * Resolve a channel to its webhook-capable parent if it's a thread.
  * Returns { webhookChannelId, threadId } where threadId is set if original was a thread.
@@ -45,6 +51,10 @@ async function resolveWebhookChannel(
       isThread: channel ? THREAD_TYPES.has(channel.type) : false,
       channelKeys: channel ? Object.keys(channel) : null,
     });
+    if (channel && NO_WEBHOOK_TYPES.has(channel.type)) {
+      debug("Channel does not support webhooks (DM/Group DM)", { channelId, channelType: channel.type });
+      return null;
+    }
     if (channel && THREAD_TYPES.has(channel.type) && channel.parentId) {
       debug("Channel is thread, using parent", {
         threadId: channelId,
