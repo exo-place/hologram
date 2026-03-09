@@ -220,7 +220,7 @@ export async function respondWithContext(
         needsLabel.value = false;
       }
       if (mimeType.startsWith("image/")) {
-        items.push({ component: { type: MessageComponentTypes.MediaGallery, items: [{ media: { url }, description: mimeType }] }, textLen: 0 });
+        items.push({ component: { type: MessageComponentTypes.MediaGallery, items: [{ media: { url } }] }, textLen: 0 });
       } else {
         const content = `📎 ${url}`;
         items.push({ component: { type: MessageComponentTypes.TextDisplay, content }, textLen: content.length });
