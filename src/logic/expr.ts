@@ -877,6 +877,7 @@ const STRIP_SIGIL = "$strip";
 const THINKING_SIGIL = "$thinking";
 const COLLAPSE_SIGIL = "$collapse";
 const SAFETY_SIGIL = "$safety";
+const TICK_SIGIL = "$tick ";
 
 /** Memory retrieval scope */
 export type MemoryScope = "none" | "channel" | "guild" | "global";
@@ -1628,6 +1629,32 @@ function parseRetryDirective(content: string): number | null {
 }
 
 /**
+ * Parse a $tick directive.
+ * Returns null if not a tick directive, or the interval in ms.
+ *
+ * Supports:
+ *   $tick 30000   → 30000ms
+ *   $tick 30s     → 30000ms
+ *   $tick 5m      → 300000ms
+ *   $tick 1h      → 3600000ms
+ *   $tick 1d      → 86400000ms
+ */
+function parseTickDirective(content: string): number | null {
+  if (!content.startsWith(TICK_SIGIL)) {
+    return null;
+  }
+  const rest = content.slice(TICK_SIGIL.length).trim();
+  if (!rest) return null;
+  const match = rest.match(/^(\d+(?:\.\d+)?)(ms|s|m|h|d)?$/);
+  if (!match) return null;
+  const value = parseFloat(match[1]);
+  if (isNaN(value) || value <= 0) return null;
+  const unit = match[2] ?? "ms";
+  const multipliers: Record<string, number> = { ms: 1, s: 1000, m: 60000, h: 3600000, d: 86400000 };
+  return Math.round(value * multipliers[unit]);
+}
+
+/**
  * Parse a $avatar directive.
  * Returns null if not an avatar directive, or the URL.
  */
@@ -2091,6 +2118,20 @@ export interface EvaluatedFactsDefaults {
   shouldRespond?: boolean | null;
   thinkingLevel?: ThinkingLevel | null;
   collapseMessages?: CollapseRoles | null;
+}
+
+/**
+ * Extract the tick interval from a list of raw fact strings.
+ * Returns the interval in ms, or null if no $tick directive is present.
+ * First $tick wins (unconditional directives only).
+ */
+export function getTickInterval(facts: string[]): number | null {
+  for (const fact of facts) {
+    const trimmed = fact.trim();
+    const result = parseTickDirective(trimmed);
+    if (result !== null) return result;
+  }
+  return null;
 }
 
 export function evaluateFacts(

@@ -188,5 +188,16 @@ export function createTools(channelId?: string, guildId?: string) {
         return { success };
       },
     }),
+
+    skip_response: tool({
+      description: "Explicitly choose not to respond to this message. Use when the conversation doesn't require your input, you would just be adding noise, or when it's better to stay quiet.",
+      inputSchema: z.object({
+        reason: z.string().optional().describe("Optional reason for not responding"),
+      }),
+      execute: async ({ reason }) => {
+        debug("Tool: skip_response", { reason });
+        return { success: true };
+      },
+    }),
   };
 }

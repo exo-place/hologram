@@ -10,9 +10,9 @@ import { InferenceError } from "../ai/models";
 import type { EvaluatedEntity } from "../ai/context";
 import { isModelAllowed } from "../ai/models";
 import { retrieveRelevantMemories, type MemoryScope } from "../db/memories";
-import { resolveDiscordEntity, resolveDiscordEntities, isNewUser, markUserWelcomed, addMessage, updateMessageByDiscordId, mergeMessageData, deleteMessageByDiscordId, trackWebhookMessage, getWebhookMessageEntity, getMessages, getFilteredMessages, formatMessagesForContext, recordEvalError, isOurWebhookUserId, countUnreadMessages, getLastMessageSnowflake, getAllBoundChannelIds, type MessageData } from "../db/discord";
+import { resolveDiscordEntity, resolveDiscordEntities, isNewUser, markUserWelcomed, addMessage, updateMessageByDiscordId, mergeMessageData, deleteMessageByDiscordId, trackWebhookMessage, getWebhookMessageEntity, getMessages, getFilteredMessages, formatMessagesForContext, recordEvalError, isOurWebhookUserId, countUnreadMessages, getLastMessageSnowflake, getAllBoundChannelIds, getChannelScopedEntities, type MessageData } from "../db/discord";
 import { getEntity, getEntityWithFacts, getSystemEntity, getFactsForEntity, getEntityEvalDefaults, getEntityKeywords, getPermissionDefaults, type EntityWithFacts } from "../db/entities";
-import { evaluateFacts, createBaseContext, parsePermissionDirectives, isUserBlacklisted, isUserAllowed, compileContextExpr, ExprError } from "../logic/expr";
+import { evaluateFacts, getTickInterval, createBaseContext, parsePermissionDirectives, isUserBlacklisted, isUserAllowed, compileContextExpr, ExprError } from "../logic/expr";
 import { DEFAULT_CONTEXT_EXPR } from "../ai/context";
 import { executeWebhook, editWebhookMessage, setBot } from "./webhooks";
 import "./commands/commands"; // Register all commands
@@ -422,8 +422,15 @@ const MAX_RESPONSE_CHAIN = _maxResponseChainRaw === 0 ? 3 : _maxResponseChainRaw
 // Pending retry timers per channel:entity
 const retryTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
+// Periodic tick timers per channel:entity
+const tickTimers = new Map<string, ReturnType<typeof setInterval>>();
+const lastTickTime = new Map<string, number>();
 
 function retryKey(channelId: string, entityId: number): string {
+  return `${channelId}:${entityId}`;
+}
+
+function tickKey(channelId: string, entityId: number): string {
   return `${channelId}:${entityId}`;
 }
 
@@ -575,6 +582,9 @@ bot.events.ready = async (payload) => {
       warn("Startup catch-up encountered an error", { error: String(err) });
     });
   }
+
+  // Start $tick timers for entities with periodic check-in directives
+  initTickTimers();
 };
 
 bot.events.messageCreate = async (message) => {
@@ -1039,6 +1049,128 @@ async function processEntityRetry(
     systemTemplate: entity.system_template,
     exprContext: ctx,
   }]);
+}
+
+async function processEntityTick(
+  channelId: string,
+  guildId: string | undefined,
+  entityId: number,
+) {
+  const entity = getEntityWithFacts(entityId);
+  if (!entity) return;
+
+  const facts = entity.facts.map(f => f.content);
+  const lastResponse = lastResponseTime.get(channelId) ?? 0;
+  const now = Date.now();
+  const key = tickKey(channelId, entityId);
+  const lastTick = lastTickTime.get(key) ?? now;
+  const tickElapsed = now - lastTick;
+
+  const lastMsg = lastMessageTime.get(channelId) ?? 0;
+  const tickIdleMs = lastMsg > 0 ? now - lastMsg : Infinity;
+
+  const channelMeta = await getChannelMetadata(channelId);
+  const guildMeta = guildId
+    ? await getGuildMetadata(guildId)
+    : { id: "", name: "", description: "", nsfw_level: "default" };
+
+  const allChannelEntityIds = getChannelScopedEntities(channelId);
+  const allChannelEntities: EntityWithFacts[] = allChannelEntityIds
+    .map(id => getEntityWithFacts(id))
+    .filter((e): e is EntityWithFacts => e !== null);
+
+  const ctx = createBaseContext({
+    facts,
+    has_fact: (pattern: string) => {
+      const regex = new RegExp(pattern, "i");
+      return facts.some(f => regex.test(f));
+    },
+    messages: (n = 1, format?: string, filter?: string) =>
+      filter
+        ? formatMessagesForContext(getFilteredMessages(channelId, n, filter), format)
+        : formatMessagesForContext(getMessages(channelId, n), format),
+    response_ms: lastResponse > 0 ? now - lastResponse : Infinity,
+    retry_ms: tickElapsed,
+    idle_ms: tickIdleMs,
+    unread_count: countUnreadMessages(channelId, entity.id),
+    mentioned: false,
+    replied: false,
+    replied_to: "",
+    is_forward: false,
+    is_self: false,
+    is_hologram: false,
+    interaction_type: "",
+    name: entity.name,
+    chars: allChannelEntities.map(e => e.name),
+    channel: channelMeta,
+    server: guildMeta,
+    keywords: getEntityKeywords(entityId),
+  });
+
+  let result;
+  try {
+    result = evaluateFacts(facts, ctx, getEntityEvalDefaults(entityId));
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    warn("Fact evaluation failed during tick", { entity: entity.name, error: errorMsg });
+    return;
+  }
+
+  // $tick entities default to not responding — must explicitly opt in via $respond
+  const shouldRespond = result.shouldRespond ?? false;
+  if (!shouldRespond) {
+    debug("Entity not responding on tick", { entity: entity.name });
+    return;
+  }
+
+  const evaluated: EvaluatedEntity = {
+    id: entity.id,
+    name: entity.name,
+    facts: result.facts,
+    avatarUrl: result.avatarUrl,
+    streamMode: result.streamMode,
+    streamDelimiter: result.streamDelimiter,
+    memoryScope: result.memoryScope,
+    contextExpr: result.contextExpr,
+    isFreeform: result.isFreeform,
+    modelSpec: result.modelSpec,
+    stripPatterns: result.stripPatterns,
+    thinkingLevel: result.thinkingLevel,
+    collapseMessages: result.collapseMessages,
+    contentFilters: result.contentFilters,
+    template: entity.template,
+    systemTemplate: entity.system_template,
+    exprContext: ctx,
+  };
+
+  await sendResponse(channelId, guildId, "", "", false, [evaluated]);
+}
+
+function initTickTimers() {
+  const channelIds = getAllBoundChannelIds();
+  for (const channelId of channelIds) {
+    const entityIds = getChannelScopedEntities(channelId);
+    for (const entityId of entityIds) {
+      const entity = getEntityWithFacts(entityId);
+      if (!entity) continue;
+      const facts = entity.facts.map(f => f.content);
+      const tickMs = getTickInterval(facts);
+      if (tickMs === null || tickMs <= 0) continue;
+
+      const key = tickKey(channelId, entityId);
+      if (tickTimers.has(key)) continue;
+
+      debug("Starting tick timer", { entity: entity.name, channelId, tickMs });
+      lastTickTime.set(key, Date.now());
+      const timer = setInterval(() => {
+        lastTickTime.set(key, Date.now());
+        processEntityTick(channelId, undefined, entityId).catch(err => {
+          error("Unhandled error in entity tick", err, { entityId, channelId });
+        });
+      }, tickMs);
+      tickTimers.set(key, timer);
+    }
+  }
 }
 
 /** Helper to send a message (webhook or regular) and immediately track it */

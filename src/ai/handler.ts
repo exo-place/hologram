@@ -70,6 +70,7 @@ export async function handleMessage(ctx: MessageContext): Promise<ResponseResult
   let memoriesSaved = 0;
   let memoriesUpdated = 0;
   let memoriesRemoved = 0;
+  let skipResponse = false;
 
   const modelSpec = evaluated[0]?.modelSpec ?? DEFAULT_MODEL;
   const { providerName, modelName } = parseModelSpec(modelSpec);
@@ -108,6 +109,7 @@ export async function handleMessage(ctx: MessageContext): Promise<ResponseResult
           if (call.toolName === "save_memory") memoriesSaved++;
           if (call.toolName === "update_memory") memoriesUpdated++;
           if (call.toolName === "remove_memory") memoriesRemoved++;
+          if (call.toolName === "skip_response") skipResponse = true;
         }
       },
     };
@@ -144,6 +146,12 @@ export async function handleMessage(ctx: MessageContext): Promise<ResponseResult
     const generatedFiles: GeneratedFile[] = (result.files ?? [])
       .filter(f => f.mediaType.startsWith("image/"))
       .map(f => ({ data: f.uint8Array, mediaType: f.mediaType }));
+
+    // Check if LLM called skip_response tool
+    if (skipResponse) {
+      debug("LLM called skip_response - no response");
+      return null;
+    }
 
     // Check for <none/> or "none" sentinel (LLM decided none should respond)
     const trimmedText = result.text.trim().toLowerCase();
