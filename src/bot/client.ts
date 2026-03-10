@@ -422,15 +422,13 @@ const MAX_RESPONSE_CHAIN = _maxResponseChainRaw === 0 ? 3 : _maxResponseChainRaw
 // Pending retry timers per channel:entity
 const retryTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-// Periodic tick timers per channel:entity
-const tickTimers = new Map<string, ReturnType<typeof setInterval>>();
-const lastTickTime = new Map<string, number>();
+// Periodic tick timers per entity (one timer, round-robins across bound channels)
+const tickTimers = new Map<number, ReturnType<typeof setInterval>>();
+const tickChannels = new Map<number, string[]>();
+const tickChannelIndex = new Map<number, number>();
+const lastTickTime = new Map<number, number>();
 
 function retryKey(channelId: string, entityId: number): string {
-  return `${channelId}:${entityId}`;
-}
-
-function tickKey(channelId: string, entityId: number): string {
   return `${channelId}:${entityId}`;
 }
 
@@ -1062,8 +1060,7 @@ async function processEntityTick(
   const facts = entity.facts.map(f => f.content);
   const lastResponse = lastResponseTime.get(channelId) ?? 0;
   const now = Date.now();
-  const key = tickKey(channelId, entityId);
-  const lastTick = lastTickTime.get(key) ?? now;
+  const lastTick = lastTickTime.get(entityId) ?? now;
   const tickElapsed = now - lastTick;
 
   const lastMsg = lastMessageTime.get(channelId) ?? 0;
@@ -1147,29 +1144,41 @@ async function processEntityTick(
 }
 
 function initTickTimers() {
-  const channelIds = getAllBoundChannelIds();
-  for (const channelId of channelIds) {
-    const entityIds = getChannelScopedEntities(channelId);
-    for (const entityId of entityIds) {
-      const entity = getEntityWithFacts(entityId);
-      if (!entity) continue;
-      const facts = entity.facts.map(f => f.content);
-      const tickMs = getTickInterval(facts);
-      if (tickMs === null || tickMs <= 0) continue;
-
-      const key = tickKey(channelId, entityId);
-      if (tickTimers.has(key)) continue;
-
-      debug("Starting tick timer", { entity: entity.name, channelId, tickMs });
-      lastTickTime.set(key, Date.now());
-      const timer = setInterval(() => {
-        lastTickTime.set(key, Date.now());
-        processEntityTick(channelId, undefined, entityId).catch(err => {
-          error("Unhandled error in entity tick", err, { entityId, channelId });
-        });
-      }, tickMs);
-      tickTimers.set(key, timer);
+  // Group channels by entity — one timer per entity, round-robins across channels
+  const entityChannels = new Map<number, string[]>();
+  for (const channelId of getAllBoundChannelIds()) {
+    for (const entityId of getChannelScopedEntities(channelId)) {
+      const list = entityChannels.get(entityId) ?? [];
+      list.push(channelId);
+      entityChannels.set(entityId, list);
     }
+  }
+
+  for (const [entityId, channels] of entityChannels) {
+    if (tickTimers.has(entityId)) continue;
+    const entity = getEntityWithFacts(entityId);
+    if (!entity) continue;
+    const facts = entity.facts.map(f => f.content);
+    const tickMs = getTickInterval(facts);
+    if (tickMs === null || tickMs <= 0) continue;
+
+    debug("Starting tick timer", { entity: entity.name, channels, tickMs });
+    tickChannels.set(entityId, channels);
+    tickChannelIndex.set(entityId, 0);
+    lastTickTime.set(entityId, Date.now());
+
+    const timer = setInterval(() => {
+      const chans = tickChannels.get(entityId) ?? [];
+      if (chans.length === 0) return;
+      const idx = tickChannelIndex.get(entityId) ?? 0;
+      const channelId = chans[idx % chans.length];
+      tickChannelIndex.set(entityId, idx + 1);
+      lastTickTime.set(entityId, Date.now());
+      processEntityTick(channelId, undefined, entityId).catch(err => {
+        error("Unhandled error in entity tick", err, { entityId, channelId });
+      });
+    }, tickMs);
+    tickTimers.set(entityId, timer);
   }
 }
 
