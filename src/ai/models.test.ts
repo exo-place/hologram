@@ -173,12 +173,22 @@ describe("buildThinkingOptions", () => {
   });
 
   // --- Google (gemini-3+) uses thinkingLevel string ---
-  test("google gemini-3: minimal → undefined (not supported)", () => {
-    expect(buildThinkingOptions("google", "gemini-3-flash-preview", "minimal")).toBeUndefined();
+  test("google gemini-3 flash: minimal → thinkingLevel minimal", () => {
+    const result = buildThinkingOptions("google", "gemini-3-flash-preview", "minimal");
+    expect(result?.google).toEqual({ thinkingConfig: { thinkingLevel: "minimal" } });
   });
 
-  test("google gemini-3: null level → undefined (defaults to minimal, not supported)", () => {
-    expect(buildThinkingOptions("google", "gemini-3-flash-preview", null)).toBeUndefined();
+  test("google gemini-3 flash: null level → thinkingLevel minimal", () => {
+    const result = buildThinkingOptions("google", "gemini-3-flash-preview", null);
+    expect(result?.google).toEqual({ thinkingConfig: { thinkingLevel: "minimal" } });
+  });
+
+  test("google gemini-3 pro: minimal → undefined (not supported by pro)", () => {
+    expect(buildThinkingOptions("google", "gemini-3.1-pro-preview", "minimal")).toBeUndefined();
+  });
+
+  test("google gemini-3 pro: null level → undefined (defaults to minimal, not supported by pro)", () => {
+    expect(buildThinkingOptions("google", "gemini-3.1-pro-preview", null)).toBeUndefined();
   });
 
   test("google gemini-3: high → thinkingLevel high", () => {

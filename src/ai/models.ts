@@ -221,8 +221,10 @@ export function buildThinkingOptions(
       if (isGemini25) {
         return { [optionKey]: { thinkingConfig: { thinkingBudget: GEMINI_25_BUDGET_MAP[level] } } };
       }
-      // Gemini 3+ doesn't support "minimal" — omit thinkingConfig to use model default
-      if (level === "minimal") return undefined;
+      // Gemini 3+ Pro doesn't support "minimal" — omit thinkingConfig to use model default
+      // Flash models do support "minimal", so only skip for pro variants
+      const isGemini3Pro = !isGemini25 && modelName.includes("pro");
+      if (isGemini3Pro && level === "minimal") return undefined;
       return { [optionKey]: { thinkingConfig: { thinkingLevel: level } } };
     }
     case "anthropic": {
