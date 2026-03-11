@@ -218,10 +218,12 @@ export function buildThinkingOptions(
       const optionKey = providerName === "google-vertex" ? "vertex" : "google";
       // Gemini 2.5 uses thinkingBudget (token count), Gemini 3+ uses thinkingLevel (string)
       const isGemini25 = modelName.startsWith("gemini-2.5");
-      const thinkingConfig = isGemini25
-        ? { thinkingBudget: GEMINI_25_BUDGET_MAP[level] }
-        : { thinkingLevel: level };
-      return { [optionKey]: { thinkingConfig } };
+      if (isGemini25) {
+        return { [optionKey]: { thinkingConfig: { thinkingBudget: GEMINI_25_BUDGET_MAP[level] } } };
+      }
+      // Gemini 3+ doesn't support "minimal" — omit thinkingConfig to use model default
+      if (level === "minimal") return undefined;
+      return { [optionKey]: { thinkingConfig: { thinkingLevel: level } } };
     }
     case "anthropic": {
       // Anthropic thinking is off by default; "minimal" = don't enable

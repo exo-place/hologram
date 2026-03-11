@@ -173,19 +173,17 @@ describe("buildThinkingOptions", () => {
   });
 
   // --- Google (gemini-3+) uses thinkingLevel string ---
-  test("google gemini-3: minimal → thinkingLevel minimal", () => {
-    const result = buildThinkingOptions("google", "gemini-3-flash-preview", "minimal");
-    expect(result?.google).toEqual({ thinkingConfig: { thinkingLevel: "minimal" } });
+  test("google gemini-3: minimal → undefined (not supported)", () => {
+    expect(buildThinkingOptions("google", "gemini-3-flash-preview", "minimal")).toBeUndefined();
+  });
+
+  test("google gemini-3: null level → undefined (defaults to minimal, not supported)", () => {
+    expect(buildThinkingOptions("google", "gemini-3-flash-preview", null)).toBeUndefined();
   });
 
   test("google gemini-3: high → thinkingLevel high", () => {
     const result = buildThinkingOptions("google", "gemini-3-flash-preview", "high");
     expect(result?.google).toEqual({ thinkingConfig: { thinkingLevel: "high" } });
-  });
-
-  test("google: null level defaults to minimal", () => {
-    const result = buildThinkingOptions("google", "gemini-3-flash-preview", null);
-    expect(result?.google).toEqual({ thinkingConfig: { thinkingLevel: "minimal" } });
   });
 
   // --- google-vertex uses vertex key ---
