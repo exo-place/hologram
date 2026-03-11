@@ -183,12 +183,14 @@ describe("buildThinkingOptions", () => {
     expect(result?.google).toEqual({ thinkingConfig: { thinkingLevel: "minimal" } });
   });
 
-  test("google gemini-3 pro: minimal → undefined (not supported by pro)", () => {
-    expect(buildThinkingOptions("google", "gemini-3.1-pro-preview", "minimal")).toBeUndefined();
+  test("google gemini-3.1 pro: minimal → falls back to low", () => {
+    const result = buildThinkingOptions("google", "gemini-3.1-pro-preview", "minimal");
+    expect(result?.google).toEqual({ thinkingConfig: { thinkingLevel: "low" } });
   });
 
-  test("google gemini-3 pro: null level → undefined (defaults to minimal, not supported by pro)", () => {
-    expect(buildThinkingOptions("google", "gemini-3.1-pro-preview", null)).toBeUndefined();
+  test("google gemini-3.1 pro: null level → falls back to low", () => {
+    const result = buildThinkingOptions("google", "gemini-3.1-pro-preview", null);
+    expect(result?.google).toEqual({ thinkingConfig: { thinkingLevel: "low" } });
   });
 
   test("google gemini-3: high → thinkingLevel high", () => {
