@@ -4,17 +4,26 @@ Pure logic layer with no database or Discord dependencies. Contains the `$if` ex
 
 ## Key Files
 
-- `expr.ts` — The core fact evaluation engine.
-  - `createBaseContext()` builds the `ExprContext` passed to both `$if` expressions and Nunjucks templates (channel/guild/user IDs, timing values, `self.*` parsed facts, `has_fact()`, `random()`, `roll()`, `time`, `is_hologram`, etc.). Adding a variable here makes it available everywhere automatically.
+- `expr.ts` — Public API and core directive evaluation engine. Re-exports everything from `expr-compiler.ts` and `expr-context.ts` for backward compatibility.
   - `evaluateFacts()` processes a raw fact list through `parseFact()` → `$if` evaluation → directive extraction (`$respond`, `$model`, `$stream`, `$avatar`, `$memory`, `$context`, `$thinking`, `$collapse`, `$safety`, `$locked`, `$strip`, `$freeform`). Returns `EvaluatedFacts` with the clean fact list and resolved directive values.
   - `parseFact()` classifies a single raw fact line (plain, conditional, directive).
-  - `evalExpr()` runs a boolean JavaScript expression in a restricted sandbox (blocked `Function`, `eval`, `process`, prototype access).
-  - `compileContextExpr()` compiles a `$context` expression (e.g. `chars < 16000`) into a predicate applied to message history filtering.
   - `parsePermissionDirectives()`, `isUserAllowed()`, `isUserBlacklisted()`, `matchesUserEntry()` — permission checking helpers shared by commands and client.
-  - `checkKeywordMatch(keywords, content)` — tests a message against a keyword list (plain substring or `/regex/flags`). Used for trigger keyword config.
   - Exports all directive types: `ThinkingLevel`, `CollapseRoles`, `ContentFilter`, `SafetyCategory`, `SafetyThreshold`, `MemoryScope`, `EvaluatedFacts`, `ExprContext`.
 
-- `safe-regex.ts` — `validateRegexPattern()`: a single-pass recursive descent parser that rejects ReDoS-dangerous patterns before they reach `RegExp`. Key invariant: no quantifier may be applied to a sub-expression that itself contains a quantifier. Used by `expr.ts` to validate patterns in `has_fact()` and `checkKeywordMatch()` calls authored by entity owners.
+- `expr-compiler.ts` — Tokenizer, Parser, code generator, and compiled expression caches.
+  - `ExprError` — expression evaluation error class.
+  - `compileExpr()` / `evalExpr()` — compile and evaluate boolean `$if` expressions in a restricted sandbox.
+  - `compileTemplateExpr()` — compile template expressions (returns raw value, supports extra loop variables).
+  - `evalMacroValue()` / `evalRaw()` — evaluate macro `{{expr}}` expansions.
+  - `Tokenizer` / `Parser` — exported for use by `parseCondition()` in expr.ts.
+
+- `expr-context.ts` — Context factory and runtime utilities.
+  - `createBaseContext()` builds the `ExprContext` passed to both `$if` expressions and Nunjucks templates (channel/guild/user IDs, timing values, `self.*` parsed facts, `has_fact()`, `random()`, `roll()`, `time`, `is_hologram`, etc.). Adding a variable here makes it available everywhere automatically.
+  - `parseSelfContext()` — parses `key: value` facts into the `self.*` object.
+  - `checkKeywordMatch(keywords, content)` — tests a message against a keyword list (plain substring or `/regex/flags`). Used for trigger keyword config.
+  - `rollDice()`, `formatDuration()`, `parseOffset()` — runtime utility functions used in `createBaseContext()`.
+
+- `safe-regex.ts` — `validateRegexPattern()`: a single-pass recursive descent parser that rejects ReDoS-dangerous patterns before they reach `RegExp`. Key invariant: no quantifier may be applied to a sub-expression that itself contains a quantifier. Used by `expr-compiler.ts` to validate patterns in `has_fact()` and `checkKeywordMatch()` calls authored by entity owners.
 
 ## Notes
 

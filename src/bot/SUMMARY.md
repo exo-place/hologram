@@ -5,6 +5,7 @@ Discord interface layer. Owns the Discordeno bot instance, message ingestion pip
 ## Key Files
 
 - `client.ts` — Creates and configures the Discordeno bot. Handles `MESSAGE_CREATE` and `MESSAGE_UPDATE` events: resolves bound entities, evaluates facts, decides whether to respond, calls `handleMessage` or `handleMessageStreaming`, and sends the result via `sendResponse`. Also manages startup catch-up (backfilling missed messages), response-chain depth limiting, self-message filtering, and user onboarding DMs. Exports the `bot` instance (used as the canonical `Bot` type via `typeof bot`).
+- `client-serialization.ts` — Pure serialization utilities extracted from `client.ts`: `buildMsgDataAndContent`, `channelTypeString`, `guildNsfwLevelString`, `serializeComponents`, `serializeEmbed`, `serializeDiscordEmbed`. Also exports the `BotMessage` type (element type of `bot.helpers.getMessages` return).
 - `webhooks.ts` — Webhook creation, caching, and message delivery. `executeWebhook` posts entity responses as webhook messages (with custom avatar and name). Handles thread channel resolution (threads must use the parent channel's webhook with a `thread_id` parameter). `editWebhookMessage` updates existing messages. `setBot` avoids circular imports by receiving the bot reference at startup.
 - `commands/` — Slash command definitions and interaction routing (see `commands/SUMMARY.md`).
 
