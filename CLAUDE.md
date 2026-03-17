@@ -261,12 +261,12 @@ error("Message", err, { key: "value" });
   - Days elapsed since `meta.date` ≥ 7
   - Update format: `{ commit, date (YYYY-MM-DD), lines (%), functions (%), tests (count) }`
 
-**Conversation is not memory.** Anything said in chat evaporates at session end. If it implies future behavior change, write it to CLAUDE.md or a memory file immediately — or it will not happen.
+**Conversation is not memory.** Anything said in chat evaporates at session end. If it implies future behavior change, write it to CLAUDE.md immediately — or it will not happen.
 
 **Warning — these phrases mean something needs to be written down right now:**
 - "I won't do X again" / "I'll remember to..." / "I've learned that..."
 - "Next time I'll..." / "From now on I'll..."
-- Any acknowledgement of a recurring error without a corresponding CLAUDE.md or memory edit
+- Any acknowledgement of a recurring error without a corresponding CLAUDE.md edit
 
 **When the user corrects you:** Ask what rule would have prevented this, and write it before proceeding. **"The rule exists, I just didn't follow it" is never the diagnosis** — a rule that doesn't prevent the failure it describes is incomplete; fix the rule, not your behavior.
 
@@ -275,6 +275,7 @@ error("Message", err, { key: "value" });
 ## Negative Constraints
 
 Do not:
+- Use Claude Code's auto-memory system (`~/.claude/projects/.*./memory/`) — it is unversioned, invisible to the user, and can't be diffed or backed up. Write behavioral changes directly to CLAUDE.md instead
 - Announce actions ("I will now...") - just do them
 - Use interactive git commands (`git add -p`, `git add -i`, `git rebase -i`) — these block on stdin and hang in non-interactive shells; stage files by name instead
 - Use `--no-verify` - fix the issue or fix the hook
@@ -304,7 +305,7 @@ Use plan mode as a handoff mechanism when:
 
 **For mid-session planning** on a different topic: investigating inside plan mode is fine — context isn't being thrown away.
 
-**TODO.md is the lossless record. Memory files are lossy.** Flush any new items to TODO.md before the handoff. Memory files only need updating if there is genuinely new user/workflow/feedback information that isn't in TODO.md.
+**TODO.md is the lossless record.** Flush any new items to TODO.md before the handoff. Anything worth preserving belongs in CLAUDE.md or TODO.md — not in memory files.
 
 ## Commits
 
