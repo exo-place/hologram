@@ -72,8 +72,9 @@ function deleteChannel(id: string): boolean {
 }
 
 // ── SSE channel map ─────────────────────────────────────────────────────────
-// Maps channelId → set of SSE response controllers (one per open client)
-const sseClients = new Map<string, Set<ReadableStreamDefaultController>>();
+// Maps channelId → set of SSE response controllers (one per open client).
+// Exported so other route modules (discord-channels) can share the same map.
+export const sseClients = new Map<string, Set<ReadableStreamDefaultController>>();
 
 /** Push a raw SSE line to all listeners of a channel */
 export function broadcastSSE(channelId: string, event: unknown): void {
