@@ -7,7 +7,7 @@
 
 .debug-panel__header {
   padding: 20px 24px 12px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--glass-border);
 }
 
 .debug-panel__title {
@@ -36,7 +36,7 @@
 }
 
 .debug-panel__condition {
-  background: var(--surface);
+  background: var(--glass-bg);
   padding: 4px 8px;
   border-radius: 4px;
   display: block;

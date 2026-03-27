@@ -8,7 +8,11 @@
 .chat__sidebar {
   width: 220px;
   flex-shrink: 0;
-  border-right: 1px solid var(--border);
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-right: 1px solid var(--glass-border);
+  border-right-color: var(--glass-border-dark);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -16,7 +20,7 @@
 
 .chat__sidebar-header {
   padding: 12px 14px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--glass-border);
   align-items: center;
 }
 
@@ -34,10 +38,10 @@
   gap: 6px;
   padding: 8px 14px;
   cursor: pointer;
-  transition: background 0.1s;
+  transition: background var(--transition);
 }
-.chat__channel-item:hover { background: var(--surface--hover); }
-.chat__channel-item--active { background: var(--surface--active, var(--surface--hover)); font-weight: 600; }
+.chat__channel-item:hover { background: var(--glass-hover); }
+.chat__channel-item--active { background: var(--glass-hover); font-weight: 600; }
 
 .chat__channel-name {
   flex: 1;
@@ -89,7 +93,7 @@
   display: flex;
   gap: 10px;
   padding: 12px 16px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--glass-border);
   align-items: flex-end;
 }
 
@@ -102,7 +106,7 @@
 .chat__entity-picker {
   max-height: 200px;
   overflow-y: auto;
-  border: 1px solid var(--border);
+  border: 1px solid var(--glass-border);
   border-radius: 4px;
   padding: 8px;
   display: flex;
@@ -129,8 +133,14 @@
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: var(--glass-bg);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--glass-border);
+  border-top-color: var(--glass-border-light);
+  border-left-color: var(--glass-border-light);
+  border-bottom-color: var(--glass-border-dark);
+  border-right-color: var(--glass-border-dark);
   border-radius: 6px;
   align-self: flex-start;
   max-width: 200px;

@@ -1,6 +1,10 @@
 .monaco-editor-container {
   width: 100%;
-  border: 1px solid var(--border);
+  border: 1px solid var(--glass-border);
+  border-top-color: var(--glass-border-light);
+  border-left-color: var(--glass-border-light);
+  border-bottom-color: var(--glass-border-dark);
+  border-right-color: var(--glass-border-dark);
   border-radius: var(--radius);
   overflow: hidden;
 }

@@ -19,13 +19,13 @@
   padding: 8px 12px;
   border-radius: var(--radius);
   border: 1px solid transparent;
-  transition: background 0.1s;
+  transition: background var(--transition);
 }
-.fact-editor__item:hover { background: var(--surface--hover); }
+.fact-editor__item:hover { background: var(--glass-hover); }
 
 .fact-editor__item--editing {
-  background: var(--surface);
-  border-color: var(--border);
+  background: var(--glass-bg);
+  border-color: var(--glass-border);
   flex-direction: column;
   align-items: stretch;
   padding: 12px;

@@ -9,7 +9,7 @@
   padding: 20px 24px 12px;
   gap: 12px;
   align-items: baseline;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--glass-border);
 }
 
 .entity-detail__back { text-decoration: none; }
@@ -26,10 +26,10 @@
   font-weight: 700;
   background: transparent;
   border: none;
-  border-bottom: 2px solid var(--accent);
+  border-bottom: 2px solid var(--primary);
   border-radius: 0;
   padding: 2px 0;
-  color: var(--text);
+  color: var(--fg);
   width: auto;
   outline: none;
   font-family: inherit;
