@@ -1,4 +1,4 @@
-import { For, Show } from "solid-js";
+import { For, Show, createMemo } from "solid-js";
 import type { ApiMessage } from "../api/client";
 import "./ChatMessage.css";
 
@@ -296,20 +296,22 @@ export default function ChatMessage(props: Props) {
   const content = () => (props.isStreaming ? props.streamContent ?? "" : props.message.content);
   const isUser = () => props.message.author_id === "web-user";
 
-  const data = (): MessageData | null => {
+  const data = createMemo((): MessageData | null => {
     const raw = props.message.data;
     if (!raw) return null;
     try { return JSON.parse(raw) as MessageData; }
     catch { return null; }
-  };
+  });
 
-  const visibleAttachments = () =>
+  const visibleAttachments = createMemo(() =>
     (data()?.attachments ?? []).filter(
       (a) => !(a.url === "" && a.filename === "unknown")
-    );
+    )
+  );
 
-  const visibleEmbeds = () =>
-    (data()?.embeds ?? []).filter((e) => !isEmbedEmpty(e));
+  const visibleEmbeds = createMemo(() =>
+    (data()?.embeds ?? []).filter((e) => !isEmbedEmpty(e))
+  );
 
   return (
     <div class={`chat-message${isUser() ? " chat-message--user" : " chat-message--bot"}`}>
