@@ -8,6 +8,8 @@
  * GET    /api/channels/:id/messages -- message history
  * POST   /api/channels/:id/messages -- send message (stores + triggers AI response)
  * GET    /api/channels/:id/stream   -- SSE stream for the channel
+ * POST   /api/channels/:id/forget   -- exclude history before now from AI context
+ * POST   /api/channels/:id/trigger  -- fire entity responses without a user message
  *
  * Web channel IDs use the format "web:<uuid>" — they coexist with Discord channel
  * IDs in the messages table without collision.
@@ -15,7 +17,7 @@
 
 import { randomUUID } from "crypto";
 import { getDb } from "../../db/index";
-import { addMessage, getMessages } from "../../db/discord";
+import { addMessage, getMessages, setChannelForgetTime } from "../../db/discord";
 import { safeParseFallback } from "../../db/entities";
 import { ok, err, parseBody, type RouteHandler } from "../helpers";
 import { info, warn } from "../../logger";
@@ -168,6 +170,27 @@ export const chatRoutes: RouteHandler = async (req, url) => {
     }).catch((e: unknown) => warn("Web chat adapter import failed", { error: String(e) }));
 
     return ok({ message, ai_response: null }, 201);
+  }
+
+  // POST /api/channels/:id/forget  — exclude history before now from context
+  if (sub === "/forget" && method === "POST") {
+    const channel = getChannel(channelId);
+    if (!channel) return err("Not found", 404);
+    const forgetAt = setChannelForgetTime(channelId);
+    broadcastSSE(channelId, { type: "forget", forget_at: forgetAt });
+    info("Web channel forget set", { channelId, forgetAt });
+    return ok({ forget_at: forgetAt });
+  }
+
+  // POST /api/channels/:id/trigger  — fire entity responses without a user message
+  if (sub === "/trigger" && method === "POST") {
+    const channel = getChannel(channelId);
+    if (!channel) return err("Not found", 404);
+    import("../chat-adapter").then(({ handleWebMessage }) => {
+      handleWebMessage(channelId, channel.entity_ids, "system", "System", "")
+        .catch((e: unknown) => warn("Web chat trigger error", { channelId, error: String(e) }));
+    }).catch((e: unknown) => warn("Web chat adapter import failed", { error: String(e) }));
+    return ok({ triggered: true }, 202);
   }
 
   // GET /api/channels/:id/stream  — SSE
