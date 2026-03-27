@@ -1,4 +1,5 @@
 import { For, Show, createMemo } from "solid-js";
+import { A } from "@solidjs/router";
 import type { ApiMessage } from "../api/client";
 import "./ChatMessage.css";
 
@@ -316,7 +317,12 @@ export default function ChatMessage(props: Props) {
   return (
     <div class={`chat-message${isUser() ? " chat-message--user" : " chat-message--bot"}`}>
       <div class="chat-message__header row">
-        <span class="chat-message__author small">{props.message.author_name}</span>
+        {(() => {
+          const match = props.message.author_id.match(/^entity:(\d+)$/);
+          return match
+            ? <A href={`/entities/${match[1]}`} class="chat-message__author chat-message__author--link small">{props.message.author_name}</A>
+            : <span class="chat-message__author small">{props.message.author_name}</span>;
+        })()}
         <Show when={props.isStreaming}>
           <span class="chat-message__streaming dim small">…</span>
         </Show>

@@ -33,6 +33,15 @@
   color: rgba(255, 255, 255, 0.8);
 }
 
+.chat-message__author--link {
+  text-decoration: none;
+  color: inherit;
+}
+
+.chat-message__author--link:hover {
+  text-decoration: underline;
+}
+
 .chat-message__streaming {
   animation: blink 1s step-end infinite;
 }
