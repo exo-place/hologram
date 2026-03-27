@@ -15,6 +15,7 @@ import { getEntity, getEntityWithFacts, getSystemEntity, getFactsForEntity, getE
 import { evaluateFacts, getTickInterval, createBaseContext, parsePermissionDirectives, isUserBlacklisted, isUserAllowed, compileContextExpr, ExprError } from "../logic/expr";
 import { DEFAULT_CONTEXT_EXPR } from "../ai/context";
 import { executeWebhook, editWebhookMessage, setBot } from "./webhooks";
+import { broadcastSSE } from "../api/routes/chat";
 import "./commands/commands"; // Register /create, /view, /delete, /transfer, /bind, /unbind, /config, /trigger, /forget
 import "./commands/cmd-edit";   // Register /edit command + modals
 import "./commands/cmd-debug";  // Register /debug command
@@ -540,7 +541,8 @@ bot.events.messageCreate = async (message) => {
   });
 
   // Store message in history (before response decision so context builds up)
-  addMessage(channelId, authorId, authorName, content, message.id.toString(), msgData);
+  const stored = addMessage(channelId, authorId, authorName, content, message.id.toString(), msgData);
+  if (stored) broadcastSSE(channelId, { type: "message", message: stored });
 
   // Get ALL channel entities (supports multiple characters)
   const channelEntityIds = resolveDiscordEntities(channelId, "channel", guildId, channelId);
@@ -1065,7 +1067,8 @@ async function sendStreamMessage(
         content: `**${entity.name}:** ${content}`,
       });
       // Bot messages skip messageCreate, store in history manually
-      addMessage(channelId, sent.author.id.toString(), entity.name, content, sent.id.toString());
+      const storedStream = addMessage(channelId, sent.author.id.toString(), entity.name, content, sent.id.toString());
+      if (storedStream) broadcastSSE(channelId, { type: "message", message: storedStream });
       return sent.id.toString();
     } catch (err) {
       error("Failed to send stream message", err);
@@ -1077,7 +1080,8 @@ async function sendStreamMessage(
       const sent = await bot.helpers.sendMessage(BigInt(channelId), { content });
       // Bot messages skip messageCreate, store in history manually
       const authorName = sent.author.globalName ?? sent.author.username;
-      addMessage(channelId, sent.author.id.toString(), authorName, content, sent.id.toString());
+      const storedStreamMsg = addMessage(channelId, sent.author.id.toString(), authorName, content, sent.id.toString());
+      if (storedStreamMsg) broadcastSSE(channelId, { type: "message", message: storedStreamMsg });
       return sent.id.toString();
     } catch (err) {
       error("Failed to send stream message", err);
@@ -1647,7 +1651,8 @@ async function sendRegularMessage(channelId: string, content: string): Promise<v
     // Bot messages skip messageCreate (filtered by botUserId check),
     // so store in history manually for LLM context
     const authorName = sent.author.globalName ?? sent.author.username;
-    addMessage(channelId, sent.author.id.toString(), authorName, content, sent.id.toString());
+    const storedMsg = addMessage(channelId, sent.author.id.toString(), authorName, content, sent.id.toString());
+    if (storedMsg) broadcastSSE(channelId, { type: "message", message: storedMsg });
   } catch (err) {
     error("Failed to send message", err);
   }
@@ -1669,7 +1674,8 @@ async function sendFallbackMessage(channelId: string, name: string, content: str
     trackBotMessage(sent.id);
     // Bot messages skip messageCreate (filtered by botUserId check),
     // so store in history manually for LLM context
-    addMessage(channelId, sent.author.id.toString(), name, content, sent.id.toString());
+    const storedFallback = addMessage(channelId, sent.author.id.toString(), name, content, sent.id.toString());
+    if (storedFallback) broadcastSSE(channelId, { type: "message", message: storedFallback });
   } catch (err) {
     error("Failed to send fallback message", err);
   }
