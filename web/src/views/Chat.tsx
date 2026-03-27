@@ -27,7 +27,7 @@ export default function Chat() {
   const [newName, setNewName] = createSignal("");
   const [creating, setCreating] = createSignal(false);
   const [createError, setCreateError] = createSignal<string | null>(null);
-  const [allEntities, setAllEntities] = createSignal<{ id: number; name: string }[]>([]);
+  const [allEntities] = createResource(() => entities.list({ limit: 200 }));
   const [selectedEntityIds, setSelectedEntityIds] = createSignal<number[]>([]);
 
   let messagesEndRef!: HTMLDivElement;
@@ -129,17 +129,11 @@ export default function Chat() {
     }
   }
 
-  async function openCreate() {
+  function openCreate() {
     setShowCreate(true);
     setNewName("");
     setSelectedEntityIds([]);
     setCreateError(null);
-    try {
-      const list = await entities.list({ limit: 200 });
-      setAllEntities(list.map((e) => ({ id: e.id, name: e.name })));
-    } catch {
-      // non-fatal
-    }
   }
 
   function toggleEntity(id: number) {
@@ -286,6 +280,9 @@ export default function Chat() {
             />
             <p class="small" style="margin:8px 0 4px;font-weight:600">Entities</p>
             <div class="chat__entity-picker">
+              <Show when={allEntities.loading}>
+                <p class="dim small">Loading…</p>
+              </Show>
               <For each={allEntities()}>
                 {(e) => (
                   <label class="chat__entity-option">

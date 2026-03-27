@@ -8,17 +8,14 @@
  * AI responses are delivered to connected SSE clients via broadcastSSE().
  */
 
-import { getEntityWithFacts, getEntityEvalDefaults, getEntityKeywords } from "../db/entities";
+import { getEntitiesWithFacts, getEntityEvalDefaults, getEntityKeywords } from "../db/entities";
 import { getMessages, addMessage, countUnreadMessages, formatMessagesForContext } from "../db/discord";
 import { retrieveRelevantMemories } from "../db/memories";
-import { createBaseContext } from "../logic/expr";
-import { evaluateFacts } from "../logic/expr";
+import { createBaseContext, evaluateFacts, compileContextExpr, type MemoryScope } from "../logic/expr";
 import { handleMessageStreaming } from "../ai/streaming";
 import { handleMessage } from "../ai/handler";
-import { compileContextExpr } from "../logic/expr";
 import { DEFAULT_CONTEXT_EXPR } from "../ai/context";
 import type { EvaluatedEntity } from "../ai/context";
-import type { MemoryScope } from "../logic/expr";
 import { broadcastSSE } from "./routes/chat";
 import { warn, debug } from "../logger";
 
@@ -47,9 +44,11 @@ export async function handleWebMessage(
   const messageTime = Date.now();
 
   // Load entity facts
-  const channelEntities = entityIds
-    .map(id => getEntityWithFacts(id))
-    .filter(Boolean) as NonNullable<ReturnType<typeof getEntityWithFacts>>[];
+  const entityMap = getEntitiesWithFacts(entityIds);
+  const channelEntities = entityIds.flatMap(id => {
+    const e = entityMap.get(id);
+    return e ? [e] : [];
+  });
 
   if (channelEntities.length === 0) return;
 
@@ -266,8 +265,8 @@ async function fireResponse(
           broadcastSSE(channelId, { type: "message_complete", content: fullContent.trim(), message: stored });
         }
         entityBuffers.delete(event.name);
-      } else if (event.type === "delta") {
-        // Single entity, no char_ prefix events
+      } else if (event.type === "delta" || event.type === "line") {
+        // Single entity (no char_ prefix events); "line" appends a newline
         if (!entityBuffers.has("_single")) {
           entityBuffers.set("_single", "");
           broadcastSSE(channelId, {
@@ -277,23 +276,9 @@ async function fireResponse(
             avatar_url: respondingEntities[0].avatarUrl,
           });
         }
-        const prev = entityBuffers.get("_single") ?? "";
-        entityBuffers.set("_single", prev + event.content);
-        broadcastSSE(channelId, { type: "text_delta", text: event.content });
-      } else if (event.type === "line") {
-        // Lines mode single entity
-        if (!entityBuffers.has("_single")) {
-          entityBuffers.set("_single", "");
-          broadcastSSE(channelId, {
-            type: "message_start",
-            author_name: respondingEntities[0].name,
-            author_id: `entity:${respondingEntities[0].id}`,
-            avatar_url: respondingEntities[0].avatarUrl,
-          });
-        }
-        const prev = entityBuffers.get("_single") ?? "";
-        entityBuffers.set("_single", prev + event.content + "\n");
-        broadcastSSE(channelId, { type: "text_delta", text: event.content + "\n" });
+        const text = event.type === "line" ? event.content + "\n" : event.content;
+        entityBuffers.set("_single", (entityBuffers.get("_single") ?? "") + text);
+        broadcastSSE(channelId, { type: "text_delta", text });
       } else if (event.type === "done") {
         if (entityBuffers.has("_single")) {
           const fullContent = entityBuffers.get("_single")?.trim() ?? event.fullText;
