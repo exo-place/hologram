@@ -220,9 +220,12 @@ function initSchema(db: Database) {
     CREATE TABLE IF NOT EXISTS discord_channel_meta (
       channel_id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
+      is_dm INTEGER NOT NULL DEFAULT 0,
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     )
   `);
+  // Migration: add is_dm to pre-existing databases
+  try { db.exec(`ALTER TABLE discord_channel_meta ADD COLUMN is_dm INTEGER NOT NULL DEFAULT 0`); } catch { /* already exists */ }
 
   // Web channels - synthetic channel sessions for the web frontend
   // entity_ids is a JSON array of bound entity IDs

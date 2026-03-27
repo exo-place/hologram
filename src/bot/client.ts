@@ -546,9 +546,14 @@ bot.events.messageCreate = async (message) => {
   if (stored) broadcastSSE(channelId, { type: "message", message: stored });
 
   // Cache channel name for the web UI (fire-and-forget; getChannelMetadata has its own cache)
-  getChannelMetadata(channelId).then((meta) => {
-    if (meta.name) storeChannelMeta(channelId, meta.name);
-  }).catch(() => {});
+  if (!guildId) {
+    // DM — use the author's name as the channel display name
+    storeChannelMeta(channelId, authorName, true);
+  } else {
+    getChannelMetadata(channelId).then((meta) => {
+      if (meta.name) storeChannelMeta(channelId, meta.name, false);
+    }).catch(() => {});
+  }
 
   // Get ALL channel entities (supports multiple characters)
   const channelEntityIds = resolveDiscordEntities(channelId, "channel", guildId, channelId);

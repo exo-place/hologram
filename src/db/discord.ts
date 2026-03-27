@@ -974,14 +974,14 @@ export function clearEntityErrors(entityId: number): void {
 // =============================================================================
 
 /**
- * Upsert the human-readable name for a Discord channel.
+ * Upsert the human-readable name for a Discord channel or DM.
  * Called from the bot when processing messages so the web UI can display names.
  */
-export function storeChannelMeta(channelId: string, name: string): void {
+export function storeChannelMeta(channelId: string, name: string, isDm = false): void {
   const db = getDb();
   db.prepare(`
-    INSERT INTO discord_channel_meta (channel_id, name, updated_at)
-    VALUES (?, ?, CURRENT_TIMESTAMP)
-    ON CONFLICT(channel_id) DO UPDATE SET name = excluded.name, updated_at = excluded.updated_at
-  `).run(channelId, name);
+    INSERT INTO discord_channel_meta (channel_id, name, is_dm, updated_at)
+    VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(channel_id) DO UPDATE SET name = excluded.name, is_dm = excluded.is_dm, updated_at = excluded.updated_at
+  `).run(channelId, name, isDm ? 1 : 0);
 }

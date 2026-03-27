@@ -327,10 +327,12 @@ export default function Chat() {
     try {
       const entityId = discordEntityId();
       const customName = discordCustomName().trim();
+      const isDm = activeDiscordChannel()?.is_dm ?? false;
       await discordChannels.sendMessage(discordId, {
         content: text,
-        entity_id: entityId ?? undefined,
-        author_name: !entityId && customName ? customName : undefined,
+        is_dm: isDm,
+        entity_id: !isDm ? (entityId ?? undefined) : undefined,
+        author_name: !isDm && !entityId && customName ? customName : undefined,
       });
     } catch (e) {
       setError(String(e));
@@ -373,7 +375,7 @@ export default function Chat() {
             )}
           </For>
         </ul>
-        <Show when={discordChannelList.loading || (discordChannelList()?.length ?? 0) > 0}>
+        <Show when={discordChannelList.loading || (discordChannelList()?.filter(c => !c.is_dm).length ?? 0) > 0}>
           <div class="chat__sidebar-section">
             <div class="chat__sidebar-header row">
               <span class="small" style="font-weight:600">Discord</span>
@@ -382,7 +384,7 @@ export default function Chat() {
               <p class="dim small" style="padding:8px">Loading…</p>
             </Show>
             <ul class="chat__channel-list">
-              <For each={discordChannelList()}>
+              <For each={discordChannelList()?.filter(c => !c.is_dm)}>
                 {(ch) => (
                   <li
                     class={`chat__channel-item${activeDiscordId() === ch.id ? " chat__channel-item--active" : ""}`}
@@ -394,6 +396,25 @@ export default function Chat() {
                         ? `#${ch.name}`
                         : (ch.entity_names.slice(0, 2).join(", ") + (ch.entity_names.length > 2 ? ` +${ch.entity_names.length - 2}` : ""))}
                     </span>
+                  </li>
+                )}
+              </For>
+            </ul>
+          </div>
+        </Show>
+        <Show when={(discordChannelList()?.filter(c => c.is_dm).length ?? 0) > 0}>
+          <div class="chat__sidebar-section">
+            <div class="chat__sidebar-header row">
+              <span class="small" style="font-weight:600">DMs</span>
+            </div>
+            <ul class="chat__channel-list">
+              <For each={discordChannelList()?.filter(c => c.is_dm)}>
+                {(ch) => (
+                  <li
+                    class={`chat__channel-item${activeDiscordId() === ch.id ? " chat__channel-item--active" : ""}`}
+                    onClick={() => selectDiscordChannel(ch.id)}
+                  >
+                    <span class="chat__channel-name">{ch.name ?? ch.id}</span>
                   </li>
                 )}
               </For>
@@ -488,31 +509,33 @@ export default function Chat() {
 
             <Show when={activeDiscordId()}>
               <div class="chat__input-area">
-                <div class="chat__persona-row">
-                  <label class="chat__persona-label small dim">Send as:</label>
-                  <select
-                    class="input input--sm chat__persona-select"
-                    value={discordEntityId() ?? ""}
-                    onChange={(e) => setDiscordEntityId(e.currentTarget.value ? Number(e.currentTarget.value) : null)}
-                  >
-                    <option value="">Anonymous / Custom</option>
-                    <For each={activeDiscordChannel()?.entity_ids.flatMap((id) => {
-                      const e = allEntities()?.find((a) => a.id === id);
-                      return e ? [e] : [];
-                    }) ?? []}>
-                      {(e) => <option value={e.id}>{e.name}</option>}
-                    </For>
-                  </select>
-                  <Show when={!discordEntityId()}>
-                    <input
-                      class="input input--sm"
-                      style="flex:1"
-                      value={discordCustomName()}
-                      onInput={(e) => setDiscordCustomName(e.currentTarget.value)}
-                      placeholder="Display name (optional)"
-                    />
-                  </Show>
-                </div>
+                <Show when={!activeDiscordChannel()?.is_dm}>
+                  <div class="chat__persona-row">
+                    <label class="chat__persona-label small dim">Send as:</label>
+                    <select
+                      class="input input--sm chat__persona-select"
+                      value={discordEntityId() ?? ""}
+                      onChange={(e) => setDiscordEntityId(e.currentTarget.value ? Number(e.currentTarget.value) : null)}
+                    >
+                      <option value="">Anonymous / Custom</option>
+                      <For each={activeDiscordChannel()?.entity_ids.flatMap((id) => {
+                        const e = allEntities()?.find((a) => a.id === id);
+                        return e ? [e] : [];
+                      }) ?? []}>
+                        {(e) => <option value={e.id}>{e.name}</option>}
+                      </For>
+                    </select>
+                    <Show when={!discordEntityId()}>
+                      <input
+                        class="input input--sm"
+                        style="flex:1"
+                        value={discordCustomName()}
+                        onInput={(e) => setDiscordCustomName(e.currentTarget.value)}
+                        placeholder="Display name (optional)"
+                      />
+                    </Show>
+                  </div>
+                </Show>
                 <div class="chat__input-row">
                   <textarea
                     class="input input--mono chat__input"
