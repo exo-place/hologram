@@ -36,9 +36,10 @@ src/
 │   ├── index.ts          # Bun.serve() + route dispatch, CORS, static files
 │   ├── helpers.ts        # RouteHandler type, ok/err/parseId/parseBody helpers
 │   ├── types.ts          # Shared request/response types (imported by frontend)
+│   ├── chat-adapter.ts   # Bridges web messages → AI pipeline (evaluateFacts, streaming, SSE)
 │   └── routes/
 │       ├── entities.ts   # Entity CRUD (GET/POST/PUT/DELETE + facts/config/template/memories)
-│       ├── chat.ts       # Web channel management, message history, SSE stream
+│       ├── chat.ts       # Web channel management, message history, SSE stream; exports broadcastSSE()
 │       └── debug.ts      # Debug inspection (bindings, errors, embeddings, trace, simulate)
 ├── logic/
 │   ├── expr.ts           # $if expression evaluator + $respond control
@@ -53,6 +54,35 @@ src/
     └── commands/
         ├── index.ts      # Command registry + interaction router
         └── commands.ts   # 7 slash commands
+
+web/                          # SolidJS SPA frontend (Vite + vite-plugin-solid)
+├── index.html
+├── vite.config.ts            # Vite config: solid plugin, monaco plugin, @api alias, dev proxy
+├── tsconfig.json
+├── package.json
+└── src/
+    ├── index.tsx             # Entry: render <App />
+    ├── App.tsx               # Router + layout (sidebar nav, lazy-loaded routes)
+    ├── style.css             # BEM design system (CSS custom properties, dark theme)
+    ├── api/
+    │   ├── client.ts         # Typed fetch wrapper (entities, channels, debug namespaces)
+    │   └── sse.ts            # SSE client (subscribeSSE → { close() })
+    ├── views/
+    │   ├── EntityList.tsx/css   # Searchable entity list, create/delete dialogs
+    │   ├── EntityDetail.tsx/css # Tabbed entity view (Facts/Config/Template/System Prompt/Memories)
+    │   ├── Chat.tsx/css         # Web chat with channel management, SSE streaming
+    │   └── Debug.tsx/css        # Debug panel (bindings, eval errors, embeddings, fact trace)
+    ├── components/
+    │   ├── FactEditor.tsx/css     # Inline fact CRUD
+    │   ├── ConfigEditor.tsx/css   # Entity config form (model, stream, memory, thinking…)
+    │   ├── TemplateEditor.tsx/css # Monaco-based template editor
+    │   ├── MemoriesPanel.tsx/css  # Memory list + add/delete
+    │   ├── ChatMessage.tsx/css    # Single message bubble (user vs bot)
+    │   └── MonacoEditor.tsx/css   # SolidJS Monaco wrapper (lazy-loaded)
+    └── monaco/
+        ├── hologram-monarch.ts          # Monarch tokenizer for .holo facts
+        ├── hologram-template-monarch.ts # Monarch tokenizer for Nunjucks templates
+        └── register.ts                  # Register languages + hologram-dark/light themes
 
 docs/
 ├── README.md             # User documentation

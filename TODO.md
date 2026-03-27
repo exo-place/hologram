@@ -155,18 +155,10 @@ Current state: message history uses role-based `user`/`assistant` messages via `
 
 ## Web Frontend
 
-- [ ] Phase 2: Entity management Vue SPA (`web/` with Vite + Vue + Router)
-  - Entity list (search, create, delete)
-  - Entity detail (facts, config, template, memories — tabbed)
-  - Fact editor
-  - Config editor
-- [ ] Phase 3: Chat interface
-  - `src/api/chat-adapter.ts` — bridges web chat → `handleMessage`/`handleMessageStreaming`
-  - Chat view with channel management + entity selection
-  - SSE client + streaming message display
-- [ ] Phase 4: Debug panel + template editor
-  - Debug view (bindings, errors, embeddings, prompt preview)
-  - Monaco template editor extracted from VitePress playground
+- [x] Phase 1: REST API (`src/api/`) — entity CRUD, chat channels, debug endpoints, SSE, conditional startup
+- [x] Phase 2: SolidJS SPA (`web/`) — entity list/detail, fact/config/template/memory editors, chat view, debug panel
+- [x] Phase 3: Chat adapter (`src/api/chat-adapter.ts`) — evaluateFacts + handleMessageStreaming + broadcastSSE
+- [x] Phase 4: Monaco template editor — hologram-dark theme, hologram-template tokenizer, lazy-loaded
 - [ ] Authentication: Discord OAuth2 / OIDC for multi-user access
   - Map Discord user ID to existing entity ownership/permissions
   - Session management (`web_sessions` table, signed cookies)
