@@ -18,7 +18,7 @@ import { getDb } from "../../db/index";
 import { addMessage, getMessages } from "../../db/discord";
 import { safeParseFallback } from "../../db/entities";
 import { ok, err, parseBody, type RouteHandler } from "../helpers";
-import { info } from "../../logger";
+import { info, warn } from "../../logger";
 import type { CreateChannelBody, UpdateChannelBody, SendMessageBody, ApiWebChannel } from "../types";
 
 // ── DB helpers ──────────────────────────────────────────────────────────────
@@ -160,8 +160,13 @@ export const chatRoutes: RouteHandler = async (req, url) => {
     // Broadcast the user message to SSE clients
     broadcastSSE(channelId, { type: "message", message });
 
-    // AI response is triggered by the chat-adapter (Phase 3).
-    // For Phase 1 we return the stored message only.
+    // Trigger AI response asynchronously (fire-and-forget)
+    // Lazy import to avoid circular dep at module load time
+    import("../chat-adapter").then(({ handleWebMessage }) => {
+      handleWebMessage(channelId, channel.entity_ids, authorId, authorName, body.content.trim())
+        .catch((e: unknown) => warn("Web chat AI error", { channelId, error: String(e) }));
+    }).catch((e: unknown) => warn("Web chat adapter import failed", { error: String(e) }));
+
     return ok({ message, ai_response: null }, 201);
   }
 

@@ -9,12 +9,13 @@ Started when `WEB !== "false"` (default: on). Runs in the same process as the Di
 - **`index.ts`** — `Bun.serve()` entry point, CORS middleware, route dispatch, static file serving for `web/dist/`
 - **`helpers.ts`** — Shared utilities: `ok()`, `err()`, `parseId()`, `parseBody()`, and the `RouteHandler` type
 - **`types.ts`** — Shared TypeScript types for API requests and responses (imported by both server and frontend via Vite alias)
+- **`chat-adapter.ts`** — Bridges web channel messages to the AI pipeline: entity fact evaluation, memory retrieval, streaming via SSE
 - **`api.test.ts`** — Route tests using in-memory DB + mock embeddings
 
 ## routes/
 
 - **`entities.ts`** — Entity CRUD: list/create/get/update/delete, facts CRUD, config, templates, memories
-- **`chat.ts`** — Web channel management, message history, send message (Phase 1: store-only), SSE stream endpoint
+- **`chat.ts`** — Web channel management, message history, send message (triggers AI via chat-adapter), SSE stream endpoint; exports `broadcastSSE()`
 - **`debug.ts`** — Debug inspection: bindings, eval errors, embedding status/coverage, fact trace, response simulation
 
 ## Key Routes

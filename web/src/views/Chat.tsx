@@ -74,11 +74,17 @@ export default function Chat() {
         });
       } else if (type === "message_complete") {
         batch(() => {
-          const meta = streamingMeta();
-          const content = streamingContent();
-          if (meta && content !== null) {
-            const completed: ApiMessage = { ...meta, content, id: Date.now() };
-            setMessages((prev) => [...prev, completed]);
+          // Server sends the stored message when available; fall back to reconstructing from meta
+          const stored = event.message as ApiMessage | undefined;
+          if (stored) {
+            setMessages((prev) => [...prev, stored]);
+          } else {
+            const meta = streamingMeta();
+            const content = streamingContent();
+            if (meta && content !== null) {
+              const completed: ApiMessage = { ...meta, content, id: Date.now() };
+              setMessages((prev) => [...prev, completed]);
+            }
           }
           setStreamingContent(null);
           setStreamingMeta(null);
