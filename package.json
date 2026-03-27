@@ -10,7 +10,6 @@
     "dev:web": "bun run --cwd web dev",
     "build:web": "bun run --cwd web build",
     "build": "bun run build:web",
-    "preview": "bun run build:web && WEB_PORT=5173 bun run src/index.ts",
     "start": "bun run src/index.ts",
     "check:types": "tsgo --noEmit",
     "lint": "oxlint",
