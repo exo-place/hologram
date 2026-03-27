@@ -7,14 +7,16 @@ import {
   onCleanup,
   batch,
 } from "solid-js";
-import { channels, entities, type ApiMessage } from "../api/client";
+import { channels, discordChannels, entities, type ApiMessage, type ApiDiscordChannel } from "../api/client";
 import { subscribeSSE, type SSESubscription } from "../api/sse";
 import ChatMessage from "../components/ChatMessage";
 import "./Chat.css";
 
 export default function Chat() {
   const [channelList, { refetch: refetchChannels }] = createResource(channels.list);
+  const [discordChannelList] = createResource(discordChannels.list);
   const [activeId, setActiveId] = createSignal<string | null>(null);
+  const [activeDiscordId, setActiveDiscordId] = createSignal<string | null>(null);
   const [messages, setMessages] = createSignal<ApiMessage[]>([]);
   const [streamingContent, setStreamingContent] = createSignal<string | null>(null);
   const [streamingMeta, setStreamingMeta] = createSignal<Omit<ApiMessage, "content"> | null>(null);
@@ -41,6 +43,9 @@ export default function Chat() {
   const [saving, setSaving] = createSignal(false);
 
   const activeChannel = createMemo(() => channelList()?.find((c) => c.id === activeId()));
+  const activeDiscordChannel = createMemo<ApiDiscordChannel | undefined>(() =>
+    discordChannelList()?.find((c) => c.id === activeDiscordId())
+  );
 
   let messagesEndRef!: HTMLDivElement;
   let inputRef!: HTMLTextAreaElement;
@@ -57,6 +62,7 @@ export default function Chat() {
     setStreamingMeta(null);
     setTypingEntities(new Map());
     setPersonaId(null);
+    setActiveDiscordId(null);
     setActiveId(id);
     setLoadingMessages(true);
     setError(null);
@@ -124,6 +130,41 @@ export default function Chat() {
         scrollToBottom();
       }
     });
+  }
+
+  async function selectDiscordChannel(id: string) {
+    sseRef?.close();
+    sseRef = null;
+    setStreamingContent(null);
+    setStreamingMeta(null);
+    setTypingEntities(new Map());
+    setActiveId(null);
+    setActiveDiscordId(id);
+    setLoadingMessages(true);
+    setError(null);
+    try {
+      const msgs = await discordChannels.listMessages(id, 100);
+      setMessages([...msgs].reverse());
+      scrollToBottom();
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setLoadingMessages(false);
+    }
+    // SSE for real-time (bot will broadcast when it receives Discord messages)
+    sseRef = subscribeSSE(
+      id,
+      (event) => {
+        const type = event.type as string;
+        if (type === "message") {
+          const msg = event.message as ApiMessage | undefined;
+          if (msg) setMessages((prev) => [...prev, msg]);
+          scrollToBottom();
+        }
+      },
+      undefined,
+      `/api/discord-channels/${id}/stream`,
+    );
   }
 
   onCleanup(() => {
@@ -291,40 +332,75 @@ export default function Chat() {
             )}
           </For>
         </ul>
+        <Show when={discordChannelList.loading || (discordChannelList()?.length ?? 0) > 0}>
+          <div class="chat__sidebar-section">
+            <div class="chat__sidebar-header row">
+              <span class="small" style="font-weight:600">Discord</span>
+            </div>
+            <Show when={discordChannelList.loading}>
+              <p class="dim small" style="padding:8px">Loading…</p>
+            </Show>
+            <ul class="chat__channel-list">
+              <For each={discordChannelList()}>
+                {(ch) => (
+                  <li
+                    class={`chat__channel-item${activeDiscordId() === ch.id ? " chat__channel-item--active" : ""}`}
+                    onClick={() => selectDiscordChannel(ch.id)}
+                    title={ch.entity_names.join(", ")}
+                  >
+                    <span class="chat__channel-name">
+                      {ch.entity_names.slice(0, 2).join(", ")}
+                      {ch.entity_names.length > 2 ? ` +${ch.entity_names.length - 2}` : ""}
+                    </span>
+                  </li>
+                )}
+              </For>
+            </ul>
+          </div>
+        </Show>
       </div>
 
       {/* Main */}
       <div class="chat__main">
-        <Show when={!activeId()}>
+        <Show when={!activeId() && !activeDiscordId()}>
           <div class="chat__empty">
             <p class="dim">Select or create a channel to start chatting.</p>
           </div>
         </Show>
 
-        <Show when={activeId()}>
+        <Show when={activeId() || activeDiscordId()}>
           <>
             <div class="chat__header">
               <span class="chat__header-name">
-                {channelList()?.find((c) => c.id === activeId())?.name ?? activeId()}
+                {activeDiscordId()
+                  ? (activeDiscordChannel()?.entity_names.join(", ") ?? activeDiscordId())
+                  : (channelList()?.find((c) => c.id === activeId())?.name ?? activeId())}
               </span>
               <div class="chat__header-entities">
-                <For each={activeChannel()?.entity_ids.flatMap((id) => {
-                  const e = allEntities()?.find((a) => a.id === id);
-                  return e ? [e] : [];
-                }) ?? []}>
-                  {(e) => <span class="chat__header-entity">{e.name}</span>}
-                </For>
+                <Show when={activeDiscordId()}>
+                  <span class="chat__header-entity chat__header-entity--discord">Discord</span>
+                </Show>
+                <Show when={activeId()}>
+                  <For each={activeChannel()?.entity_ids.flatMap((id) => {
+                    const e = allEntities()?.find((a) => a.id === id);
+                    return e ? [e] : [];
+                  }) ?? []}>
+                    {(e) => <span class="chat__header-entity">{e.name}</span>}
+                  </For>
+                </Show>
               </div>
               <div class="chat__header-actions">
-                <button class="btn btn--ghost btn--sm" onClick={openEdit} title="Edit channel">
-                  Edit
-                </button>
-                <button class="btn btn--sm" onClick={forget} title="Forget messages before now">
-                  Forget
-                </button>
-                <button class="btn btn--sm btn--primary" onClick={trigger} title="Trigger entity response">
-                  Trigger
-                </button>
+                <Show when={activeId()}>
+                  <button class="btn btn--ghost btn--sm" onClick={openEdit} title="Edit channel">
+                    Edit
+                  </button>
+                  <button class="btn btn--sm" onClick={forget} title="Forget messages before now">
+                    Forget
+                  </button>
+                  <button class="btn btn--sm btn--primary" onClick={trigger} title="Trigger entity response">
+                    Trigger
+                  </button>
+                </Show>
               </div>
             </div>
 
@@ -368,8 +444,14 @@ export default function Chat() {
               <p class="error chat__error">{error()}</p>
             </Show>
 
-            <div class="chat__input-area">
-              <Show when={activeId()}>
+            <Show when={activeDiscordId()}>
+              <div class="chat__readonly-notice">
+                <span class="dim small">Read-only — Discord channel</span>
+              </div>
+            </Show>
+
+            <Show when={activeId()}>
+              <div class="chat__input-area">
                 <div class="chat__persona-row">
                   <label class="chat__persona-label small dim">Speak as:</label>
                   <select
@@ -392,24 +474,24 @@ export default function Chat() {
                     </For>
                   </select>
                 </div>
-              </Show>
-              <div class="chat__input-row">
-                <textarea
-                  ref={inputRef}
-                  class="input input--mono chat__input"
-                  value={input()}
-                  placeholder="Type a message… (Ctrl+Enter to send)"
-                  rows={3}
-                  onInput={(e) => setInput(e.currentTarget.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && e.ctrlKey) send();
-                  }}
-                />
-                <button class="btn btn--primary" onClick={send} disabled={sending() || !input().trim()}>
-                  {sending() ? "Sending…" : "Send"}
-                </button>
+                <div class="chat__input-row">
+                  <textarea
+                    ref={inputRef}
+                    class="input input--mono chat__input"
+                    value={input()}
+                    placeholder="Type a message… (Ctrl+Enter to send)"
+                    rows={3}
+                    onInput={(e) => setInput(e.currentTarget.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && e.ctrlKey) send();
+                    }}
+                  />
+                  <button class="btn btn--primary" onClick={send} disabled={sending() || !input().trim()}>
+                    {sending() ? "Sending…" : "Send"}
+                  </button>
+                </div>
               </div>
-            </div>
+            </Show>
           </>
         </Show>
       </div>

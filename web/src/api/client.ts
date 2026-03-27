@@ -11,6 +11,7 @@ import type {
   ApiEntityConfig,
   ApiMemory,
   ApiWebChannel,
+  ApiDiscordChannel,
   ApiMessage,
   ApiBindingGraph,
   ApiEvalError,
@@ -34,6 +35,7 @@ export type {
   ApiEntityConfig,
   ApiMemory,
   ApiWebChannel,
+  ApiDiscordChannel,
   ApiMessage,
   ApiBindingGraph,
   ApiEvalError,
@@ -144,6 +146,16 @@ export const channels = {
     request<{ forget_at: string }>(`/api/channels/${id}/forget`, { method: "POST" }),
   trigger: (id: string) =>
     request<{ triggered: true }>(`/api/channels/${id}/trigger`, { method: "POST" }),
+};
+
+// ============================================================================
+// Discord Channels (read-only browse)
+// ============================================================================
+
+export const discordChannels = {
+  list: () => get<ApiDiscordChannel[]>("/api/discord-channels"),
+  listMessages: (id: string, limit = 50) =>
+    get<ApiMessage[]>(`/api/discord-channels/${id}/messages?limit=${limit}`),
 };
 
 // ============================================================================

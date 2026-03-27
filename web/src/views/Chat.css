@@ -165,6 +165,33 @@
   min-width: 120px;
 }
 
+/* Discord section in sidebar */
+.chat__sidebar-section {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--glass-border);
+}
+
+.chat__sidebar-section .chat__channel-list {
+  flex: none;
+}
+
+/* Discord badge on channel header */
+.chat__header-entity--discord {
+  color: var(--fg-muted);
+  background: transparent;
+  border-color: var(--glass-border);
+  font-style: italic;
+}
+
+/* Read-only notice bar */
+.chat__readonly-notice {
+  padding: 8px 16px;
+  border-top: 1px solid var(--glass-border);
+  text-align: center;
+  background: var(--glass-bg);
+}
+
 /* Entity picker in create dialog */
 .chat__entity-picker {
   max-height: 200px;

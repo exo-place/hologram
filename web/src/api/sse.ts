@@ -14,8 +14,9 @@ export function subscribeSSE(
   channelId: string,
   onEvent: (event: Record<string, unknown>) => void,
   onError?: (err: Event) => void,
+  streamUrl?: string,
 ): SSESubscription {
-  const url = `/api/channels/${channelId}/stream`;
+  const url = streamUrl ?? `/api/channels/${channelId}/stream`;
   const es = new EventSource(url);
 
   es.onmessage = (e) => {
