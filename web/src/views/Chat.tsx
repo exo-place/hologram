@@ -48,7 +48,7 @@ export default function Chat() {
     setError(null);
     try {
       const msgs = await channels.listMessages(id, 100);
-      setMessages(msgs);
+      setMessages([...msgs].reverse());
       scrollToBottom();
     } catch (err) {
       setError(String(err));
