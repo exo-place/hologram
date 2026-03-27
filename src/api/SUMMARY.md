@@ -15,7 +15,8 @@ Started when `WEB !== "false"` (default: on). Runs in the same process as the Di
 ## routes/
 
 - **`entities.ts`** — Entity CRUD: list/create/get/update/delete, facts CRUD, config, templates, memories
-- **`chat.ts`** — Web channel management, message history, send message (triggers AI via chat-adapter), SSE stream endpoint; exports `broadcastSSE()`
+- **`chat.ts`** — Web channel management, message history, send message (triggers AI via chat-adapter), SSE stream endpoint; exports `broadcastSSE()` and `sseClients`
+- **`discord-channels.ts`** — Read-only Discord channel browse: list bound channels with entity names, message history, SSE stream (shared `sseClients` map with chat.ts so bot broadcasts reach web clients)
 - **`debug.ts`** — Debug inspection: bindings, eval errors, embedding status/coverage, fact trace, response simulation
 
 ## Key Routes
@@ -35,6 +36,10 @@ POST/GET    /api/channels
 PATCH/DELETE /api/channels/:id
 GET/POST    /api/channels/:id/messages
 GET         /api/channels/:id/stream     (SSE)
+
+GET         /api/discord-channels
+GET         /api/discord-channels/:id/messages
+GET         /api/discord-channels/:id/stream    (SSE, read-only)
 
 GET         /api/debug/bindings
 GET         /api/debug/errors

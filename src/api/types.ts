@@ -66,6 +66,13 @@ export interface ApiWebChannel {
   created_at: string;
 }
 
+export interface ApiDiscordChannel {
+  id: string;           // Discord snowflake string
+  entity_ids: number[];
+  entity_names: string[];
+  latest_message: { author_name: string; content: string; created_at: string } | null;
+}
+
 export interface ApiMessage {
   id: number;
   channel_id: string;
