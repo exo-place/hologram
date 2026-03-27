@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "bun run --watch src/index.ts",
+    "dev:api": "WEB=true bun run --watch src/index.ts",
     "start": "bun run src/index.ts",
     "check:types": "tsgo --noEmit",
     "lint": "oxlint",

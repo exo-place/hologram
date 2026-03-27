@@ -215,6 +215,17 @@ function initSchema(db: Database) {
     )
   `);
 
+  // Web channels - synthetic channel sessions for the web frontend
+  // entity_ids is a JSON array of bound entity IDs
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS web_channels (
+      id TEXT PRIMARY KEY,
+      name TEXT,
+      entity_ids TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
   // Indexes
   db.exec(`CREATE INDEX IF NOT EXISTS idx_facts_entity ON facts(entity_id)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_discord_entities_lookup ON discord_entities(discord_id, discord_type)`);

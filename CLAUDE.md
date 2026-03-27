@@ -5,9 +5,10 @@ Discord bot for collaborative worldbuilding and roleplay, built on an entity-fac
 ## Tech Stack
 
 - **Runtime**: Bun (native SQLite, TypeScript-first)
-- **Discord**: Discordeno (Bun-native)
+- **Discord**: Discordeno (Bun-native, optional — requires `DISCORD_TOKEN`)
+- **Web**: Bun.serve() REST API (optional — on by default, set `WEB=false` to disable)
 - **LLM**: AI SDK v6 with provider-agnostic `provider:model` spec (default: `google:gemini-3-flash-preview`)
-- **Database**: bun:sqlite (9 tables)
+- **Database**: bun:sqlite (10 tables — shared by Discord bot and web server)
 - **Linting**: oxlint
 - **Type checking**: tsgo
 
@@ -15,10 +16,10 @@ Discord bot for collaborative worldbuilding and roleplay, built on an entity-fac
 
 ```
 src/
-├── index.ts              # Entry point
+├── index.ts              # Entry point (conditional: Discord bot if DISCORD_TOKEN, web if WEB!=false)
 ├── logger.ts             # Logging utilities
 ├── db/
-│   ├── index.ts          # Database setup + schema
+│   ├── index.ts          # Database setup + schema (10 tables)
 │   ├── entities.ts       # Entity/fact CRUD
 │   └── discord.ts        # Discord ID mapping + message history
 ├── ai/
@@ -31,6 +32,14 @@ src/
 │   ├── template.ts       # Nunjucks template engine, DEFAULT_TEMPLATE, runtime security patches
 │   ├── tools.ts          # createTools() factory + $locked permission checks
 │   └── embeddings.ts     # Local embeddings (planned)
+├── api/                  # Web API server (Phase 1)
+│   ├── index.ts          # Bun.serve() + route dispatch, CORS, static files
+│   ├── helpers.ts        # RouteHandler type, ok/err/parseId/parseBody helpers
+│   ├── types.ts          # Shared request/response types (imported by frontend)
+│   └── routes/
+│       ├── entities.ts   # Entity CRUD (GET/POST/PUT/DELETE + facts/config/template/memories)
+│       ├── chat.ts       # Web channel management, message history, SSE stream
+│       └── debug.ts      # Debug inspection (bindings, errors, embeddings, trace, simulate)
 ├── logic/
 │   ├── expr.ts           # $if expression evaluator + $respond control
 │   └── safe-regex.ts     # Regex pattern validator (ReDoS prevention)
@@ -92,7 +101,7 @@ Facts:
 
 **Macros:** `{{entity:ID}}` expands to entity name, `{{char}}` expands to current entity name, `{{user}}` expands to literal "user". Any expression works: `{{channel.name}}`, `{{self.health}}`, etc. See `src/ai/prompt.ts` for macro expansion and `docs/reference/` for the full list.
 
-### Database (9 tables)
+### Database (10 tables)
 
 ```sql
 entities         -- id, name, owned_by, created_at, template, system_template
@@ -104,6 +113,7 @@ messages         -- channel_id, user_id, author_name, content, discord_message_i
 welcomed_users   -- discord_id, welcomed_at (onboarding DM tracking)
 webhook_messages -- message_id, entity_id, entity_name (for reply detection)
 eval_errors      -- entity_id, owner_id, error_message, condition (deduped error notifications)
+web_channels     -- id (web:<uuid>), name, entity_ids (JSON array), created_at
 ```
 
 ### Message Pipeline
@@ -196,7 +206,8 @@ Help is an entity: `/view help`, `/view help:commands`, `/view help:respond`
 
 ```bash
 bun install          # Install dependencies
-bun run dev          # Development with watch
+bun run dev          # Development with watch (Discord if DISCORD_TOKEN set; web API on port 3000)
+bun run dev:api      # Web API only (WEB=true, no Discord required)
 bun run start        # Production
 bun run lint         # oxlint
 bun run check:types  # TypeScript check
@@ -206,7 +217,7 @@ bun run debug        # CLI debug tools (embeddings, state, eval)
 ## Environment Variables
 
 ```
-DISCORD_TOKEN=       # Required: Discord bot token
+DISCORD_TOKEN=       # Optional: Discord bot token (bot disabled if unset)
 DEFAULT_MODEL=       # Default LLM (google:gemini-3-flash-preview)
 GOOGLE_GENERATIVE_AI_API_KEY=  # For google:* models
 ANTHROPIC_API_KEY=             # For anthropic:* models (optional)
@@ -218,6 +229,8 @@ CATCHUP_ON_STARTUP=  # all (default) | lazy | off — backfill missed messages o
 CATCHUP_RESPOND=     # true | false (default) — respond to recent missed messages
 CATCHUP_RESPOND_MAX_AGE_MS=  # Max age to respond to (default: 300000 = 5 min)
 LOG_LEVEL=           # debug, info (default), warn, error
+WEB=false            # Set to disable the web API server (on by default)
+WEB_PORT=3000        # Web API server port (default 3000)
 ```
 
 ## Logging

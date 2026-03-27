@@ -153,6 +153,27 @@ Current state: message history uses role-based `user`/`assistant` messages via `
 
 ---
 
+## Web Frontend
+
+- [ ] Phase 2: Entity management Vue SPA (`web/` with Vite + Vue + Router)
+  - Entity list (search, create, delete)
+  - Entity detail (facts, config, template, memories — tabbed)
+  - Fact editor
+  - Config editor
+- [ ] Phase 3: Chat interface
+  - `src/api/chat-adapter.ts` — bridges web chat → `handleMessage`/`handleMessageStreaming`
+  - Chat view with channel management + entity selection
+  - SSE client + streaming message display
+- [ ] Phase 4: Debug panel + template editor
+  - Debug view (bindings, errors, embeddings, prompt preview)
+  - Monaco template editor extracted from VitePress playground
+- [ ] Authentication: Discord OAuth2 / OIDC for multi-user access
+  - Map Discord user ID to existing entity ownership/permissions
+  - Session management (`web_sessions` table, signed cookies)
+  - Admin access for bot owner
+
+---
+
 ## Low Priority
 
 - [ ] In-memory test DB — `buildPromptAndMessages()` and the full prompt pipeline (`preparePromptContext` → handler/streaming) require DB access (`getMessages`, `getWebhookMessageEntity`, etc.) and can't be tested statically. A `:memory:` SQLite instance with test fixtures would enable integration tests for edge cases like the 0-messages fallback and empty-history scenarios

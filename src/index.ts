@@ -1,13 +1,26 @@
 import { getDb, closeDb } from "./db";
-import { startBot } from "./bot/client";
-import { info } from "./logger";
+import { info, warn } from "./logger";
 
 // Initialize database
 info("Initializing database");
 getDb();
 
-// Start bot
-await startBot();
+// Discord bot (optional — requires DISCORD_TOKEN)
+if (process.env.DISCORD_TOKEN) {
+  const { startBot } = await import("./bot/client");
+  await startBot();
+} else {
+  warn("DISCORD_TOKEN not set — Discord bot will not start");
+}
+
+// Web API server (on by default — set WEB=false to disable)
+if (process.env.WEB !== "false") {
+  const { startApi } = await import("./api/index");
+  const port = Number(process.env.WEB_PORT) || 3000;
+  await startApi(port);
+} else {
+  info("WEB=false — web server will not start");
+}
 
 // Handle graceful shutdown
 process.on("SIGINT", () => {
