@@ -1,6 +1,9 @@
-import { createSignal, createResource, Show } from "solid-js";
+import { createSignal, createResource, Show, lazy } from "solid-js";
 import { entities } from "../api/client";
 import "./TemplateEditor.css";
+
+// Monaco is heavy — load it lazily so it doesn't block initial page paint
+const MonacoEditor = lazy(() => import("./MonacoEditor"));
 
 interface Props {
   entityId: number;
@@ -66,6 +69,7 @@ export default function TemplateEditor(props: Props) {
             setInitialised(true);
           }
           const isCustom = content() !== null && content() !== "";
+          const monacoLang = props.type === "template" ? "hologram-template" : "hologram-template";
           return (
             <>
               <div class="template-editor__toolbar row">
@@ -84,31 +88,26 @@ export default function TemplateEditor(props: Props) {
                 </Show>
               </div>
 
-              <textarea
-                class="input input--mono template-editor__textarea"
-                value={content() ?? ""}
-                placeholder="Leave empty to use default template…"
-                onInput={(e) => setContent(e.currentTarget.value || null)}
-                rows={20}
-                spellcheck={false}
-              />
+              <div class="template-editor__editor">
+                <MonacoEditor
+                  value={content() ?? ""}
+                  language={monacoLang}
+                  onChange={(v) => setContent(v || null)}
+                  minHeight={360}
+                />
+              </div>
 
               <Show when={error()}>
                 <p class="error">{error()}</p>
               </Show>
 
               <div class="template-editor__actions row">
-                <span class="dim small">Ctrl+Enter to save</span>
+                <span class="dim small">Ctrl+S or Save button</span>
                 <Show when={saved()}>
                   <span class="success small">Saved</span>
                 </Show>
                 <div class="spacer" />
-                <button
-                  class="btn btn--primary"
-                  onClick={save}
-                  disabled={saving()}
-                  onKeyDown={(e) => e.key === "Enter" && e.ctrlKey && save()}
-                >
+                <button class="btn btn--primary" onClick={save} disabled={saving()}>
                   {saving() ? "Saving…" : "Save"}
                 </button>
               </div>
