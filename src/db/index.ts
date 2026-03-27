@@ -215,6 +215,15 @@ function initSchema(db: Database) {
     )
   `);
 
+  // Discord channel metadata - name/display info cached from Discord API
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS discord_channel_meta (
+      channel_id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
   // Web channels - synthetic channel sessions for the web frontend
   // entity_ids is a JSON array of bound entity IDs
   db.exec(`

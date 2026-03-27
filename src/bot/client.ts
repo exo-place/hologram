@@ -10,12 +10,13 @@ import { InferenceError } from "../ai/models";
 import type { EvaluatedEntity } from "../ai/context";
 import { isModelAllowed } from "../ai/models";
 import { retrieveRelevantMemories, type MemoryScope } from "../db/memories";
-import { resolveDiscordEntity, resolveDiscordEntities, isNewUser, markUserWelcomed, addMessage, updateMessageByDiscordId, mergeMessageData, deleteMessageByDiscordId, trackWebhookMessage, getWebhookMessageEntity, getMessages, getFilteredMessages, formatMessagesForContext, recordEvalError, isOurWebhookUserId, countUnreadMessages, getLastMessageSnowflake, getAllBoundChannelIds, getChannelScopedEntities, type MessageData } from "../db/discord";
+import { resolveDiscordEntity, resolveDiscordEntities, isNewUser, markUserWelcomed, addMessage, updateMessageByDiscordId, mergeMessageData, deleteMessageByDiscordId, trackWebhookMessage, getWebhookMessageEntity, getMessages, getFilteredMessages, formatMessagesForContext, recordEvalError, isOurWebhookUserId, countUnreadMessages, getLastMessageSnowflake, getAllBoundChannelIds, getChannelScopedEntities, storeChannelMeta, type MessageData } from "../db/discord";
 import { getEntity, getEntityWithFacts, getSystemEntity, getFactsForEntity, getEntityEvalDefaults, getEntityKeywords, getPermissionDefaults, type EntityWithFacts } from "../db/entities";
 import { evaluateFacts, getTickInterval, createBaseContext, parsePermissionDirectives, isUserBlacklisted, isUserAllowed, compileContextExpr, ExprError } from "../logic/expr";
 import { DEFAULT_CONTEXT_EXPR } from "../ai/context";
 import { executeWebhook, editWebhookMessage, setBot } from "./webhooks";
 import { broadcastSSE } from "../api/routes/chat";
+import { setBotBridge } from "./bridge";
 import "./commands/commands"; // Register /create, /view, /delete, /transfer, /bind, /unbind, /config, /trigger, /forget
 import "./commands/cmd-edit";   // Register /edit command + modals
 import "./commands/cmd-debug";  // Register /debug command
@@ -543,6 +544,11 @@ bot.events.messageCreate = async (message) => {
   // Store message in history (before response decision so context builds up)
   const stored = addMessage(channelId, authorId, authorName, content, message.id.toString(), msgData);
   if (stored) broadcastSSE(channelId, { type: "message", message: stored });
+
+  // Cache channel name for the web UI (fire-and-forget; getChannelMetadata has its own cache)
+  getChannelMetadata(channelId).then((meta) => {
+    if (meta.name) storeChannelMeta(channelId, meta.name);
+  }).catch(() => {});
 
   // Get ALL channel entities (supports multiple characters)
   const channelEntityIds = resolveDiscordEntities(channelId, "channel", guildId, channelId);
@@ -1917,5 +1923,9 @@ bot.handlers.MESSAGE_UPDATE = (bot, data, shardId) => {
 
 export async function startBot() {
   info("Starting bot");
+  setBotBridge(async (channelId: string, content: string, authorName?: string) => {
+    const text = authorName ? `**${authorName}:** ${content}` : content;
+    await bot.helpers.sendMessage(BigInt(channelId), { content: text });
+  });
   await bot.start();
 }

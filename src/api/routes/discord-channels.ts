@@ -1,15 +1,17 @@
 /**
- * Discord channel browse routes (read-only).
+ * Discord channel browse routes.
  *
  * GET  /api/discord-channels           -- list channels with entity bindings
  * GET  /api/discord-channels/:id/messages -- message history
+ * POST /api/discord-channels/:id/messages -- send message to Discord (requires bot)
  * GET  /api/discord-channels/:id/stream   -- SSE stream (real-time when bot broadcasts)
  */
 
 import { getDb } from "../../db/index";
 import { getMessages } from "../../db/discord";
-import { ok, type RouteHandler } from "../helpers";
+import { ok, err, parseBody, type RouteHandler } from "../helpers";
 import { sseClients } from "./chat";
+import { sendToDiscordChannel, isBotConnected } from "../../bot/bridge";
 import type { ApiDiscordChannel } from "../types";
 
 export type { ApiDiscordChannel };
@@ -22,11 +24,16 @@ export const discordChannelRoutes: RouteHandler = async (req, url) => {
   if (path === "/api/discord-channels" && method === "GET") {
     const db = getDb();
     const rows = db.prepare(`
-      SELECT de.discord_id, GROUP_CONCAT(e.id) as entity_ids, GROUP_CONCAT(e.name) as entity_names
-      FROM discord_entities de JOIN entities e ON de.entity_id = e.id
+      SELECT de.discord_id,
+             GROUP_CONCAT(e.id) as entity_ids,
+             GROUP_CONCAT(e.name) as entity_names,
+             dcm.name as channel_name
+      FROM discord_entities de
+      JOIN entities e ON de.entity_id = e.id
+      LEFT JOIN discord_channel_meta dcm ON dcm.channel_id = de.discord_id
       WHERE de.discord_type = 'channel'
       GROUP BY de.discord_id
-    `).all() as { discord_id: string; entity_ids: string; entity_names: string }[];
+    `).all() as { discord_id: string; entity_ids: string; entity_names: string; channel_name: string | null }[];
 
     const channels: ApiDiscordChannel[] = rows.map(row => {
       const latest = db.prepare(
@@ -34,6 +41,7 @@ export const discordChannelRoutes: RouteHandler = async (req, url) => {
       ).get(row.discord_id) as { author_name: string; content: string; created_at: string } | null;
       return {
         id: row.discord_id,
+        name: row.channel_name,
         entity_ids: row.entity_ids.split(",").map(Number),
         entity_names: row.entity_names.split(","),
         latest_message: latest,
@@ -62,6 +70,15 @@ export const discordChannelRoutes: RouteHandler = async (req, url) => {
     const limit = Math.min(Number(url.searchParams.get("limit") ?? 50), 200);
     const messages = getMessages(channelId, limit);
     return ok(messages);
+  }
+
+  // POST /api/discord-channels/:id/messages — send a message to Discord via the bot
+  if (sub === "/messages" && method === "POST") {
+    if (!isBotConnected()) return err("Bot not connected", 503);
+    const body = await parseBody<{ content: string; author_name?: string }>(req);
+    if (!body?.content?.trim()) return err("content is required");
+    await sendToDiscordChannel(channelId, body.content.trim(), body.author_name?.trim() || undefined);
+    return ok({ sent: true });
   }
 
   // GET /api/discord-channels/:id/stream — SSE (shared map with web channels)

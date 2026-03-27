@@ -42,6 +42,13 @@ export default function Chat() {
   const [editError, setEditError] = createSignal<string | null>(null);
   const [saving, setSaving] = createSignal(false);
 
+  // Delete confirm dialog
+  const [showDeleteConfirm, setShowDeleteConfirm] = createSignal(false);
+  const [deleteTargetId, setDeleteTargetId] = createSignal<string | null>(null);
+
+  // Discord send persona
+  const [discordPersonaName, setDiscordPersonaName] = createSignal("");
+
   const activeChannel = createMemo(() => channelList()?.find((c) => c.id === activeId()));
   const activeDiscordChannel = createMemo<ApiDiscordChannel | undefined>(() =>
     discordChannelList()?.find((c) => c.id === activeDiscordId())
@@ -288,14 +295,42 @@ export default function Chat() {
     }
   }
 
-  async function deleteChannel(id: string, e: MouseEvent) {
+  function promptDeleteChannel(id: string, e: MouseEvent) {
     e.stopPropagation();
+    setDeleteTargetId(id);
+    setShowDeleteConfirm(true);
+  }
+
+  async function confirmDeleteChannel() {
+    const id = deleteTargetId();
+    if (!id) return;
+    setShowDeleteConfirm(false);
+    setDeleteTargetId(null);
     await channels.delete(id);
     if (activeId() === id) {
       setActiveId(null);
       setMessages([]);
     }
     refetchChannels();
+  }
+
+  async function sendToDiscord() {
+    const text = input().trim();
+    const discordId = activeDiscordId();
+    if (!text || !discordId) return;
+    setSending(true);
+    setError(null);
+    setInput("");
+    try {
+      await discordChannels.sendMessage(discordId, {
+        content: text,
+        author_name: discordPersonaName().trim() || undefined,
+      });
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setSending(false);
+    }
   }
 
   return (
@@ -323,7 +358,7 @@ export default function Chat() {
                 <span class="chat__channel-name">{ch.name || ch.id}</span>
                 <button
                   class="btn btn--ghost btn--icon chat__channel-delete"
-                  onClick={(e) => deleteChannel(ch.id, e)}
+                  onClick={(e) => promptDeleteChannel(ch.id, e)}
                   title="Delete"
                 >
                   ×
@@ -349,8 +384,9 @@ export default function Chat() {
                     title={ch.entity_names.join(", ")}
                   >
                     <span class="chat__channel-name">
-                      {ch.entity_names.slice(0, 2).join(", ")}
-                      {ch.entity_names.length > 2 ? ` +${ch.entity_names.length - 2}` : ""}
+                      {ch.name
+                        ? `#${ch.name}`
+                        : (ch.entity_names.slice(0, 2).join(", ") + (ch.entity_names.length > 2 ? ` +${ch.entity_names.length - 2}` : ""))}
                     </span>
                   </li>
                 )}
@@ -373,7 +409,7 @@ export default function Chat() {
             <div class="chat__header">
               <span class="chat__header-name">
                 {activeDiscordId()
-                  ? (activeDiscordChannel()?.entity_names.join(", ") ?? activeDiscordId())
+                  ? (activeDiscordChannel()?.name ? `#${activeDiscordChannel()!.name}` : (activeDiscordChannel()?.entity_names.join(", ") ?? activeDiscordId()))
                   : (channelList()?.find((c) => c.id === activeId())?.name ?? activeId())}
               </span>
               <div class="chat__header-entities">
@@ -445,8 +481,31 @@ export default function Chat() {
             </Show>
 
             <Show when={activeDiscordId()}>
-              <div class="chat__readonly-notice">
-                <span class="dim small">Read-only — Discord channel</span>
+              <div class="chat__input-area">
+                <div class="chat__persona-row">
+                  <label class="chat__persona-label small dim">Send as:</label>
+                  <input
+                    class="input input--sm chat__persona-select"
+                    value={discordPersonaName()}
+                    onInput={(e) => setDiscordPersonaName(e.currentTarget.value)}
+                    placeholder="Display name (optional)"
+                  />
+                </div>
+                <div class="chat__input-row">
+                  <textarea
+                    class="input input--mono chat__input"
+                    value={input()}
+                    placeholder="Type a message… (Ctrl+Enter to send)"
+                    rows={3}
+                    onInput={(e) => setInput(e.currentTarget.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && e.ctrlKey) sendToDiscord();
+                    }}
+                  />
+                  <button class="btn btn--primary" onClick={sendToDiscord} disabled={sending() || !input().trim()}>
+                    {sending() ? "Sending…" : "Send"}
+                  </button>
+                </div>
               </div>
             </Show>
 
@@ -495,6 +554,20 @@ export default function Chat() {
           </>
         </Show>
       </div>
+
+      {/* Delete confirm dialog */}
+      <Show when={showDeleteConfirm()}>
+        <div class="overlay" onClick={() => setShowDeleteConfirm(false)}>
+          <div class="dialog card" onClick={(e) => e.stopPropagation()}>
+            <h3 class="dialog__title">Delete Channel</h3>
+            <p class="small dim">This will permanently delete the channel and its message history.</p>
+            <div class="row" style="margin-top:12px">
+              <button class="btn" onClick={() => setShowDeleteConfirm(false)}>Cancel</button>
+              <button class="btn btn--danger" onClick={confirmDeleteChannel}>Delete</button>
+            </div>
+          </div>
+        </div>
+      </Show>
 
       {/* Edit channel dialog */}
       <Show when={showEdit()}>

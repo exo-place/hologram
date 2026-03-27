@@ -968,3 +968,20 @@ export function clearEntityErrors(entityId: number): void {
   db.prepare(`DELETE FROM eval_errors WHERE entity_id = ?`).run(entityId);
 }
 
+
+// =============================================================================
+// Discord Channel Metadata
+// =============================================================================
+
+/**
+ * Upsert the human-readable name for a Discord channel.
+ * Called from the bot when processing messages so the web UI can display names.
+ */
+export function storeChannelMeta(channelId: string, name: string): void {
+  const db = getDb();
+  db.prepare(`
+    INSERT INTO discord_channel_meta (channel_id, name, updated_at)
+    VALUES (?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(channel_id) DO UPDATE SET name = excluded.name, updated_at = excluded.updated_at
+  `).run(channelId, name);
+}

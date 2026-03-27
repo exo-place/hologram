@@ -68,6 +68,7 @@ export interface ApiWebChannel {
 
 export interface ApiDiscordChannel {
   id: string;           // Discord snowflake string
+  name: string | null;  // Channel name from Discord (cached in discord_channel_meta)
   entity_ids: number[];
   entity_names: string[];
   latest_message: { author_name: string; content: string; created_at: string } | null;
