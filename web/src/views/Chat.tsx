@@ -17,6 +17,7 @@ export default function Chat() {
   const [messages, setMessages] = createSignal<ApiMessage[]>([]);
   const [streamingContent, setStreamingContent] = createSignal<string | null>(null);
   const [streamingMeta, setStreamingMeta] = createSignal<Omit<ApiMessage, "content"> | null>(null);
+  const [typingEntities, setTypingEntities] = createSignal<Map<string, { name: string; avatarUrl: string | null }>>(new Map());
   const [sending, setSending] = createSignal(false);
   const [input, setInput] = createSignal("");
   const [error, setError] = createSignal<string | null>(null);
@@ -43,6 +44,7 @@ export default function Chat() {
     sseRef = null;
     setStreamingContent(null);
     setStreamingMeta(null);
+    setTypingEntities(new Map());
     setActiveId(id);
     setLoadingMessages(true);
     setError(null);
@@ -59,7 +61,13 @@ export default function Chat() {
     // Subscribe to SSE stream
     sseRef = subscribeSSE(id, (event) => {
       const type = event.type as string;
-      if (type === "text_delta") {
+      if (type === "typing") {
+        setTypingEntities((prev) => {
+          const next = new Map(prev);
+          next.set(String(event.author_id ?? ""), { name: String(event.author_name ?? ""), avatarUrl: event.avatar_url as string | null ?? null });
+          return next;
+        });
+      } else if (type === "text_delta") {
         setStreamingContent((prev) => (prev ?? "") + (event.text as string ?? ""));
       } else if (type === "message_start") {
         setStreamingContent("");
@@ -76,6 +84,13 @@ export default function Chat() {
         batch(() => {
           // Server sends the stored message when available; fall back to reconstructing from meta
           const stored = event.message as ApiMessage | undefined;
+          const authorId = stored?.author_id ?? (streamingMeta()?.author_id ?? "");
+          setTypingEntities((prev) => {
+            if (!prev.has(authorId)) return prev;
+            const next = new Map(prev);
+            next.delete(authorId);
+            return next;
+          });
           if (stored) {
             setMessages((prev) => [...prev, stored]);
           } else {
@@ -238,6 +253,20 @@ export default function Chat() {
                     />
                   );
                 }}
+              </Show>
+              <Show when={typingEntities().size > 0}>
+                <div class="chat__typing-row">
+                  <For each={[...typingEntities().values()]}>
+                    {(entity) => (
+                      <div class="chat-typing-indicator">
+                        <span class="chat-typing-indicator__name">{entity.name}</span>
+                        <span class="chat-typing-indicator__dots">
+                          <span /><span /><span />
+                        </span>
+                      </div>
+                    )}
+                  </For>
+                </div>
               </Show>
               <div ref={messagesEndRef} />
             </div>

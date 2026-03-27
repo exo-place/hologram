@@ -225,6 +225,16 @@ async function fireResponse(
     entityMemories,
   };
 
+  // Signal typing for each responding entity
+  for (const entity of respondingEntities) {
+    broadcastSSE(channelId, {
+      type: "typing",
+      author_name: entity.name,
+      author_id: `entity:${entity.id}`,
+      avatar_url: entity.avatarUrl ?? null,
+    });
+  }
+
   const streamMode = respondingEntities[0]?.streamMode;
   if (streamMode) {
     // Streaming path: broadcast SSE events as they arrive
