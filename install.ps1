@@ -97,6 +97,33 @@ GOOGLE_GENERATIVE_AI_API_KEY=$GoogleKey
   Ok ".env created"
 }
 
+# ── Optional: desktop / startup integration ───────────────────────────────────
+if ($Interactive) {
+  Write-Host ""
+  Ask "Add to Start Menu and start on login?" "(y/N):"
+  $AddStartup = Read-Host
+  if ($AddStartup -match '^[Yy]') {
+    $AbsDest  = (Resolve-Path ".").Path
+    $BunBin   = (Get-Command bun).Source
+    $WshShell = New-Object -ComObject WScript.Shell
+
+    # Start Menu shortcut
+    $StartMenu = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Hologram.lnk"
+    $Shortcut  = $WshShell.CreateShortcut($StartMenu)
+    $Shortcut.TargetPath       = $BunBin
+    $Shortcut.Arguments        = "start"
+    $Shortcut.WorkingDirectory = $AbsDest
+    $Shortcut.Description      = "Hologram — Discord RP bot and web chat"
+    $Shortcut.Save()
+
+    # Startup folder (run at login)
+    $StartupDir = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Startup\Hologram.lnk"
+    Copy-Item $StartMenu $StartupDir -Force
+
+    Ok "Start Menu shortcut + startup entry added"
+  }
+}
+
 # ── Done ───────────────────────────────────────────────────────────────────────
 Write-Host ""
 Write-Host "hologram is ready!" -ForegroundColor Green
