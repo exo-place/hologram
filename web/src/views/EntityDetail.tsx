@@ -5,10 +5,11 @@ import FactEditor from "../components/FactEditor";
 import ConfigEditor from "../components/ConfigEditor";
 import TemplateEditor from "../components/TemplateEditor";
 import MemoriesPanel from "../components/MemoriesPanel";
+import PermissionsEditor from "../components/PermissionsEditor";
 import "./EntityDetail.css";
 
-type Tab = "Facts" | "Config" | "Template" | "System Prompt" | "Memories";
-const TABS: Tab[] = ["Facts", "Config", "Template", "System Prompt", "Memories"];
+type Tab = "Facts" | "Config" | "Template" | "System Prompt" | "Memories" | "Permissions";
+const TABS: Tab[] = ["Facts", "Config", "Template", "System Prompt", "Memories", "Permissions"];
 
 export default function EntityDetail() {
   const params = useParams();
@@ -103,6 +104,9 @@ export default function EntityDetail() {
                 </Match>
                 <Match when={tab() === "Memories"}>
                   <MemoriesPanel entityId={e().id} />
+                </Match>
+                <Match when={tab() === "Permissions"}>
+                  <PermissionsEditor entityId={e().id} />
                 </Match>
               </Switch>
             </div>

@@ -1,0 +1,50 @@
+.perm-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 16px 0;
+  max-width: 540px;
+}
+
+.perm-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.perm-section__header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.perm-section__title {
+  font-size: 0.875em;
+  font-weight: 600;
+}
+
+.perm-section__desc {
+  font-size: 0.75em;
+  opacity: 0.6;
+}
+
+.perm-section__textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+.perm-section__hint {
+  font-size: 0.75em;
+  opacity: 0.5;
+}
+
+.perm-section__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.perm-section__saved {
+  font-size: 0.75em;
+  color: var(--success, #4caf7a);
+}
