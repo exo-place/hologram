@@ -1,5 +1,6 @@
 import {
   createSignal,
+  createMemo,
   createResource,
   Show,
   For,
@@ -30,6 +31,9 @@ export default function Chat() {
   const [createError, setCreateError] = createSignal<string | null>(null);
   const [allEntities] = createResource(() => entities.list({ limit: 200 }));
   const [selectedEntityIds, setSelectedEntityIds] = createSignal<number[]>([]);
+  const [personaId, setPersonaId] = createSignal<number | null>(null);
+
+  const activeChannel = createMemo(() => channelList()?.find((c) => c.id === activeId()));
 
   let messagesEndRef!: HTMLDivElement;
   let inputRef!: HTMLTextAreaElement;
@@ -45,6 +49,7 @@ export default function Chat() {
     setStreamingContent(null);
     setStreamingMeta(null);
     setTypingEntities(new Map());
+    setPersonaId(null);
     setActiveId(id);
     setLoadingMessages(true);
     setError(null);
@@ -80,6 +85,11 @@ export default function Chat() {
           data: null,
           created_at: new Date().toISOString(),
         });
+      } else if (type === "forget") {
+        const id = activeId();
+        if (id) {
+          channels.listMessages(id, 100).then((msgs) => setMessages([...msgs].reverse())).catch(() => {});
+        }
       } else if (type === "message_complete") {
         batch(() => {
           // Server sends the stored message when available; fall back to reconstructing from meta
@@ -118,11 +128,14 @@ export default function Chat() {
     if (!text || !activeId()) return;
     setSending(true);
     setError(null);
+    const persona = personaId() ? allEntities()?.find((e) => e.id === personaId()) : null;
+    const authorId = persona ? `entity:${persona.id}` : "web-user";
+    const authorName = persona ? persona.name : "You";
     const optimistic: ApiMessage = {
       id: Date.now(),
       channel_id: activeId()!,
-      author_id: "web-user",
-      author_name: "You",
+      author_id: authorId,
+      author_name: authorName,
       content: text,
       discord_message_id: null,
       data: null,
@@ -134,14 +147,28 @@ export default function Chat() {
     try {
       await channels.sendMessage(activeId()!, {
         content: text,
-        author_id: "web-user",
-        author_name: "You",
+        author_id: authorId,
+        author_name: authorName,
       });
     } catch (err) {
       setError(String(err));
     } finally {
       setSending(false);
     }
+  }
+
+  async function forget() {
+    const id = activeId();
+    if (!id) return;
+    await channels.forget(id);
+    const msgs = await channels.listMessages(id, 100);
+    setMessages([...msgs].reverse());
+  }
+
+  async function trigger() {
+    const id = activeId();
+    if (!id) return;
+    await channels.trigger(id);
   }
 
   function openCreate() {
@@ -235,6 +262,28 @@ export default function Chat() {
 
         <Show when={activeId()}>
           <>
+            <div class="chat__header">
+              <span class="chat__header-name">
+                {channelList()?.find((c) => c.id === activeId())?.name ?? activeId()}
+              </span>
+              <div class="chat__header-entities">
+                <For each={activeChannel()?.entity_ids.flatMap((id) => {
+                  const e = allEntities()?.find((a) => a.id === id);
+                  return e ? [e] : [];
+                }) ?? []}>
+                  {(e) => <span class="chat__header-entity">{e.name}</span>}
+                </For>
+              </div>
+              <div class="chat__header-actions">
+                <button class="btn btn--sm" onClick={forget} title="Forget messages before now">
+                  Forget
+                </button>
+                <button class="btn btn--sm btn--primary" onClick={trigger} title="Trigger entity response">
+                  Trigger
+                </button>
+              </div>
+            </div>
+
             <div class="chat__messages">
               <Show when={loadingMessages()}>
                 <p class="dim small" style="padding:16px">Loading…</p>
@@ -276,20 +325,46 @@ export default function Chat() {
             </Show>
 
             <div class="chat__input-area">
-              <textarea
-                ref={inputRef}
-                class="input input--mono chat__input"
-                value={input()}
-                placeholder="Type a message… (Ctrl+Enter to send)"
-                rows={3}
-                onInput={(e) => setInput(e.currentTarget.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && e.ctrlKey) send();
-                }}
-              />
-              <button class="btn btn--primary" onClick={send} disabled={sending() || !input().trim()}>
-                {sending() ? "Sending…" : "Send"}
-              </button>
+              <Show when={activeId()}>
+                <div class="chat__persona-row">
+                  <label class="chat__persona-label small dim">Speak as:</label>
+                  <select
+                    class="input input--sm chat__persona-select"
+                    value={personaId() ?? ""}
+                    onChange={(e) =>
+                      setPersonaId(e.currentTarget.value ? Number(e.currentTarget.value) : null)
+                    }
+                  >
+                    <option value="">You</option>
+                    <For
+                      each={
+                        activeChannel()?.entity_ids.flatMap((id) => {
+                          const e = allEntities()?.find((a) => a.id === id);
+                          return e ? [e] : [];
+                        }) ?? []
+                      }
+                    >
+                      {(e) => <option value={e.id}>{e.name}</option>}
+                    </For>
+                  </select>
+                </div>
+              </Show>
+              <div class="chat__input-row">
+                <textarea
+                  ref={inputRef}
+                  class="input input--mono chat__input"
+                  value={input()}
+                  placeholder="Type a message… (Ctrl+Enter to send)"
+                  rows={3}
+                  onInput={(e) => setInput(e.currentTarget.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && e.ctrlKey) send();
+                  }}
+                />
+                <button class="btn btn--primary" onClick={send} disabled={sending() || !input().trim()}>
+                  {sending() ? "Sending…" : "Send"}
+                </button>
+              </div>
             </div>
           </>
         </Show>

@@ -140,6 +140,10 @@ export const channels = {
     get<ApiMessage[]>(`/api/channels/${id}/messages?limit=${limit}`),
   sendMessage: (id: string, body: SendMessageBody) =>
     post<{ message: ApiMessage; ai_response: null }>(`/api/channels/${id}/messages`, body),
+  forget: (id: string) =>
+    request<{ forget_at: string }>(`/api/channels/${id}/forget`, { method: "POST" }),
+  trigger: (id: string) =>
+    request<{ triggered: true }>(`/api/channels/${id}/trigger`, { method: "POST" }),
 };
 
 // ============================================================================

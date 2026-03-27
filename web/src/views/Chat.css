@@ -91,15 +91,78 @@
 
 .chat__input-area {
   display: flex;
-  gap: 10px;
+  flex-direction: column;
+  gap: 6px;
   padding: 12px 16px;
   border-top: 1px solid var(--glass-border);
+}
+
+.chat__input-row {
+  display: flex;
+  gap: 10px;
   align-items: flex-end;
 }
 
 .chat__input {
   flex: 1;
   resize: none;
+}
+
+/* Channel header */
+.chat__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  flex-shrink: 0;
+}
+
+.chat__header-name {
+  font-weight: 600;
+  font-size: 0.9em;
+}
+
+.chat__header-entities {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.chat__header-entity {
+  font-size: 0.75em;
+  padding: 2px 7px;
+  border-radius: 12px;
+  background: var(--glass-hover);
+  border: 1px solid var(--glass-border);
+  color: var(--fg-muted);
+}
+
+.chat__header-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* Persona selector */
+.chat__persona-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.chat__persona-label {
+  flex-shrink: 0;
+}
+
+.chat__persona-select {
+  width: auto;
+  min-width: 120px;
 }
 
 /* Entity picker in create dialog */
