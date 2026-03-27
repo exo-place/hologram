@@ -1,0 +1,50 @@
+.memories-panel__toolbar {
+  margin-bottom: 12px;
+  align-items: center;
+}
+
+.memories-panel__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.memories-panel__item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+}
+
+.memories-panel__item--editing {
+  gap: 8px;
+}
+
+.memories-panel__content {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+}
+
+.memories-panel__meta {
+  align-items: center;
+}
+
+.memories-panel__delete {
+  color: var(--danger);
+  opacity: 0.6;
+}
+.memories-panel__delete:hover { opacity: 1; }
+
+.memories-panel__textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+.memories-panel__actions {
+  align-items: center;
+  gap: 8px;
+}

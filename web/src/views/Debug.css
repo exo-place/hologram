@@ -1,0 +1,82 @@
+.debug-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.debug-panel__header {
+  padding: 20px 24px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.debug-panel__title {
+  margin: 0;
+  font-size: 20px;
+}
+
+.debug-panel__content {
+  flex: 1;
+  overflow: auto;
+  padding: 20px 24px;
+}
+
+/* Errors tab */
+.debug-panel__errors {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.debug-panel__error-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+}
+
+.debug-panel__condition {
+  background: var(--surface);
+  padding: 4px 8px;
+  border-radius: 4px;
+  display: block;
+}
+
+/* Embeddings tab */
+.debug-panel__embed-status {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.debug-panel__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 20px;
+  min-width: 140px;
+}
+
+/* Trace tab */
+.debug-panel__trace-form {
+  margin-bottom: 16px;
+  align-items: center;
+  gap: 10px;
+}
+
+.debug-panel__trace-input {
+  width: 120px;
+}
+
+.debug-panel__trace-channel {
+  flex: 1;
+  max-width: 280px;
+}
+
+.debug-panel__trace-result {
+  overflow-x: auto;
+}
+
+.debug-panel__row--excluded {
+  opacity: 0.45;
+}

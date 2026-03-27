@@ -1,0 +1,37 @@
+.config-editor__form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 540px;
+}
+
+.config-editor__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.config-editor__field--inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.config-editor__label {
+  color: var(--text--dim);
+}
+
+.config-editor__input,
+.config-editor__select {
+  width: 100%;
+}
+
+.config-editor__checkbox {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.config-editor__actions {
+  padding-top: 4px;
+}

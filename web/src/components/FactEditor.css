@@ -1,0 +1,57 @@
+.fact-editor__toolbar {
+  margin-bottom: 12px;
+  align-items: center;
+}
+
+.fact-editor__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fact-editor__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  transition: background 0.1s;
+}
+.fact-editor__item:hover { background: var(--surface--hover); }
+
+.fact-editor__item--editing {
+  background: var(--surface);
+  border-color: var(--border);
+  flex-direction: column;
+  align-items: stretch;
+  padding: 12px;
+}
+
+.fact-editor__content {
+  flex: 1;
+  cursor: text;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+}
+
+.fact-editor__delete {
+  color: var(--danger);
+  opacity: 0;
+}
+.fact-editor__item:hover .fact-editor__delete { opacity: 0.6; }
+.fact-editor__delete:hover { opacity: 1 !important; }
+
+.fact-editor__textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+.fact-editor__actions {
+  align-items: center;
+  gap: 8px;
+}

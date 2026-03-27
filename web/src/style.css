@@ -1,0 +1,218 @@
+*, *::before, *::after { box-sizing: border-box; }
+
+:root {
+  --bg: #0f0f11;
+  --surface: #1a1a20;
+  --surface--hover: #22222a;
+  --border: #2e2e3a;
+  --text: #e2e2ec;
+  --text--dim: #888899;
+  --accent: #7c6aff;
+  --accent--hover: #6354d4;
+  --danger: #e05353;
+  --danger--hover: #b83e3e;
+  --success: #4caf7a;
+  --font: "Inter", system-ui, sans-serif;
+  --mono: "JetBrains Mono", "Fira Code", monospace;
+  --radius: 6px;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  height: 100%;
+}
+
+#app { height: 100vh; display: flex; flex-direction: column; }
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ── Scrollbars ─────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* ── Layout ─────────────────────────────────────────────────────────────── */
+.layout {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.layout__sidebar {
+  width: 180px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 16px 12px;
+  gap: 4px;
+}
+
+.layout__content {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* ── Sidebar nav ─────────────────────────────────────────────────────────── */
+.nav__logo {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--accent);
+  padding: 4px 8px 16px;
+  letter-spacing: 0.03em;
+}
+
+.nav__link {
+  display: block;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  color: var(--text--dim);
+  font-size: 13px;
+  text-decoration: none;
+  transition: background 0.12s, color 0.12s;
+}
+.nav__link:hover { background: var(--surface--hover); color: var(--text); text-decoration: none; }
+.nav__link--active { background: var(--surface--hover); color: var(--text); }
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+.btn {
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--surface--hover);
+  color: var(--text);
+  border-radius: var(--radius);
+  padding: 7px 14px;
+  font-size: 13px;
+  font-family: inherit;
+  transition: background 0.12s;
+  line-height: 1;
+}
+.btn:hover:not(:disabled) { background: var(--border); }
+.btn:disabled { opacity: 0.4; cursor: default; }
+
+.btn--primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn--primary:hover:not(:disabled) { background: var(--accent--hover); border-color: var(--accent--hover); }
+
+.btn--danger { background: transparent; border-color: var(--danger); color: var(--danger); }
+.btn--danger:hover:not(:disabled) { background: var(--danger--hover); border-color: var(--danger--hover); color: #fff; }
+
+.btn--ghost { background: transparent; border-color: transparent; color: var(--text--dim); padding: 4px 8px; }
+.btn--ghost:hover:not(:disabled) { background: var(--surface--hover); color: var(--text); }
+
+.btn--sm { padding: 4px 10px; font-size: 12px; }
+.btn--icon { padding: 4px 8px; font-size: 16px; line-height: 1; }
+
+/* ── Form controls ───────────────────────────────────────────────────────── */
+.input {
+  background: var(--surface--hover);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: var(--radius);
+  padding: 7px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  width: 100%;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.input:focus { border-color: var(--accent); }
+.input--mono { font-family: var(--mono); }
+
+textarea.input { resize: vertical; min-height: 80px; }
+
+select.input { cursor: pointer; }
+
+/* ── Card ─────────────────────────────────────────────────────────────────── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+/* ── Tag ──────────────────────────────────────────────────────────────────── */
+.tag {
+  display: inline-block;
+  background: var(--surface--hover);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-size: 11px;
+  color: var(--text--dim);
+}
+
+/* ── Helpers ─────────────────────────────────────────────────────────────── */
+.row { display: flex; gap: 8px; align-items: center; }
+.col { display: flex; flex-direction: column; gap: 8px; }
+.spacer { flex: 1; }
+.mono { font-family: var(--mono); }
+.dim { color: var(--text--dim); }
+.small { font-size: 12px; }
+.error { color: var(--danger); font-size: 13px; }
+.success { color: var(--success); font-size: 13px; }
+
+/* ── Overlay / Dialog ─────────────────────────────────────────────────────── */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.dialog {
+  padding: 24px;
+  min-width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.dialog__title { margin: 0; font-size: 16px; font-weight: 600; }
+
+/* ── Table ────────────────────────────────────────────────────────────────── */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.table th, .table td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.table th { color: var(--text--dim); font-weight: 500; font-size: 12px; }
+
+/* ── Tabs ─────────────────────────────────────────────────────────────────── */
+.tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tabs__tab {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 8px 14px;
+  color: var(--text--dim);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  margin-bottom: -1px;
+  transition: color 0.12s;
+}
+.tabs__tab:hover { color: var(--text); }
+.tabs__tab--active { color: var(--text); border-bottom-color: var(--accent); }

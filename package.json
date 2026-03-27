@@ -7,6 +7,8 @@
   "scripts": {
     "dev": "bun run --watch src/index.ts",
     "dev:api": "WEB=true bun run --watch src/index.ts",
+    "dev:web": "bun run --cwd web dev",
+    "build:web": "bun run --cwd web build",
     "start": "bun run src/index.ts",
     "check:types": "tsgo --noEmit",
     "lint": "oxlint",

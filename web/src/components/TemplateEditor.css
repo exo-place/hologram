@@ -1,0 +1,24 @@
+.template-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+}
+
+.template-editor__toolbar {
+  align-items: center;
+}
+
+.template-editor__textarea {
+  flex: 1;
+  width: 100%;
+  resize: vertical;
+  min-height: 300px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.template-editor__actions {
+  align-items: center;
+  gap: 12px;
+}

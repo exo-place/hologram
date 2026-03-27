@@ -1,0 +1,42 @@
+.entity-detail {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.entity-detail__header {
+  padding: 20px 24px 12px;
+  gap: 12px;
+  align-items: baseline;
+  border-bottom: 1px solid var(--border);
+}
+
+.entity-detail__back { text-decoration: none; }
+.entity-detail__back:hover { text-decoration: underline; }
+
+.entity-detail__title {
+  margin: 0;
+  font-size: 20px;
+  cursor: text;
+}
+
+.entity-detail__rename-input {
+  font-size: 20px;
+  font-weight: 700;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid var(--accent);
+  border-radius: 0;
+  padding: 2px 0;
+  color: var(--text);
+  width: auto;
+  outline: none;
+  font-family: inherit;
+}
+
+.entity-detail__content {
+  flex: 1;
+  overflow: auto;
+  padding: 20px 24px;
+}

@@ -230,7 +230,7 @@ CATCHUP_RESPOND=     # true | false (default) — respond to recent missed messa
 CATCHUP_RESPOND_MAX_AGE_MS=  # Max age to respond to (default: 300000 = 5 min)
 LOG_LEVEL=           # debug, info (default), warn, error
 WEB=false            # Set to disable the web API server (on by default)
-WEB_PORT=3000        # Web API server port (default 3000)
+WEB_PORT=3000        # Web API server port (default 3000); PORT= is also accepted as a fallback
 ```
 
 ## Logging

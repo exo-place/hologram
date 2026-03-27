@@ -16,7 +16,7 @@ if (process.env.DISCORD_TOKEN) {
 // Web API server (on by default — set WEB=false to disable)
 if (process.env.WEB !== "false") {
   const { startApi } = await import("./api/index");
-  const port = Number(process.env.WEB_PORT) || 3000;
+  const port = Number(process.env.WEB_PORT ?? process.env.PORT) || 3000;
   await startApi(port);
 } else {
   info("WEB=false — web server will not start");
