@@ -1,0 +1,110 @@
+# Hologram quickstart installer (Windows PowerShell)
+# Usage: irm https://exo.place/hologram/install.ps1 | iex
+$ErrorActionPreference = 'Stop'
+
+$Repo = "https://github.com/exo-place/hologram"
+$Dest = if ($env:HOLOGRAM_DIR) { $env:HOLOGRAM_DIR } else { "hologram" }
+
+# ── Helpers ────────────────────────────────────────────────────────────────────
+function Ok($msg)   { Write-Host "✓ $msg" -ForegroundColor Green }
+function Fail($msg) { Write-Host "✗ $msg" -ForegroundColor Red; exit 1 }
+function Ask($label, $hint = "") {
+  if ($hint) { Write-Host "? $label " -NoNewline; Write-Host $hint -ForegroundColor DarkGray -NoNewline }
+  else        { Write-Host "? $label" -NoNewline }
+  Write-Host " " -NoNewline
+}
+
+$Interactive = [Environment]::UserInteractive -and -not [Console]::IsInputRedirected
+
+# ── Dependencies ───────────────────────────────────────────────────────────────
+if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+  Fail "git is required — https://git-scm.com/"
+}
+
+if (-not (Get-Command bun -ErrorAction SilentlyContinue)) {
+  Write-Host "Installing Bun..."
+  powershell -c "irm bun.sh/install.ps1 | iex"
+  # Reload PATH
+  $env:PATH = [Environment]::GetEnvironmentVariable("PATH", "User") + ";" + $env:PATH
+}
+if (-not (Get-Command bun -ErrorAction SilentlyContinue)) {
+  Fail "Bun installation failed — try installing manually: https://bun.sh"
+}
+Ok "Bun $(bun --version)"
+
+# ── Clone / update ─────────────────────────────────────────────────────────────
+if (Test-Path "$Dest\.git") {
+  Write-Host "Updating existing install in .\$Dest"
+  git -C $Dest pull --ff-only
+} else {
+  Write-Host "Cloning hologram into .\$Dest"
+  git clone $Repo $Dest
+}
+Set-Location $Dest
+
+# ── Install + build ────────────────────────────────────────────────────────────
+bun install --frozen-lockfile
+bun run build
+Ok "Built"
+
+# ── Configure ──────────────────────────────────────────────────────────────────
+if (Test-Path ".env") {
+  Write-Host ".env already exists — skipping configuration"
+} else {
+  $DiscordToken = ""
+  $DiscordAppId = ""
+  $GoogleKey    = ""
+
+  if ($Interactive) {
+    Write-Host ""
+    Write-Host "Configure hologram" -ForegroundColor White -NoNewline
+    Write-Host " (press Enter to skip any field)" -ForegroundColor DarkGray
+    Write-Host ""
+
+    Ask "Google AI API key" "(free at aistudio.google.com/api-keys):"
+    $GoogleKey = Read-Host
+
+    Ask "Discord bot token" "(optional — skip for web-only mode):"
+    $DiscordToken = Read-Host
+
+    if ($DiscordToken) {
+      Ask "Discord application ID" "(discord.com/developers/applications):"
+      $DiscordAppId = Read-Host
+    }
+  } else {
+    Write-Host "Non-interactive mode — creating .env with empty values." -ForegroundColor DarkGray
+    Write-Host "Edit .env before running hologram." -ForegroundColor DarkGray
+  }
+
+  @"
+# Hologram configuration
+# Full reference: .env.example
+
+DISCORD_TOKEN=$DiscordToken
+DISCORD_APP_ID=$DiscordAppId
+
+DEFAULT_MODEL=google:gemini-3-flash-preview
+GOOGLE_GENERATIVE_AI_API_KEY=$GoogleKey
+"@ | Set-Content .env -Encoding UTF8
+
+  Ok ".env created"
+}
+
+# ── Done ───────────────────────────────────────────────────────────────────────
+Write-Host ""
+Write-Host "hologram is ready!" -ForegroundColor Green
+Write-Host ""
+Write-Host "  cd $Dest"
+Write-Host "  Start:  " -NoNewline; Write-Host "bun start" -ForegroundColor White -NoNewline; Write-Host "         (production)" -ForegroundColor DarkGray
+Write-Host "  Dev:    " -NoNewline; Write-Host "bun run dev" -ForegroundColor White -NoNewline; Write-Host "       (watch + hot reload)" -ForegroundColor DarkGray
+Write-Host "  Web UI: " -NoNewline; Write-Host "http://localhost:3000" -ForegroundColor Cyan
+Write-Host ""
+
+$envContent = Get-Content .env -Raw
+if ($envContent -notmatch 'GOOGLE_GENERATIVE_AI_API_KEY=.+' -and
+    $envContent -notmatch 'ANTHROPIC_API_KEY=.+' -and
+    $envContent -notmatch 'OPENAI_API_KEY=.+') {
+  Write-Host "  Add at least one LLM API key to .env before starting." -ForegroundColor DarkGray
+  Write-Host "  See .env.example for all supported providers." -ForegroundColor DarkGray
+  Write-Host ""
+}
