@@ -33,7 +33,8 @@ else
 fi
 
 # ── Dependencies ───────────────────────────────────────────────────────────────
-command -v git >/dev/null 2>&1 || fail "git is required — https://git-scm.com/"
+HAS_GIT=0
+command -v git >/dev/null 2>&1 && HAS_GIT=1
 
 if ! command -v bun >/dev/null 2>&1; then
   echo "Installing Bun..."
@@ -46,12 +47,19 @@ command -v bun >/dev/null 2>&1 || fail "Bun installation failed — try installi
 ok "Bun $(bun --version)"
 
 # ── Clone / update ─────────────────────────────────────────────────────────────
-if [ -d "$DEST/.git" ]; then
+if [ "$HAS_GIT" = "1" ] && [ -d "$DEST/.git" ]; then
   echo "Updating existing install in ./$DEST"
   git -C "$DEST" pull --ff-only || true
-else
+elif [ "$HAS_GIT" = "1" ]; then
   echo "Cloning hologram into ./$DEST"
   git clone "$REPO" "$DEST"
+else
+  echo "git not found — downloading archive..."
+  TMPWORK=$(mktemp -d)
+  trap 'rm -rf "$TMPWORK"' EXIT
+  curl -fsSL "$REPO/archive/refs/heads/master.tar.gz" -o "$TMPWORK/hologram.tar.gz"
+  tar -xzf "$TMPWORK/hologram.tar.gz" -C "$TMPWORK"
+  mv "$TMPWORK/hologram-master" "$DEST"
 fi
 cd "$DEST"
 

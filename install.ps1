@@ -17,9 +17,7 @@ function Ask($label, $hint = "") {
 $Interactive = [Environment]::UserInteractive -and -not [Console]::IsInputRedirected
 
 # ── Dependencies ───────────────────────────────────────────────────────────────
-if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-  Fail "git is required — https://git-scm.com/"
-}
+$HasGit = [bool](Get-Command git -ErrorAction SilentlyContinue)
 
 if (-not (Get-Command bun -ErrorAction SilentlyContinue)) {
   Write-Host "Installing Bun..."
@@ -33,12 +31,21 @@ if (-not (Get-Command bun -ErrorAction SilentlyContinue)) {
 Ok "Bun $(bun --version)"
 
 # ── Clone / update ─────────────────────────────────────────────────────────────
-if (Test-Path "$Dest\.git") {
+if ($HasGit -and (Test-Path "$Dest\.git")) {
   Write-Host "Updating existing install in .\$Dest"
   git -C $Dest pull --ff-only
-} else {
+} elseif ($HasGit) {
   Write-Host "Cloning hologram into .\$Dest"
   git clone $Repo $Dest
+} else {
+  Write-Host "git not found — downloading archive..."
+  $ZipUrl = "$Repo/archive/refs/heads/master.zip"
+  $TmpZip = Join-Path $env:TEMP "hologram.zip"
+  $TmpDir = Join-Path $env:TEMP "hologram-extract"
+  Invoke-WebRequest $ZipUrl -OutFile $TmpZip
+  Expand-Archive $TmpZip -DestinationPath $TmpDir -Force
+  Move-Item (Join-Path $TmpDir "hologram-master") $Dest
+  Remove-Item $TmpZip, $TmpDir -Recurse -Force -ErrorAction SilentlyContinue
 }
 Set-Location $Dest
 
