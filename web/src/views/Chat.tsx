@@ -33,6 +33,13 @@ export default function Chat() {
   const [selectedEntityIds, setSelectedEntityIds] = createSignal<number[]>([]);
   const [personaId, setPersonaId] = createSignal<number | null>(null);
 
+  // Edit channel dialog
+  const [showEdit, setShowEdit] = createSignal(false);
+  const [editName, setEditName] = createSignal("");
+  const [editEntityIds, setEditEntityIds] = createSignal<number[]>([]);
+  const [editError, setEditError] = createSignal<string | null>(null);
+  const [saving, setSaving] = createSignal(false);
+
   const activeChannel = createMemo(() => channelList()?.find((c) => c.id === activeId()));
 
   let messagesEndRef!: HTMLDivElement;
@@ -178,6 +185,40 @@ export default function Chat() {
     setCreateError(null);
   }
 
+  function openEdit() {
+    const ch = activeChannel();
+    if (!ch) return;
+    setEditName(ch.name ?? "");
+    setEditEntityIds([...ch.entity_ids]);
+    setEditError(null);
+    setShowEdit(true);
+  }
+
+  function toggleEditEntity(id: number) {
+    setEditEntityIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  }
+
+  async function saveEdit() {
+    const id = activeId();
+    if (!id) return;
+    setSaving(true);
+    setEditError(null);
+    try {
+      await channels.update(id, {
+        name: editName().trim() || null,
+        entity_ids: editEntityIds(),
+      });
+      setShowEdit(false);
+      await refetchChannels();
+    } catch (err) {
+      setEditError(String(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   function toggleEntity(id: number) {
     setSelectedEntityIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
@@ -275,6 +316,9 @@ export default function Chat() {
                 </For>
               </div>
               <div class="chat__header-actions">
+                <button class="btn btn--ghost btn--sm" onClick={openEdit} title="Edit channel">
+                  Edit
+                </button>
                 <button class="btn btn--sm" onClick={forget} title="Forget messages before now">
                   Forget
                 </button>
@@ -369,6 +413,49 @@ export default function Chat() {
           </>
         </Show>
       </div>
+
+      {/* Edit channel dialog */}
+      <Show when={showEdit()}>
+        <div class="overlay" onClick={() => setShowEdit(false)}>
+          <div class="dialog card" onClick={(e) => e.stopPropagation()}>
+            <h3 class="dialog__title">Edit Channel</h3>
+            <input
+              class="input"
+              value={editName()}
+              onInput={(e) => setEditName(e.currentTarget.value)}
+              placeholder="Channel name (optional)"
+              autofocus
+            />
+            <p class="small" style="margin:8px 0 4px;font-weight:600">Entities</p>
+            <div class="chat__entity-picker">
+              <Show when={allEntities.loading}>
+                <p class="dim small">Loading…</p>
+              </Show>
+              <For each={allEntities()}>
+                {(e) => (
+                  <label class="chat__entity-option">
+                    <input
+                      type="checkbox"
+                      checked={editEntityIds().includes(e.id)}
+                      onChange={() => toggleEditEntity(e.id)}
+                    />
+                    <span class="small">{e.name}</span>
+                  </label>
+                )}
+              </For>
+            </div>
+            <Show when={editError()}>
+              <p class="error">{editError()}</p>
+            </Show>
+            <div class="row" style="margin-top:12px">
+              <button class="btn" onClick={() => setShowEdit(false)}>Cancel</button>
+              <button class="btn btn--primary" onClick={saveEdit} disabled={saving()}>
+                {saving() ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Show>
 
       {/* Create dialog */}
       <Show when={showCreate()}>
