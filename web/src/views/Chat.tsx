@@ -46,8 +46,9 @@ export default function Chat() {
   const [showDeleteConfirm, setShowDeleteConfirm] = createSignal(false);
   const [deleteTargetId, setDeleteTargetId] = createSignal<string | null>(null);
 
-  // Discord send persona
-  const [discordPersonaName, setDiscordPersonaName] = createSignal("");
+  // Discord send persona (entity ID or custom name)
+  const [discordEntityId, setDiscordEntityId] = createSignal<number | null>(null);
+  const [discordCustomName, setDiscordCustomName] = createSignal("");
 
   const activeChannel = createMemo(() => channelList()?.find((c) => c.id === activeId()));
   const activeDiscordChannel = createMemo<ApiDiscordChannel | undefined>(() =>
@@ -145,6 +146,8 @@ export default function Chat() {
     setStreamingContent(null);
     setStreamingMeta(null);
     setTypingEntities(new Map());
+    setDiscordEntityId(null);
+    setDiscordCustomName("");
     setActiveId(null);
     setActiveDiscordId(id);
     setLoadingMessages(true);
@@ -322,9 +325,12 @@ export default function Chat() {
     setError(null);
     setInput("");
     try {
+      const entityId = discordEntityId();
+      const customName = discordCustomName().trim();
       await discordChannels.sendMessage(discordId, {
         content: text,
-        author_name: discordPersonaName().trim() || undefined,
+        entity_id: entityId ?? undefined,
+        author_name: !entityId && customName ? customName : undefined,
       });
     } catch (e) {
       setError(String(e));
@@ -484,12 +490,28 @@ export default function Chat() {
               <div class="chat__input-area">
                 <div class="chat__persona-row">
                   <label class="chat__persona-label small dim">Send as:</label>
-                  <input
+                  <select
                     class="input input--sm chat__persona-select"
-                    value={discordPersonaName()}
-                    onInput={(e) => setDiscordPersonaName(e.currentTarget.value)}
-                    placeholder="Display name (optional)"
-                  />
+                    value={discordEntityId() ?? ""}
+                    onChange={(e) => setDiscordEntityId(e.currentTarget.value ? Number(e.currentTarget.value) : null)}
+                  >
+                    <option value="">Anonymous / Custom</option>
+                    <For each={activeDiscordChannel()?.entity_ids.flatMap((id) => {
+                      const e = allEntities()?.find((a) => a.id === id);
+                      return e ? [e] : [];
+                    }) ?? []}>
+                      {(e) => <option value={e.id}>{e.name}</option>}
+                    </For>
+                  </select>
+                  <Show when={!discordEntityId()}>
+                    <input
+                      class="input input--sm"
+                      style="flex:1"
+                      value={discordCustomName()}
+                      onInput={(e) => setDiscordCustomName(e.currentTarget.value)}
+                      placeholder="Display name (optional)"
+                    />
+                  </Show>
                 </div>
                 <div class="chat__input-row">
                   <textarea

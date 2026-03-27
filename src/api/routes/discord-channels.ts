@@ -9,6 +9,7 @@
 
 import { getDb } from "../../db/index";
 import { getMessages } from "../../db/discord";
+import { getEntity, getEntityConfig } from "../../db/entities";
 import { ok, err, parseBody, type RouteHandler } from "../helpers";
 import { sseClients } from "./chat";
 import { sendToDiscordChannel, isBotConnected } from "../../bot/bridge";
@@ -75,9 +76,22 @@ export const discordChannelRoutes: RouteHandler = async (req, url) => {
   // POST /api/discord-channels/:id/messages — send a message to Discord via the bot
   if (sub === "/messages" && method === "POST") {
     if (!isBotConnected()) return err("Bot not connected", 503);
-    const body = await parseBody<{ content: string; author_name?: string }>(req);
+    const body = await parseBody<{ content: string; entity_id?: number; author_name?: string }>(req);
     if (!body?.content?.trim()) return err("content is required");
-    await sendToDiscordChannel(channelId, body.content.trim(), body.author_name?.trim() || undefined);
+
+    let authorName: string | undefined;
+    let avatarUrl: string | undefined;
+
+    if (body.entity_id != null) {
+      const entity = getEntity(body.entity_id);
+      const config = entity ? getEntityConfig(body.entity_id) : null;
+      authorName = entity?.name;
+      avatarUrl = config?.config_avatar ?? undefined;
+    } else if (body.author_name?.trim()) {
+      authorName = body.author_name.trim();
+    }
+
+    await sendToDiscordChannel(channelId, body.content.trim(), authorName, avatarUrl);
     return ok({ sent: true });
   }
 

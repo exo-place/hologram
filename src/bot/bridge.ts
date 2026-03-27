@@ -4,7 +4,7 @@
  * layer checks `isBotConnected()` and calls `sendToDiscordChannel()`.
  */
 
-type SendFn = (channelId: string, content: string, authorName?: string) => Promise<void>;
+type SendFn = (channelId: string, content: string, authorName?: string, avatarUrl?: string) => Promise<void>;
 
 let _send: SendFn | null = null;
 
@@ -16,7 +16,7 @@ export function isBotConnected(): boolean {
   return _send !== null;
 }
 
-export async function sendToDiscordChannel(channelId: string, content: string, authorName?: string): Promise<void> {
+export async function sendToDiscordChannel(channelId: string, content: string, authorName?: string, avatarUrl?: string): Promise<void> {
   if (!_send) throw new Error("Bot not connected");
-  return _send(channelId, content, authorName);
+  return _send(channelId, content, authorName, avatarUrl);
 }

@@ -1923,9 +1923,14 @@ bot.handlers.MESSAGE_UPDATE = (bot, data, shardId) => {
 
 export async function startBot() {
   info("Starting bot");
-  setBotBridge(async (channelId: string, content: string, authorName?: string) => {
-    const text = authorName ? `**${authorName}:** ${content}` : content;
-    await bot.helpers.sendMessage(BigInt(channelId), { content: text });
+  setBotBridge(async (channelId: string, content: string, authorName?: string, avatarUrl?: string) => {
+    if (authorName) {
+      // Try webhook first (sends with proper username/avatar)
+      const ids = await executeWebhook(channelId, content, authorName, avatarUrl);
+      if (ids) return;
+      // Fall back to prefixed regular message if webhook unavailable
+    }
+    await bot.helpers.sendMessage(BigInt(channelId), { content });
   });
   await bot.start();
 }

@@ -156,7 +156,7 @@ export const discordChannels = {
   list: () => get<ApiDiscordChannel[]>("/api/discord-channels"),
   listMessages: (id: string, limit = 50) =>
     get<ApiMessage[]>(`/api/discord-channels/${id}/messages?limit=${limit}`),
-  sendMessage: (id: string, body: { content: string; author_name?: string }) =>
+  sendMessage: (id: string, body: { content: string; entity_id?: number; author_name?: string }) =>
     post<{ sent: boolean }>(`/api/discord-channels/${id}/messages`, body),
 };
 
