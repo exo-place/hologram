@@ -9,7 +9,14 @@
 
 .chat-message--user {
   align-self: flex-end;
-  background: var(--primary);
+  background: rgba(99, 84, 255, 0.35);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(99, 84, 255, 0.45);
+  border-top-color: rgba(99, 84, 255, 0.55);
+  border-left-color: rgba(99, 84, 255, 0.55);
+  border-bottom-color: rgba(40, 30, 120, 0.4);
+  border-right-color: rgba(40, 30, 120, 0.4);
   color: #fff;
 }
 
