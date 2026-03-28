@@ -126,7 +126,7 @@ if [ "$INTERACTIVE" = "1" ]; then
       if [ "$OS" = "Linux" ]; then
         DESKTOP_FILE="$HOME/.local/share/applications/hologram.desktop"
         mkdir -p "$(dirname "$DESKTOP_FILE")"
-        printf '[Desktop Entry]\nName=Hologram\nComment=Discord RP bot and web chat\nExec=sh -c '"'"'cd "%s" && "%s" start; exec "${SHELL:-sh}"'"'"'\nTerminal=true\nType=Application\nCategories=Network;\nIcon=%s/assets/icon.svg\n' \
+        printf '[Desktop Entry]\nName=Hologram\nComment=Discord RP bot and web chat\nExec=sh -c '"'"'cd "%s" && "%s" start; exec "${SHELL:-sh}"'"'"'\nTerminal=true\nType=Application\nCategories=Network;\nIcon=%s/assets/icon.png\n' \
           "$ABS_DEST" "$BUN_BIN" "$ABS_DEST" > "$DESKTOP_FILE"
         mkdir -p "$HOME/.config/autostart"
         cp "$DESKTOP_FILE" "$HOME/.config/autostart/hologram.desktop"
