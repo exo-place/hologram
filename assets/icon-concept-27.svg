@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="512" height="512">
+  <!-- Two walls + V-dip crossbar meeting at center point -->
+  <rect width="32" height="32" rx="6" fill="#1a1a1a"/>
+
+  <!-- Left wall -->
+  <rect x="3" y="3" width="5" height="26" rx="1" fill="#888"/>
+
+  <!-- Right wall -->
+  <rect x="24" y="3" width="5" height="26" rx="1" fill="#888"/>
+
+  <!-- V-shaped crossbar: from each wall, angles down to center pinch -->
+  <g opacity="0.6">
+    <path d="M8,12 L16,20 L24,12" fill="none" stroke="#bbb" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Concept 15: Single dot at bottom, three lines fanning upward to dots — origin → entities -->
+  <rect width="512" height="512" rx="112" fill="#0f0b2e"/>
+
+  <!-- Source dot -->
+  <circle cx="256" cy="388" r="36" fill="#4338ca"/>
+
+  <!-- Diverging paths -->
+  <path d="M256 352 Q220 260 140 160" fill="none" stroke="#6366f1" stroke-width="24" stroke-linecap="round"/>
+  <path d="M256 352 Q256 260 256 140" fill="none" stroke="#a5b4fc" stroke-width="24" stroke-linecap="round"/>
+  <path d="M256 352 Q292 260 372 160" fill="none" stroke="#818cf8" stroke-width="24" stroke-linecap="round"/>
+
+  <!-- Entity dots at ends -->
+  <circle cx="140" cy="148" r="32" fill="#6366f1"/>
+  <circle cx="256" cy="128" r="32" fill="#a5b4fc"/>
+  <circle cx="372" cy="148" r="32" fill="#818cf8"/>
+</svg>

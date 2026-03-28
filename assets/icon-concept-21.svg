@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="512" height="512">
+  <!-- 32x32 grid. Grey palette. Wall + fork = H shape. -->
+  <rect width="32" height="32" rx="6" fill="#1a1a1a"/>
+
+  <!-- Wall (left vertical, solid) -->
+  <rect x="3" y="3" width="7" height="26" rx="1.5" fill="#888"/>
+
+  <!-- Beam + arrowheads (single group, translucent) -->
+  <g opacity="0.55" fill="#bbb">
+    <!-- Horizontal crossbar (abuts wall at x=10, no overlap) -->
+    <rect x="10" y="14" width="14" height="4" rx="0.5"/>
+
+    <!-- Up bar -->
+    <rect x="19" y="7" width="4" height="9" rx="0.5"/>
+
+    <!-- Down bar -->
+    <rect x="19" y="16" width="4" height="9" rx="0.5"/>
+
+    <!-- Arrowhead up -->
+    <polygon points="17,8 21,3 25,8"/>
+
+    <!-- Arrowhead right -->
+    <polygon points="23,11.5 29,16 23,20.5"/>
+
+    <!-- Arrowhead down -->
+    <polygon points="17,24 21,29 25,24"/>
+  </g>
+</svg>

@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="512" height="512">
+  <!-- Variant: slightly curved branches at junction, sharper arrowheads -->
+  <rect width="32" height="32" rx="6" fill="#1a1a1a"/>
+
+  <!-- Wall -->
+  <rect x="3" y="3" width="7" height="26" rx="1.5" fill="#888"/>
+
+  <!-- Beam group -->
+  <g opacity="0.55" fill="#bbb">
+    <!-- Horizontal bar -->
+    <rect x="10" y="14" width="14" height="4" rx="0.5"/>
+
+    <!-- Up branch (slight curve at junction via path) -->
+    <path d="M19,15 Q19,10 19,7 L23,7 Q23,10 23,15 Z" fill="#bbb"/>
+
+    <!-- Down branch (slight curve) -->
+    <path d="M19,17 Q19,22 19,25 L23,25 Q23,22 23,17 Z" fill="#bbb"/>
+
+    <!-- Arrowhead up -->
+    <polygon points="17.5,8 21,3.5 24.5,8"/>
+
+    <!-- Arrowhead right -->
+    <polygon points="23,12 28.5,16 23,20"/>
+
+    <!-- Arrowhead down -->
+    <polygon points="17.5,24 21,28.5 24.5,24"/>
+  </g>
+</svg>

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Concept 6: Simplified projection — bold rounded diamond over a soft base pill -->
+  <rect width="512" height="512" rx="112" fill="#0f0b2e"/>
+
+  <!-- Beam (simple triangle, rounded) -->
+  <path d="M256 140 L340 360 Q340 370 330 370 L182 370 Q172 370 172 360 Z"
+        fill="#6366f1" opacity="0.3"/>
+
+  <!-- Diamond — single flat color, rounded corners via path -->
+  <path d="M256 120 Q262 120 266 126 L336 210 Q340 216 336 222 L266 306 Q262 312 256 312 Q250 312 246 306 L176 222 Q172 216 176 210 L246 126 Q250 120 256 120Z"
+        fill="#818cf8"/>
+
+  <!-- Base pill -->
+  <rect x="176" y="370" width="160" height="32" rx="16" fill="#6366f1"/>
+</svg>

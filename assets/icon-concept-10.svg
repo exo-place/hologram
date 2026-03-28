@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Concept 10: Three overlapping circles on a shared rounded base — entities on a substrate -->
+  <rect width="512" height="512" rx="112" fill="#0f0b2e"/>
+
+  <!-- Shared base/platform -->
+  <rect x="96" y="320" width="320" height="48" rx="24" fill="#4338ca"/>
+
+  <!-- Entity circles, overlapping, different tints -->
+  <circle cx="192" cy="240" r="72" fill="#818cf8" opacity="0.85"/>
+  <circle cx="256" cy="200" r="72" fill="#a5b4fc" opacity="0.85"/>
+  <circle cx="320" cy="240" r="72" fill="#6366f1" opacity="0.85"/>
+</svg>

@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="512" height="512">
+  <!-- Variant: pillars also have isometric depth (not just flat rects) -->
+  <rect width="32" height="32" rx="6" fill="#1a1a1a"/>
+
+  <!-- Left pillar — front face -->
+  <rect x="4" y="4" width="5" height="24" rx="1" fill="#888"/>
+  <!-- Left pillar — top face (depth going back-right) -->
+  <polygon points="4,4 9,4 12,2 7,2" fill="#aaa"/>
+  <!-- Left pillar — right inner face (depth) -->
+  <polygon points="9,4 12,2 12,26 9,28" fill="#777"/>
+
+  <!-- Right pillar — front face -->
+  <rect x="23" y="4" width="5" height="24" rx="1" fill="#888"/>
+  <!-- Right pillar — top face (depth going back-left) -->
+  <polygon points="23,4 28,4 25,2 20,2" fill="#aaa"/>
+  <!-- Right pillar — left inner face (depth) -->
+  <polygon points="23,4 20,2 20,26 23,28" fill="#777"/>
+
+  <!-- Crossbar top face (recedes to vanishing point between pillars) -->
+  <polygon points="12,12 20,12 16,15" fill="#999"/>
+
+  <!-- Crossbar left inner face -->
+  <polygon points="12,12 16,15 16,19 12,16" fill="#666"/>
+
+  <!-- Crossbar right inner face -->
+  <polygon points="20,12 16,15 16,19 20,16" fill="#777"/>
+
+  <!-- Crossbar underside -->
+  <polygon points="12,16 20,16 16,19" fill="#555"/>
+</svg>

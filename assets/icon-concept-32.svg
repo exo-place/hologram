@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="512" height="512">
+  <!-- Same idea, thicker crossbar, more depth, rounder pillars -->
+  <rect width="32" height="32" rx="6" fill="#1a1a1a"/>
+
+  <!-- Left pillar -->
+  <rect x="3" y="3" width="7" height="26" rx="1.5" fill="#888"/>
+
+  <!-- Right pillar -->
+  <rect x="22" y="3" width="7" height="26" rx="1.5" fill="#888"/>
+
+  <!-- Crossbar top face -->
+  <polygon points="10,11 22,11 16,15" fill="#aaa"/>
+
+  <!-- Crossbar left inner face -->
+  <polygon points="10,11 16,15 16,20 10,16" fill="#666"/>
+
+  <!-- Crossbar right inner face -->
+  <polygon points="22,11 16,15 16,20 22,16" fill="#777"/>
+
+  <!-- Crossbar bottom face (underside, darkest) -->
+  <polygon points="10,16 22,16 16,20" fill="#555"/>
+</svg>

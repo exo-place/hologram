@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="512" height="512">
+  <!-- Thinner bars: pillar width 4 (was 6), arm height 4 (was 6), stroke 2 for rounding -->
+  <rect width="32" height="32" rx="6" fill="#1a1a1a"/>
+
+  <!-- Left T — pillar 4px wide, arm 4px tall -->
+  <path d="M 4 3 l 0 21 l 4 2 l 0 -8.5 l 7 3.5 l 0 -4 l -7 -3.5 l 0 -8.5 l -4 -2 Z"
+        fill="#999" opacity="0.75"
+        stroke="#999" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+
+  <!-- Right T -->
+  <path d="M 28 3 l 0 21 l -4 2 l 0 -8.5 l -7 3.5 l 0 -4 l 7 -3.5 l 0 -8.5 l 4 -2 Z"
+        fill="#ccc" opacity="0.75"
+        stroke="#ccc" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+</svg>

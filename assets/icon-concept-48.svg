@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="512" height="512">
+  <!-- Same but with a tiny ~1px gap between the two halves -->
+  <rect width="32" height="32" rx="6" fill="#1a1a1a"/>
+
+  <!-- Left T (⊢) — arm tip at x=14.5, stroke → visual edge at x=15.5 -->
+  <path d="M 4 3 l 0 21 l 6 3 l 0 -9 l 4.5 2.25 l 0 -6 l -4.5 -2.25 l 0 -6 l -6 -3 Z"
+        fill="#999" opacity="0.75"
+        stroke="#999" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+
+  <!-- Right T (⊣) — arm tip at x=17.5, stroke → visual edge at x=16.5 -->
+  <path d="M 28 3 l 0 21 l -6 3 l 0 -9 l -4.5 2.25 l 0 -6 l 4.5 -2.25 l 0 -6 l 6 -3 Z"
+        fill="#ccc" opacity="0.75"
+        stroke="#ccc" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+</svg>

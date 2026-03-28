@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Concept 2: Layered translucent planes — stacked horizontal rhombuses suggesting a holographic display -->
+  <defs>
+    <linearGradient id="plane1" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#06b6d4"/>
+      <stop offset="100%" stop-color="#8b5cf6"/>
+    </linearGradient>
+    <linearGradient id="plane2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#8b5cf6"/>
+      <stop offset="100%" stop-color="#ec4899"/>
+    </linearGradient>
+    <linearGradient id="plane3" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ec4899"/>
+      <stop offset="100%" stop-color="#f59e0b"/>
+    </linearGradient>
+    <filter id="glow2">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Dark background -->
+  <rect width="512" height="512" rx="96" fill="#0c0a1d"/>
+
+  <g filter="url(#glow2)" transform="translate(256,256)">
+    <!-- Bottom layer -->
+    <polygon points="-140,60 0,120 140,60 0,0" fill="url(#plane1)" opacity="0.55"/>
+    <polygon points="-140,60 0,0 0,120" fill="#06b6d4" opacity="0.15"/>
+
+    <!-- Middle layer -->
+    <polygon points="-120,-10 0,50 120,-10 0,-70" fill="url(#plane2)" opacity="0.6"/>
+    <polygon points="-120,-10 0,-70 0,50" fill="#8b5cf6" opacity="0.15"/>
+
+    <!-- Top layer -->
+    <polygon points="-100,-80 0,-20 100,-80 0,-140" fill="url(#plane3)" opacity="0.65"/>
+    <polygon points="-100,-80 0,-140 0,-20" fill="#ec4899" opacity="0.15"/>
+
+    <!-- Vertical scan lines connecting layers -->
+    <line x1="0" y1="-140" x2="0" y2="120" stroke="#fff" stroke-width="1" opacity="0.15"/>
+    <line x1="-60" y1="-110" x2="-80" y2="90" stroke="#fff" stroke-width="0.8" opacity="0.1"/>
+    <line x1="60" y1="-110" x2="80" y2="90" stroke="#fff" stroke-width="0.8" opacity="0.1"/>
+  </g>
+</svg>

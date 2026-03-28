@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Concept 19: Same fork but softer — curved branches, no junction dot, thinner -->
+  <rect width="512" height="512" rx="112" fill="#0f0b2e"/>
+
+  <!-- Vertical input -->
+  <path d="M148 80 L148 432" stroke="#4338ca" stroke-width="32" stroke-linecap="round"/>
+
+  <!-- Branch up (curves from horizontal to vertical) -->
+  <path d="M148 256 Q320 256 320 108" fill="none" stroke="#a5b4fc" stroke-width="32" stroke-linecap="round"/>
+
+  <!-- Branch right -->
+  <path d="M148 256 L420 256" stroke="#818cf8" stroke-width="32" stroke-linecap="round"/>
+
+  <!-- Branch down -->
+  <path d="M148 256 Q320 256 320 404" fill="none" stroke="#6366f1" stroke-width="32" stroke-linecap="round"/>
+</svg>

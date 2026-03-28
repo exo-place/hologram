@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="512" height="512">
+  <!-- Isometric H solid — three-tone grey faces -->
+  <rect width="32" height="32" rx="6" fill="#1a1a1a"/>
+
+  <!-- Depth = 4px right, 2px up -->
+
+  <!-- Front face (left-facing): the H shape -->
+  <path d="
+    M6,6  L10,6  L10,13  L18,13  L18,6  L22,6
+    L22,26 L18,26 L18,19 L10,19 L10,26 L6,26 Z
+  " fill="#888"/>
+
+  <!-- Top faces (visible tops of the H) -->
+  <!-- Left pillar top -->
+  <polygon points="6,6 10,6 14,4 10,4" fill="#bbb"/>
+  <!-- Right pillar top -->
+  <polygon points="18,6 22,6 26,4 22,4" fill="#bbb"/>
+  <!-- Crossbar top -->
+  <polygon points="10,13 18,13 22,11 14,11" fill="#bbb"/>
+
+  <!-- Right-side faces (visible right edges) -->
+  <!-- Right pillar right side -->
+  <polygon points="22,6 26,4 26,24 22,26" fill="#666"/>
+  <!-- Crossbar right side (bottom of gap, above crossbar) -->
+  <polygon points="18,13 22,11 22,17 18,19" fill="#666"/>
+</svg>
