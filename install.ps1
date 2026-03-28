@@ -114,6 +114,7 @@ if ($Interactive) {
     $Shortcut.Arguments        = "start"
     $Shortcut.WorkingDirectory = $AbsDest
     $Shortcut.Description      = "Hologram — Discord RP bot and web chat"
+    $Shortcut.IconLocation     = "$AbsDest\assets\icon.svg,0"
     $Shortcut.Save()
 
     # Startup folder (run at login)

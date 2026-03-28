@@ -4,6 +4,7 @@ import path from 'node:path'
 export default defineConfig({
   title: 'Hologram',
   description: 'Discord bot for collaborative worldbuilding and roleplay',
+  head: [['link', { rel: 'icon', type: 'image/svg+xml', href: '/hologram/icon.svg' }]],
   base: '/hologram/',
   srcExclude: ['archive/**'],
 

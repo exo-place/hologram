@@ -1,9 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="512" height="512">
   <path d="M 6 5 l 0 21 l 4 2 l 0 -10 l 5 2.5 l 0 -4 l -5 -2.5 l 0 -7 l -4 -2 Z"
-        fill="#ddd" opacity="0.75"
+        fill="#ddd" opacity="0.6"
         stroke="#ddd" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
 
   <path d="M 26 5 l 0 21 l -4 2 l 0 -10 l -5 2.5 l 0 -4 l 5 -2.5 l 0 -7 l 4 -2 Z"
-        fill="#ddd" opacity="0.5"
+        fill="#ddd" opacity="0.3"
         stroke="#ddd" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
 </svg>
