@@ -60,6 +60,7 @@ export default defineConfig({
           { text: 'Commands', link: '/reference/commands' },
           { text: 'Directives', link: '/reference/directives' },
           { text: 'Fact Patterns', link: '/reference/facts' },
+          { text: 'Tool Calls', link: '/reference/tools' },
           { text: 'Triggers', link: '/reference/triggers' },
           { text: 'Custom Templates', link: '/reference/templates' },
           { text: 'Configuration', link: '/reference/configuration' },
