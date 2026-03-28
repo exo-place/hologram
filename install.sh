@@ -112,6 +112,50 @@ EOF
   ok ".env created"
 fi
 
+# ── Optional: desktop / startup integration ───────────────────────────────────
+if [ "$INTERACTIVE" = "1" ]; then
+  echo ""
+  prompt "Add to app launcher and start on login?" "(y/N):"
+  read -r ADD_STARTUP || true
+  case "${ADD_STARTUP:-n}" in
+    [Yy]*)
+      ABS_DEST=$(pwd)
+      BUN_BIN=$(command -v bun)
+      OS=$(uname -s)
+
+      if [ "$OS" = "Linux" ]; then
+        DESKTOP_FILE="$HOME/.local/share/applications/hologram.desktop"
+        mkdir -p "$(dirname "$DESKTOP_FILE")"
+        printf '[Desktop Entry]\nName=Hologram\nComment=Discord RP bot and web chat\nExec=sh -c '"'"'cd "%s" && "%s" start; exec "${SHELL:-sh}"'"'"'\nTerminal=true\nType=Application\nCategories=Network;\n' \
+          "$ABS_DEST" "$BUN_BIN" > "$DESKTOP_FILE"
+        mkdir -p "$HOME/.config/autostart"
+        cp "$DESKTOP_FILE" "$HOME/.config/autostart/hologram.desktop"
+        ok "App launcher entry + XDG autostart added"
+
+      elif [ "$OS" = "Darwin" ]; then
+        PLIST="$HOME/Library/LaunchAgents/place.exo.hologram.plist"
+        cat > "$PLIST" << XML
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>place.exo.hologram</string>
+  <key>ProgramArguments</key><array>
+    <string>$BUN_BIN</string><string>start</string>
+  </array>
+  <key>WorkingDirectory</key><string>$ABS_DEST</string>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>$ABS_DEST/hologram.log</string>
+  <key>StandardErrorPath</key><string>$ABS_DEST/hologram.log</string>
+</dict></plist>
+XML
+        launchctl load "$PLIST" 2>/dev/null || true
+        ok "LaunchAgent installed — hologram will start on login"
+      fi
+      ;;
+  esac
+fi
+
 # ── Done ───────────────────────────────────────────────────────────────────────
 echo ""
 echo "$(green "$(bold 'hologram is ready!')")"
