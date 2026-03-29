@@ -99,16 +99,15 @@ GOOGLE_GENERATIVE_AI_API_KEY=$GoogleKey
 
 # ── Optional: desktop / startup integration ───────────────────────────────────
 if ($Interactive) {
-  Write-Host ""
-  Ask "Add to Start Menu and start on login?" "(y/N):"
-  $AddStartup = Read-Host
-  if ($AddStartup -match '^[Yy]') {
-    $AbsDest  = (Resolve-Path ".").Path
-    $BunBin   = (Get-Command bun).Source
-    $WshShell = New-Object -ComObject WScript.Shell
+  $AbsDest  = (Resolve-Path ".").Path
+  $BunBin   = (Get-Command bun).Source
+  $WshShell = New-Object -ComObject WScript.Shell
+  $StartMenu = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Hologram.lnk"
 
-    # Start Menu shortcut
-    $StartMenu = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Hologram.lnk"
+  Write-Host ""
+  Ask "Add to Start Menu?" "(y/N):"
+  $AddLauncher = Read-Host
+  if ($AddLauncher -match '^[Yy]') {
     $Shortcut  = $WshShell.CreateShortcut($StartMenu)
     $Shortcut.TargetPath       = $BunBin
     $Shortcut.Arguments        = "start"
@@ -116,13 +115,27 @@ if ($Interactive) {
     $Shortcut.Description      = "Hologram — Discord RP bot and web chat"
     $Shortcut.IconLocation     = "$AbsDest\assets\icon.ico,0"
     $Shortcut.Save()
+    Ok "Start Menu shortcut added"
+    $LaunchedFromDesktop = $true
+  }
 
-    # Startup folder (run at login)
+  Write-Host ""
+  Ask "Start on login?" "(y/N):"
+  $AddStartup = Read-Host
+  if ($AddStartup -match '^[Yy]') {
+    # Create shortcut if not already done
+    if (-not $LaunchedFromDesktop) {
+      $Shortcut  = $WshShell.CreateShortcut($StartMenu)
+      $Shortcut.TargetPath       = $BunBin
+      $Shortcut.Arguments        = "start"
+      $Shortcut.WorkingDirectory = $AbsDest
+      $Shortcut.Description      = "Hologram — Discord RP bot and web chat"
+      $Shortcut.IconLocation     = "$AbsDest\assets\icon.ico,0"
+      $Shortcut.Save()
+    }
     $StartupDir = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Startup\Hologram.lnk"
     Copy-Item $StartMenu $StartupDir -Force
-
-    Ok "Start Menu shortcut + startup entry added"
-    $LaunchedFromDesktop = $true
+    Ok "Startup entry added"
   }
 }
 

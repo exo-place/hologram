@@ -114,24 +114,42 @@ fi
 
 # ── Optional: desktop / startup integration ───────────────────────────────────
 if [ "$INTERACTIVE" = "1" ]; then
-  echo ""
-  prompt "Add to app launcher and start on login?" "(y/N):"
-  read -r ADD_STARTUP || true
-  case "${ADD_STARTUP:-n}" in
-    [Yy]*)
-      ABS_DEST=$(pwd)
-      BUN_BIN=$(command -v bun)
-      OS=$(uname -s)
+  ABS_DEST=$(pwd)
+  BUN_BIN=$(command -v bun)
+  OS=$(uname -s)
 
+  echo ""
+  prompt "Add to app launcher?" "(y/N):"
+  read -r ADD_LAUNCHER || true
+  case "${ADD_LAUNCHER:-n}" in
+    [Yy]*)
       if [ "$OS" = "Linux" ]; then
         DESKTOP_FILE="$HOME/.local/share/applications/hologram.desktop"
         mkdir -p "$(dirname "$DESKTOP_FILE")"
         printf '[Desktop Entry]\nName=Hologram\nComment=Discord RP bot and web chat\nExec=sh -c '"'"'cd "%s" && "%s" start; exec "${SHELL:-sh}"'"'"'\nTerminal=true\nType=Application\nCategories=Network;\nIcon=%s/assets/icon.png\n' \
           "$ABS_DEST" "$BUN_BIN" "$ABS_DEST" > "$DESKTOP_FILE"
+        ok "App launcher entry added"
+        LAUNCHED_FROM_DESKTOP=1
+      fi
+      ;;
+  esac
+
+  echo ""
+  prompt "Start on login?" "(y/N):"
+  read -r ADD_STARTUP || true
+  case "${ADD_STARTUP:-n}" in
+    [Yy]*)
+      if [ "$OS" = "Linux" ]; then
+        DESKTOP_FILE="${DESKTOP_FILE:-$HOME/.local/share/applications/hologram.desktop}"
+        # Create desktop file if launcher wasn't added
+        if [ "${LAUNCHED_FROM_DESKTOP:-0}" = "0" ]; then
+          mkdir -p "$(dirname "$DESKTOP_FILE")"
+          printf '[Desktop Entry]\nName=Hologram\nComment=Discord RP bot and web chat\nExec=sh -c '"'"'cd "%s" && "%s" start; exec "${SHELL:-sh}"'"'"'\nTerminal=true\nType=Application\nCategories=Network;\nIcon=%s/assets/icon.png\n' \
+            "$ABS_DEST" "$BUN_BIN" "$ABS_DEST" > "$DESKTOP_FILE"
+        fi
         mkdir -p "$HOME/.config/autostart"
         cp "$DESKTOP_FILE" "$HOME/.config/autostart/hologram.desktop"
-        ok "App launcher entry + XDG autostart added"
-        LAUNCHED_FROM_DESKTOP=1
+        ok "XDG autostart added"
 
       elif [ "$OS" = "Darwin" ]; then
         PLIST="$HOME/Library/LaunchAgents/place.exo.hologram.plist"
@@ -152,7 +170,6 @@ if [ "$INTERACTIVE" = "1" ]; then
 XML
         launchctl load "$PLIST" 2>/dev/null || true
         ok "LaunchAgent installed — hologram will start on login"
-        LAUNCHED_FROM_DESKTOP=1
       fi
       ;;
   esac
