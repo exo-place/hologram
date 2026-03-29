@@ -131,6 +131,7 @@ if [ "$INTERACTIVE" = "1" ]; then
         mkdir -p "$HOME/.config/autostart"
         cp "$DESKTOP_FILE" "$HOME/.config/autostart/hologram.desktop"
         ok "App launcher entry + XDG autostart added"
+        LAUNCHED_FROM_DESKTOP=1
 
       elif [ "$OS" = "Darwin" ]; then
         PLIST="$HOME/Library/LaunchAgents/place.exo.hologram.plist"
@@ -151,6 +152,7 @@ if [ "$INTERACTIVE" = "1" ]; then
 XML
         launchctl load "$PLIST" 2>/dev/null || true
         ok "LaunchAgent installed — hologram will start on login"
+        LAUNCHED_FROM_DESKTOP=1
       fi
       ;;
   esac
@@ -160,10 +162,20 @@ fi
 echo ""
 echo "$(green "$(bold 'hologram is ready!')")"
 echo ""
-echo "  $(dim 'cd') $DEST"
-echo "  $(dim 'Start:')    $(bold 'bun start')         $(dim '# production')"
-echo "  $(dim 'Dev:')      $(bold 'bun run dev')       $(dim '# with watch + hot reload')"
+if [ "${LAUNCHED_FROM_DESKTOP:-0}" = "1" ]; then
+  echo "  $(dim 'Launch:')   Find $(bold 'Hologram') in your app launcher, or run:"
+  echo "  $(dim '          cd') $DEST $(dim '&&') $(bold 'bun start')"
+else
+  echo "  $(dim 'cd') $DEST"
+  echo "  $(dim 'Start:')    $(bold 'bun start')         $(dim '# production')"
+  echo "  $(dim 'Dev:')      $(bold 'bun run dev')       $(dim '# with watch + hot reload')"
+fi
 echo "  $(dim 'Web UI:')   $(bold 'http://localhost:3000')"
+echo ""
+echo "  $(dim 'Quick start:')"
+echo "  $(dim '  1. Open the web UI and create your first entity')"
+echo "  $(dim '  2. Add facts to give it a personality')"
+echo "  $(dim '  3. Start a chat — or bind it to a Discord channel')"
 echo ""
 if [ -z "$(grep 'GOOGLE_GENERATIVE_AI_API_KEY=.' .env 2>/dev/null || true)" ] && \
    [ -z "$(grep 'ANTHROPIC_API_KEY=.' .env 2>/dev/null || true)" ] && \

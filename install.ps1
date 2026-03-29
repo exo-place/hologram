@@ -122,6 +122,7 @@ if ($Interactive) {
     Copy-Item $StartMenu $StartupDir -Force
 
     Ok "Start Menu shortcut + startup entry added"
+    $LaunchedFromDesktop = $true
   }
 }
 
@@ -129,10 +130,20 @@ if ($Interactive) {
 Write-Host ""
 Write-Host "hologram is ready!" -ForegroundColor Green
 Write-Host ""
-Write-Host "  cd $Dest"
-Write-Host "  Start:  " -NoNewline; Write-Host "bun start" -ForegroundColor White -NoNewline; Write-Host "         (production)" -ForegroundColor DarkGray
-Write-Host "  Dev:    " -NoNewline; Write-Host "bun run dev" -ForegroundColor White -NoNewline; Write-Host "       (watch + hot reload)" -ForegroundColor DarkGray
-Write-Host "  Web UI: " -NoNewline; Write-Host "http://localhost:3000" -ForegroundColor Cyan
+if ($LaunchedFromDesktop) {
+  Write-Host "  Launch:   Find " -NoNewline -ForegroundColor DarkGray; Write-Host "Hologram" -NoNewline; Write-Host " in your Start Menu, or run:" -ForegroundColor DarkGray
+  Write-Host "             cd $Dest && " -NoNewline -ForegroundColor DarkGray; Write-Host "bun start" -ForegroundColor White
+} else {
+  Write-Host "  cd $Dest"
+  Write-Host "  Start:  " -NoNewline -ForegroundColor DarkGray; Write-Host "bun start" -ForegroundColor White -NoNewline; Write-Host "         (production)" -ForegroundColor DarkGray
+  Write-Host "  Dev:    " -NoNewline -ForegroundColor DarkGray; Write-Host "bun run dev" -ForegroundColor White -NoNewline; Write-Host "       (watch + hot reload)" -ForegroundColor DarkGray
+}
+Write-Host "  Web UI: " -NoNewline -ForegroundColor DarkGray; Write-Host "http://localhost:3000" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "  Quick start:" -ForegroundColor DarkGray
+Write-Host "    1. Open the web UI and create your first entity" -ForegroundColor DarkGray
+Write-Host "    2. Add facts to give it a personality" -ForegroundColor DarkGray
+Write-Host "    3. Start a chat — or bind it to a Discord channel" -ForegroundColor DarkGray
 Write-Host ""
 
 $envContent = Get-Content .env -Raw
