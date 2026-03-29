@@ -732,7 +732,7 @@ bot.events.messageCreate = async (message) => {
       const keywordMatch = ctx.keyword_match && !isSelf;
       const defaultRespond =
         (channelEntities.length === 1 && isMentioned) ||
-        repliedToThis ||
+        (repliedToThis && (!isHologram || Math.random() < 0.75)) ||
         nameMentioned ||
         keywordMatch;
       const shouldRespond = result.shouldRespond ?? defaultRespond;
