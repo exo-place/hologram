@@ -69,6 +69,7 @@ export default defineConfig({
           { text: 'Triggers', link: '/reference/triggers' },
           { text: 'Custom Templates', link: '/reference/templates' },
           { text: 'Configuration', link: '/reference/configuration' },
+          { text: 'Expressions', link: '/reference/expressions' },
           { text: 'Expression Security', link: '/reference/expression-security' },
           { text: 'Safe Regex', link: '/reference/safe-regex' },
         ]
