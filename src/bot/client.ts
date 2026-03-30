@@ -1148,6 +1148,7 @@ async function handleStreamingResponse(
     content: string;
     isMentioned: boolean;
     entityMemories?: Map<number, Array<{ content: string }>>;
+    triggerEntityFn?: (entityId: number, verb: string, authorName: string) => Promise<void>;
   }
 ): Promise<void> {
   const allMessageIds: string[] = [];
@@ -1499,6 +1500,90 @@ export async function sendResponse(
       return;
     }
 
+    // Build triggerEntityFn: fires another entity's pipeline with interaction_type set.
+    // Used by the trigger_entity tool and /trigger <entity> <verb> (with persona).
+    const triggerEntityFn = async (entityId: number, verb: string, authorName: string): Promise<void> => {
+      // Guard against infinite chains
+      const depth = responseChainDepth.get(channelId) ?? 0;
+      if (depth >= MAX_RESPONSE_CHAIN) {
+        debug("trigger_entity blocked by chain depth", { channelId, depth, max: MAX_RESPONSE_CHAIN });
+        return;
+      }
+
+      const targetEntity = getEntityWithFacts(entityId);
+      if (!targetEntity) {
+        debug("trigger_entity: entity not found", { entityId });
+        return;
+      }
+
+      const facts = targetEntity.facts.map(f => f.content);
+      const channelEntityNames = getChannelScopedEntities(channelId)
+        .map(id => getEntity(id)?.name ?? "")
+        .filter(Boolean);
+      const [channelMeta, guildMeta] = await Promise.all([
+        getChannelMetadata(channelId),
+        guildId ? getGuildMetadata(guildId) : Promise.resolve({ id: "", name: "", description: "", nsfw_level: "default" as const }),
+      ]);
+
+      const ctx = createBaseContext({
+        facts,
+        has_fact: (pattern: string) => {
+          const regex = new RegExp(pattern, "i");
+          return facts.some(f => regex.test(f));
+        },
+        messages: (n = 1, format?: string, filter?: string) =>
+          filter
+            ? formatMessagesForContext(getFilteredMessages(channelId, n, filter), format)
+            : formatMessagesForContext(getMessages(channelId, n), format),
+        response_ms: 0,
+        retry_ms: 0,
+        idle_ms: 0,
+        unread_count: 0,
+        mentioned: true,
+        replied: false,
+        replied_to: "",
+        is_forward: false,
+        is_self: false,
+        is_hologram: true,
+        interaction_type: verb,
+        name: targetEntity.name,
+        chars: channelEntityNames,
+        channel: channelMeta,
+        server: guildMeta,
+        keywords: getEntityKeywords(targetEntity.id),
+      });
+
+      let triggerResult;
+      try {
+        triggerResult = evaluateFacts(facts, ctx, getEntityEvalDefaults(targetEntity.id));
+      } catch (err) {
+        warn("trigger_entity: fact evaluation failed", { entity: targetEntity.name, error: String(err) });
+        return;
+      }
+
+      debug("trigger_entity firing", { target: targetEntity.name, verb, author: authorName });
+
+      await sendResponse(channelId, guildId, authorName, "", true, [{
+        id: targetEntity.id,
+        name: targetEntity.name,
+        facts: triggerResult.facts,
+        avatarUrl: triggerResult.avatarUrl,
+        streamMode: triggerResult.streamMode,
+        streamDelimiter: triggerResult.streamDelimiter,
+        memoryScope: triggerResult.memoryScope,
+        contextExpr: triggerResult.contextExpr,
+        isFreeform: triggerResult.isFreeform,
+        modelSpec: triggerResult.modelSpec,
+        stripPatterns: triggerResult.stripPatterns,
+        thinkingLevel: triggerResult.thinkingLevel,
+        collapseMessages: triggerResult.collapseMessages,
+        contentFilters: triggerResult.contentFilters,
+        template: targetEntity.template,
+        systemTemplate: targetEntity.system_template,
+        exprContext: ctx,
+      }]);
+    };
+
     // Check for streaming mode
     const streamMode = respondingEntities?.[0]?.streamMode;
     const useStreaming = streamMode && respondingEntities && respondingEntities.length > 0;
@@ -1519,6 +1604,7 @@ export async function sendResponse(
           content,
           isMentioned,
           entityMemories,
+          triggerEntityFn,
         });
 
         // Mark response time
@@ -1546,6 +1632,7 @@ export async function sendResponse(
       isMentioned,
       respondingEntities,
       entityMemories,
+      triggerEntityFn,
     });
 
     // Mark response time

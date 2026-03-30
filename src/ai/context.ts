@@ -16,6 +16,8 @@ export interface MessageContext {
   respondingEntities?: EvaluatedEntity[];
   /** Retrieved memories per entity (entity id -> memories) */
   entityMemories?: Map<number, Array<{ content: string }>>;
+  /** Callback to trigger another entity's pipeline (from trigger_entity tool or /trigger verb) */
+  triggerEntityFn?: (entityId: number, verb: string, authorName: string) => Promise<void>;
 }
 
 /** Entity with pre-evaluated facts (directives processed and removed) */

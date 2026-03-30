@@ -456,6 +456,8 @@ describe("createTools — tool structure", () => {
     expect(keys).toContain("save_memory");
     expect(keys).toContain("update_memory");
     expect(keys).toContain("remove_memory");
+    expect(keys).toContain("trigger_entity");
+    expect(keys).toContain("skip_response");
   });
 
   test("each tool has an execute function", () => {
@@ -463,5 +465,50 @@ describe("createTools — tool structure", () => {
     for (const [, toolDef] of Object.entries(tools)) {
       expect(typeof toolDef.execute).toBe("function");
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// createTools — trigger_entity
+// ---------------------------------------------------------------------------
+
+type TriggerResult = { success: boolean; error?: string };
+
+async function callTriggerEntity(
+  tools: ReturnType<typeof createTools>,
+  args: { entityId: number; verb: string; author: string },
+): Promise<TriggerResult> {
+  return (await tools.trigger_entity.execute!(args, {} as never)) as TriggerResult;
+}
+
+describe("createTools — trigger_entity", () => {
+  beforeEach(() => {
+    testDb = new Database(":memory:");
+    createTestSchema(testDb);
+  });
+
+  test("returns error when no triggerEntityFn provided", async () => {
+    const tools = createTools();
+    const result = await callTriggerEntity(tools, { entityId: 1, verb: "drink", author: "Aria" });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("not available");
+  });
+
+  test("calls triggerEntityFn with correct args", async () => {
+    const calls: Array<{ entityId: number; verb: string; authorName: string }> = [];
+    const triggerFn = async (entityId: number, verb: string, authorName: string) => {
+      calls.push({ entityId, verb, authorName });
+    };
+    const tools = createTools("ch-1", "guild-1", triggerFn);
+    const result = await callTriggerEntity(tools, { entityId: 42, verb: "drink", author: "Aria" });
+    expect(result.success).toBe(true);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toEqual({ entityId: 42, verb: "drink", authorName: "Aria" });
+  });
+
+  test("propagates rejection from triggerEntityFn", async () => {
+    const triggerFn = async () => { throw new Error("chain limit"); };
+    const tools = createTools(undefined, undefined, triggerFn);
+    await expect(callTriggerEntity(tools, { entityId: 1, verb: "use", author: "Bob" })).rejects.toThrow("chain limit");
   });
 });

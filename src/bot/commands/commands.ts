@@ -34,6 +34,7 @@ import {
   deleteDiscordConfig,
   formatMessagesForContext,
   getFilteredMessages,
+  resolvePersona,
 } from "../../db/discord";
 import { parsePermissionDirectives, isUserBlacklisted, isUserAllowed, evaluateFacts, createBaseContext } from "../../logic/expr";
 import { formatEntityDisplay } from "../../ai/context";
@@ -708,6 +709,12 @@ registerCommand({
       required: true,
       autocomplete: true,
     },
+    {
+      name: "verb",
+      description: "Interaction verb requiring a persona (e.g. drink, eat, open, use)",
+      type: ApplicationCommandOptionTypes.String,
+      required: false,
+    },
   ],
   async handler(ctx, options) {
     const input = options.entity as string;
@@ -741,9 +748,29 @@ registerCommand({
       return;
     }
 
+    // Resolve interaction verb + persona (verb requires persona)
+    const verb = options.verb as string | undefined;
+    let interactionType = "";
+    let interactionAuthor: string | null = null;
+
+    if (verb) {
+      const personaEntityId = resolvePersona(ctx.userId, ctx.guildId, ctx.channelId);
+      if (personaEntityId === null) {
+        await respond(ctx.bot, ctx.interaction, "You need a persona bound to use verb interactions. Use `/bind` to bind an entity to your account.", true);
+        return;
+      }
+      const personaEntity = getEntity(personaEntityId);
+      if (!personaEntity) {
+        await respond(ctx.bot, ctx.interaction, "Could not resolve your persona entity.", true);
+        return;
+      }
+      interactionType = verb;
+      interactionAuthor = personaEntity.name;
+    }
+
     // Get last message from channel for context
     const lastMessages = getMessages(ctx.channelId, 1);
-    const lastAuthor = lastMessages.length > 0 ? lastMessages[0].author_name : ctx.username;
+    const lastAuthor = interactionAuthor ?? (lastMessages.length > 0 ? lastMessages[0].author_name : ctx.username);
     const lastContent = lastMessages.length > 0 ? lastMessages[0].content : "";
 
     // Evaluate facts (ignore shouldRespond - we always trigger)
@@ -766,8 +793,8 @@ registerCommand({
       replied_to: "",
       is_forward: false,
       is_self: false,
-      is_hologram: false,
-      interaction_type: "",
+      is_hologram: interactionAuthor !== null, // entity-to-entity if persona-initiated
+      interaction_type: interactionType,
       name: entity.name,
       chars: [entity.name],
       channel: { id: ctx.channelId, name: "", description: "", is_nsfw: false, type: "text", mention: "" },

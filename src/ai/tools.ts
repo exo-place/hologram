@@ -64,8 +64,12 @@ export function checkFactLocked(entityId: number, factContent: string): { locked
 // Tool Definitions
 // =============================================================================
 
-/** Create tools with context for memory source tracking */
-export function createTools(channelId?: string, guildId?: string) {
+/** Create tools with context for memory source tracking and entity triggering */
+export function createTools(
+  channelId?: string,
+  guildId?: string,
+  triggerEntityFn?: (entityId: number, verb: string, authorName: string) => Promise<void>,
+) {
   return {
     add_fact: tool({
       description: "Add a permanent defining trait to an entity. Use very sparingly - only for core personality, appearance, abilities, or key relationships. Most interactions don't need facts saved.",
@@ -186,6 +190,24 @@ export function createTools(channelId?: string, guildId?: string) {
         const success = removeMemoryByContent(entityId, content);
         debug("Tool: remove_memory", { entityId, content, success });
         return { success };
+      },
+    }),
+
+    trigger_entity: tool({
+      description: "Trigger another entity to respond with a specific interaction type. Use when your character performs an action on an item, location, or other entity — for example, drinking a potion, opening a door, equipping an item. The target entity receives the interaction type and can respond accordingly.",
+      inputSchema: z.object({
+        entityId: z.number().describe("The target entity ID"),
+        verb: z.string().describe("The interaction verb (e.g. 'drink', 'eat', 'open', 'use', 'equip', 'throw')"),
+        author: z.string().describe("Your character's name — the entity initiating this interaction"),
+      }),
+      execute: async ({ entityId, verb, author }) => {
+        if (!triggerEntityFn) {
+          debug("Tool: trigger_entity unavailable", { entityId, verb, author });
+          return { success: false, error: "Entity triggering not available in this context" };
+        }
+        debug("Tool: trigger_entity", { entityId, verb, author });
+        await triggerEntityFn(entityId, verb, author);
+        return { success: true };
       },
     }),
 

@@ -117,7 +117,7 @@ export async function handleMessage(ctx: MessageContext): Promise<ResponseResult
     let result;
     if (modelSupportsTools(modelSpec)) {
       try {
-        result = await generateText({ ...callOptions, tools: createTools(channelId, guildId) });
+        result = await generateText({ ...callOptions, tools: createTools(channelId, guildId, ctx.triggerEntityFn) });
       } catch (toolErr) {
         if (isToolsNotSupportedError(toolErr)) {
           // Model doesn't support tool calls — record, retry without tools
