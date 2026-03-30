@@ -8,7 +8,7 @@ hero:
   actions:
     - theme: brand
       text: Get Started
-      link: /guide/
+      link: /guide/getting-started
     - theme: alt
       text: View on GitHub
       link: https://github.com/exo-place/hologram
@@ -29,9 +29,9 @@ features:
   - icon: 🤖
     title: 16+ LLM Providers
     details: Google, Anthropic, OpenAI, Groq, Mistral, xAI, and more. Per-entity model selection, thinking level control, streaming, and image generation.
-  - icon: ✨
-    title: Transformations
-    details: Characters can change form with TF items, gradual progress tracking, and saved loadouts. Items apply guaranteed and random effects.
+  - icon: 🛠️
+    title: LLM Tool Calls
+    details: Entities update their own facts in real time via tool calls — add, modify, or remove facts mid-conversation, with memories persisted separately from facts.
 ---
 
 ## Quick Example
@@ -86,4 +86,4 @@ Nunjucks templates give full control over the system prompt: message roles, enti
 3. **Bind to channel**: `/bind channel Aria`
 4. **Chat**: Just talk — Aria responds in character
 
-[Read the full guide →](/guide/)
+[Read the full guide →](/guide/getting-started)

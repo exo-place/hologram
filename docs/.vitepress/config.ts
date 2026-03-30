@@ -39,7 +39,7 @@ export default defineConfig({
   themeConfig: {
     nav: [
       { text: 'Home', link: '/' },
-      { text: 'Guide', link: '/guide/' },
+      { text: 'Guide', link: '/guide/getting-started' },
       { text: 'Reference', link: '/reference/commands' },
       { text: 'Playground', link: '/playground/facts' },
     ],
@@ -48,13 +48,11 @@ export default defineConfig({
       {
         text: 'Guide',
         items: [
-          { text: 'Getting Started', link: '/guide/' },
+          { text: 'Getting Started', link: '/guide/getting-started' },
           { text: 'Core Concepts', link: '/guide/concepts' },
-          { text: 'Setting Up a Channel', link: '/guide/channel-setup' },
           { text: 'Creating a Persona', link: '/guide/personas' },
           { text: 'Multi-Character Scenes', link: '/guide/multi-character' },
           { text: 'Permissions', link: '/guide/permissions' },
-          { text: 'Transformations', link: '/guide/transformations' },
           { text: 'SillyTavern Migration', link: '/guide/sillytavern' },
           { text: 'Editor Setup', link: '/guide/editor-setup' },
         ]
@@ -63,15 +61,11 @@ export default defineConfig({
         text: 'Reference',
         items: [
           { text: 'Commands', link: '/reference/commands' },
-          { text: 'Directives', link: '/reference/directives' },
-          { text: 'Fact Patterns', link: '/reference/facts' },
-          { text: 'Tool Calls', link: '/reference/tools' },
-          { text: 'Triggers', link: '/reference/triggers' },
-          { text: 'Custom Templates', link: '/reference/templates' },
-          { text: 'Configuration', link: '/reference/configuration' },
+          { text: 'Facts & Directives', link: '/reference/facts' },
           { text: 'Expressions', link: '/reference/expressions' },
-          { text: 'Expression Security', link: '/reference/expression-security' },
-          { text: 'Safe Regex', link: '/reference/safe-regex' },
+          { text: 'Custom Templates', link: '/reference/templates' },
+          { text: 'Tool Calls', link: '/reference/tools' },
+          { text: 'Configuration', link: '/reference/configuration' },
         ]
       },
       {

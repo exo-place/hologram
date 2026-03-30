@@ -1,69 +1,53 @@
-# Introduction
+# Getting Started
 
-Hologram is a Discord bot designed for roleplay with intelligent context and memory management. Built on Bun and Discordeno, it provides a SillyTavern-inspired experience directly in Discord.
+Hologram is a Discord bot for collaborative worldbuilding and roleplay. Its core idea is simple: **everything is an entity with facts**.
 
-## Key Features
+## Installation
 
-- **Zero-Config Start** - Just invite the bot and click Quick Setup
-- **Smart Context Assembly** - Automatically manages what goes into the LLM prompt based on token budgets and priorities
-- **Chronicle Memory** - Persistent, searchable memories with perspective awareness (who knows what)
-- **Scene System** - Pause and resume RP sessions with full state preservation
-- **Multi-Character** - Voice multiple AI characters using webhooks or tagged output
-- **World State** - Locations, time, weather, and configurable world rules
-- **User Proxying** - PluralKit-style character switching for players
-- **Progressive Disclosure** - Starts simple, suggests features as you use them
+1. Invite the bot to your server (link from server admin)
+2. Create a character: `/create YourCharacter`
+3. Bind it to a channel: `/bind channel YourCharacter`
+4. Start chatting!
 
-## Tech Stack
+## Your First Character
 
-| Component | Technology |
-|-----------|------------|
-| Runtime | Bun |
-| Discord | Discordeno |
-| LLM | AI SDK (provider-agnostic) |
-| Database | bun:sqlite |
-| Vectors | sqlite-vec |
+Let's create a character named Aria:
 
-## Quick Start (Users)
+```
+/create Aria
+```
 
-When you add Hologram to your server, you'll see a welcome message with setup options:
+This creates an entity named "Aria".
 
-1. **Quick Setup** - Click to create a world and enable responses instantly
-2. **Choose Mode** - Pick a playstyle (minimal, SillyTavern, MUD, tabletop, etc.)
+Now let's give her some personality:
 
-Or use slash commands:
-- `/setup quick` - One-command setup with sensible defaults
-- `/setup guided` - Step-by-step interactive setup
-- `/build character` - Create a character with AI assistance
+```
+/edit Aria
+```
 
-That's it! Start chatting or mention the bot to begin.
+This opens a modal where you can add facts, one per line:
 
-## Quick Start (Developers)
+```
+has silver hair and violet eyes
+works as a traveling merchant
+speaks with a slight accent
+is cautious around strangers
+carries a worn leather satchel
+```
 
-1. Clone the repository
-2. Copy `.env.example` to `.env` and configure
-3. Run `bun install`
-4. Run `bun run dev`
+## Binding to a Channel
 
-See the [Installation](/guide/installation) guide for detailed setup instructions.
+To make Aria respond in a channel:
 
-## Modes
+```
+/bind channel Aria
+```
 
-Hologram supports different playstyles via modes:
+Now when users chat in that channel, Aria will respond based on her facts. By default, she responds when @mentioned.
 
-| Mode | Description |
-|------|-------------|
-| **Minimal** | Simple chat with a character |
-| **SillyTavern** | Character chat with memory and relationships |
-| **MUD** | Text adventure with locations and inventory |
-| **Survival** | Resource management with hunger, thirst, transformation |
-| **Tabletop** | Dice rolling, combat, and turn-based play |
-| **Parser** | Classic text adventure (Zork-style) |
-| **Full** | All features enabled |
+## What's Next?
 
-Use `/config preset <mode>` to switch modes anytime.
-
-## Getting Help
-
-- `/help` - Overview of current setup and available commands
-- `/help <topic>` - Deep dive into specific features
-- `/tips enable` - Get contextual suggestions as you use the bot
+- [Core Concepts](/guide/concepts) - Understand the entity-facts model
+- [Setting Up a Channel](/guide/channel-setup) - Configure how the bot responds
+- [Creating a Persona](/guide/personas) - Speak as different characters
+- [Commands Reference](/reference/commands) - All available commands

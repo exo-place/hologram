@@ -1,124 +1,118 @@
+---
+title: Core Concepts
+---
+
 # Core Concepts
 
-## Entities
+This page explains the mental model behind Hologram. Read it once and the rest of the docs will make sense.
 
-Everything in Hologram is an **entity**. Characters, locations, items, even the help system - all entities.
+## Everything Is an Entity
 
-An entity is just a name with an ID:
-
-```
-Entity: Aria (id: 1)
-Entity: The Tavern (id: 2)
-Entity: Magic Sword (id: 3)
-```
-
-There's no fundamental difference between a character and a location. The difference emerges from the facts you attach.
-
-## Facts
-
-Facts are statements attached to entities. They describe what something is.
+Hologram has one fundamental building block: the **entity**. Characters, locations, items, factions, help topics — all entities. There is no special "character" type or "location" type. The difference between a sword and a tavern-keeper emerges entirely from the facts you attach to them.
 
 ```
-Entity: Aria
-Facts:
-  - is a character
-  - has silver hair
-  - works as a merchant
-  - is in {{entity:2}}
+Entity: Aria           → a character (because her facts say so)
+Entity: The Broken Axe → a tavern (because her facts say so)
+Entity: Sunstone Gem   → an item (because its facts say so)
 ```
 
-Facts are freeform text. You can write anything. Some patterns have special meaning (like <code v-pre>is in {{entity:2}}</code> for location), but most facts are just descriptions that shape how the AI responds.
+You create entities with `/create`, view them with `/view`, and edit them with `/edit`.
 
-### Good Facts
+## Facts Shape Behavior
 
-- Use present tense: "is friendly" not "was friendly"
-- Be specific: "has a scar above left eye" not "has scars"
-- Include personality: "speaks formally", "tends to ramble"
-- Note relationships: "distrusts strangers", "loyal to the guild"
+Facts are freeform lines of text attached to an entity. When the bot responds, the entity's facts become its system prompt — the AI reads them to understand who or what the entity is.
 
-### Special Patterns
+```
+is a traveling merchant with silver hair
+speaks cautiously around strangers
+carries a worn leather satchel
+is currently in a small border town
+```
 
-| Pattern | Meaning |
-|---------|---------|
-| `is a character` | Entity type |
-| `is a location` | Entity type |
-| `is a item` | Entity type |
-| <code v-pre>is in {{entity:12}}</code> | Location/containment |
-| `$if condition: fact` | Conditional fact |
-| `$respond` | Control when entity responds |
-| `$stream` | Enable line-based streaming |
-| `$locked` | Prevent AI from modifying entity |
-| `$edit @everyone` | Allow anyone to edit |
+Facts are plain prose. There's no required format, no fixed fields. Write what the AI needs to know.
 
-See [Permissions](/guide/permissions) for full permission system documentation.
+Some facts carry special meaning because of patterns the system recognizes. For example, the macro `{{entity:12}}` in a fact expands to the name of entity 12 at runtime — useful for expressing relationships like `is in {{entity:12}}` when you want the location name to update automatically if the entity is renamed. See [Facts Reference](/reference/facts) for the full list of recognized patterns.
 
-## Bindings
+### Facts Are Mutable
 
-Bindings connect Discord to entities.
+The AI can modify facts through tool calls during a conversation. If Aria learns something, she might add a fact: `met a traveler named Sven seeking rare gems`. This is how memory accumulates between sessions — not through conversation history alone, but through persistent facts.
 
-### Channel Binding
+## Conditions — `$if`
+
+Any fact line can be made conditional with a `$if` prefix:
+
+```
+$if mentioned: $respond
+$if content.match(/potion|health/i): has a store of healing potions worth discussing
+$if random() < 0.05: is in a particularly talkative mood
+```
+
+The condition is a JavaScript expression evaluated against the current message context. Variables include `mentioned`, `content`, `response_ms`, `random()`, and many more. The fact after the colon is only included in the prompt (or only has its directive effect) when the condition is true.
+
+This is how you control when an entity responds, what it reveals, and how it behaves in different situations — all from within the facts list, without touching configuration files.
+
+See [Expressions Reference](/reference/directives) for the full variable and directive list.
+
+## Bindings — Connecting Entities to Discord
+
+An entity on its own does nothing. A **binding** is what connects an entity to a Discord channel, server, or user.
+
+### Channel binding
 
 ```
 /bind channel Aria
 ```
 
-When a channel is bound to an entity (usually a character), that entity:
-- Receives messages from the channel
-- Responds based on its facts and triggers
-- Can learn and update its facts through conversation
+Aria receives and responds to messages in this channel. Channel bindings take priority over server-wide bindings.
 
-### Server Binding
+### Server binding
 
 ```
 /bind server Narrator
 ```
 
-When a server is bound to an entity:
-- That entity responds in all channels of the server
-- Channel-specific bindings take priority (override server binding)
-- Useful for server-wide narrators or assistants
+The Narrator entity responds across every channel in the server, except channels that have their own binding.
 
-### User Binding (Persona)
+### User binding (persona)
 
 ```
 /bind me Traveler
 ```
 
-When you bind yourself to an entity:
-- Your messages come from that entity's perspective
-- The AI sees you as that character
-- Useful for roleplaying as specific characters
+Your messages are attributed to the Traveler entity. The AI sees you as that character. Scoped versions exist: `Me (this channel)`, `Me (this server)`, `Me (global)`. See [Personas](/guide/personas).
 
-### Binding Types
-
-**Channel/Server bindings** - where the entity responds:
-```
-/bind "This channel" Aria       # Aria responds in this channel
-/bind "This server" Narrator    # Narrator responds server-wide
-```
-
-**User bindings (personas)** - where you speak as an entity:
-
-| Target | Where it applies |
-|--------|------------------|
-| `Me (this channel)` | Only in this channel |
-| `Me (this server)` | Across the entire server |
-| `Me (global)` | Everywhere the bot is |
+### Unbinding
 
 ```
-/bind "Me (this channel)" Traveler  # Here only
-/bind "Me (this server)" Knight     # Server-wide
-/bind "Me (global)" Narrator        # Everywhere
+/unbind channel Aria
 ```
 
-## How It Works
+Removes the binding. The entity still exists; it just no longer responds in that channel.
 
-When a message arrives:
+### Permissions
 
-1. **Lookup**: Find the channel's bound entity
-2. **Triggers**: Check if any triggers fire (mention, pattern, etc.)
-3. **Context**: Gather entity facts + recent messages
-4. **LLM**: Send to language model for response
-5. **Learning**: LLM can add/update facts via tool calls
+Binding requires permission at two levels: the entity must allow you to bind it (entity-side `$edit` permission), and the server/channel must allow binding operations (`/config` sets this, Manage Channels required). By default, only the entity owner can bind it, and anyone can initiate binds in any channel.
 
-The AI doesn't just respond - it can learn. If someone tells Aria "I'm looking for a rare gem", she might add a fact: "met a traveler seeking rare gems".
+## The Message Pipeline
+
+When a message arrives in a bound channel:
+
+1. **Channel lookup** — find the entity bound to this channel (channel-scoped wins over server-scoped).
+2. **Fact evaluation** — evaluate all the entity's facts, resolving `$if` conditions against the current message context. This produces a filtered list of active facts and determines whether the entity should respond at all (`$respond`).
+3. **Prompt assembly** — active facts, recent message history, and any memories are assembled into a prompt.
+4. **LLM call** — the prompt is sent to the configured language model.
+5. **Tool calls** — the LLM can call tools during its response: `add_fact`, `update_fact`, `remove_fact` to update the entity's facts in real time.
+6. **Response** — the final text is sent to Discord, as a webhook message (using the entity's avatar if set) or a regular bot message.
+
+The entity only responds if fact evaluation produces a `$respond` directive. No `$respond` = silence, even if the bot is bound to the channel. This is intentional — you control response triggers through facts.
+
+## What Comes Next
+
+Once you have the mental model, the rest is details:
+
+- **[Getting Started](/guide/getting-started)** — set up your first character step by step
+- **[Personas](/guide/personas)** — speak as a character yourself
+- **[Multi-Character Channels](/guide/multi-character)** — run multiple entities in one channel
+- **[Directives Reference](/reference/directives)** — every `$if`, `$respond`, `$stream`, `$model`, and other directive
+- **[Facts Reference](/reference/facts)** — macros, patterns, and what's available in fact text
+- **[Commands Reference](/reference/commands)** — every slash command with its options
