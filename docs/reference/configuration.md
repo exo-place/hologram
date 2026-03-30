@@ -68,6 +68,24 @@ Maximum age (in milliseconds) of a missed message that the bot will respond to d
 
 Messages older than this are stored in history but not responded to.
 
+## Web Server
+
+### `WEB`
+
+Set to `false` to disable the built-in web API server. The web server is on by default.
+
+```
+WEB=false
+```
+
+### `WEB_PORT`
+
+Port for the web API server. Default: `3000`. `PORT` is also accepted as a fallback.
+
+```
+WEB_PORT=3000
+```
+
 ## Logging
 
 ### `LOG_LEVEL`

@@ -13,22 +13,30 @@ Create a new entity.
 **Examples:**
 ```
 /create Aria           # Create entity named Aria
-/create                # Opens modal for name entry
+/create                # Opens modal for name and facts
 ```
 
 ---
 
 ### `/view`
 
-View an entity and its facts.
+View an entity and its facts or memories.
 
 ```
-/view <entity>
+/view <entity> [type]
 ```
+
+The optional `type` parameter controls what is shown:
+
+| Value | Shows |
+|-------|-------|
+| `All (facts + memories)` | Facts and memories (default) |
+| `Facts only` | Facts only |
+| `Memories only` | Memories only |
 
 **Examples:**
 ```
-/view Aria             # View by name
+/view Aria             # View facts and memories
 /view help             # View help entity
 /view help:triggers    # View triggers help
 ```
@@ -37,20 +45,33 @@ View an entity and its facts.
 
 ### `/edit`
 
-Edit an entity's facts and memories.
+Edit an entity's facts, memories, config, or template.
 
 ```
-/edit <entity>
-/edit <entity> type:facts       # Facts only (more space)
-/edit <entity> type:memories    # Memories only (more space)
+/edit <entity> [type]
 ```
 
-Opens a modal with name, facts, and memories. Edit them (one per line) and submit. Use `type:facts` or `type:memories` to edit one at a time when content is too large for the combined modal.
+The optional `type` parameter selects what to edit:
+
+| Value | Opens |
+|-------|-------|
+| `Both` | Facts and memories combined (default) |
+| `Facts only` | Facts only (more space, up to 4 fields) |
+| `Memories only` | Memories only |
+| `Template` | Nunjucks template (system prompt formatting) |
+| `System Prompt` | Per-entity system instructions |
+| `Config` | Model, context, stream, avatar, memory settings |
+| `Advanced` | Thinking level |
+| `Permissions` | View, edit, use, and blacklist permissions |
 
 **Examples:**
 ```
-/edit Aria             # Edit Aria's facts and memories
-/edit Aria type:facts  # Edit only facts (up to 4 fields)
+/edit Aria                        # Edit facts and memories
+/edit Aria type:Facts only        # Edit only facts
+/edit Aria type:Config            # Edit model and settings
+/edit Aria type:Permissions       # Edit permissions
+/edit Aria type:Template          # Edit Nunjucks template
+/edit Aria type:System Prompt     # Edit system instructions
 ```
 
 ---
@@ -140,20 +161,60 @@ Remove an entity binding from a channel, server, or yourself.
 
 ---
 
-## Status
+## Server Configuration
+
+### `/config`
+
+Configure bind and persona permissions for a channel or server. Requires **Manage Channels**.
+
+```
+/config <scope>
+```
+
+**Scopes:**
+- `This channel` - Configure permissions for the current channel
+- `This server` - Configure permissions server-wide
+
+Opens a modal with three permission lists:
+
+| Field | Controls |
+|-------|----------|
+| Bind access | Who can bind entities here (blank = everyone) |
+| Persona access | Who can use personas here (blank = everyone) |
+| Blacklist | Blocked from all binding operations |
+
+Each field accepts users and roles. Clearing all fields removes the configuration (everyone can bind).
+
+---
+
+## Status and Debugging
 
 ### `/debug`
 
 View current channel state or debug information.
 
 ```
-/debug [status|prompt|context]
+/debug [subcommand]
 ```
 
-Shows:
-- Channel binding (which entity responds)
-- Your persona (if any)
-- Recent message count
+| Subcommand | Description |
+|------------|-------------|
+| `status` (default) | Channel bindings, your persona, unread message count |
+| `prompt [entity]` | System prompt that would be sent to the LLM |
+| `context [entity]` | Message context that would be sent to the LLM |
+| `rag [entity] [query]` | Embedding status and RAG retrieval test results |
+
+For `prompt`, `context`, and `rag`, `entity` defaults to the channel-bound entity.
+
+**Examples:**
+```
+/debug                    # Channel state
+/debug status             # Same as above
+/debug prompt             # System prompt for bound entity
+/debug prompt Aria        # System prompt for Aria
+/debug context Aria       # Message context for Aria
+/debug rag Aria "silver"  # Test RAG retrieval with query
+```
 
 ---
 
@@ -185,6 +246,20 @@ The triggered entity can then use `$if interaction_type == "drink"` to only resp
 /trigger Aria                  # Force Aria to respond now
 /trigger HealthPotion drink    # Trigger HealthPotion with interaction_type "drink" (requires persona)
 ```
+
+---
+
+## History
+
+### `/forget`
+
+Exclude all messages before this moment from the LLM context. Useful for resetting the "memory" of a conversation without deleting any messages.
+
+```
+/forget
+```
+
+Messages are not deleted — they remain in the database. They are simply excluded from the context window going forward.
 
 ---
 
