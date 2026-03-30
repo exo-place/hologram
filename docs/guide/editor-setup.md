@@ -33,7 +33,7 @@ Syntax highlighting for entity fact files, with support for:
 
 <div v-pre>
 
-Syntax highlighting for custom templates (the files in `src/templates/` and templates edited via `/edit entity type:Template`), with Hologram-specific awareness of:
+Syntax highlighting for custom templates (edited via `/edit <entity> type:Template`), with Hologram-specific awareness of:
 
 - **Nunjucks syntax** — `{{ expr }}`, `{% tag %}`, `{# comment #}`, whitespace control (`{%- -%}`)
 - **Control flow** — `if`/`elif`/`else`/`endif`, `for`/`endfor`, `block`/`endblock`, `extends`, `call`/`endcall`, `macro`/`endmacro`, `set`
