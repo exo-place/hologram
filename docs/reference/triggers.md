@@ -51,7 +51,7 @@ $if content.includes(hello): $respond
 | `keyword_match` | boolean | Message matched one of this entity's configured trigger keywords |
 | `content` | string | Message content (alias for `messages(1, "%m")`) |
 | `author` | string | Message author name (alias for `messages(1, "%a")`) |
-| `interaction_type` | string | Interaction type if applicable (e.g. `"drink"`, `"eat"`, `"throw"`) |
+| `interaction_type` | string | Interaction verb set when triggered via `trigger_entity` tool or `/trigger <entity> <verb>` (e.g. `"drink"`, `"eat"`, `"open"`) |
 | `name` | string | This entity's name |
 | `chars` | string[] | Names of all entities bound to this channel |
 | `group` | string | All bound character names, comma-separated |

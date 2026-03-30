@@ -161,17 +161,29 @@ Shows:
 
 ### `/trigger`
 
-Manually trigger an entity to respond in the current channel. Bypasses the normal response logic (`$respond` / `$if`) - the entity will always respond.
+Manually trigger an entity to respond in the current channel. Bypasses the normal response logic (`$respond` / `$if`) — the entity will always respond.
 
 ```
-/trigger <entity>
+/trigger <entity> [verb]
 ```
 
-Respects `$use` and `$blacklist` permissions - you must be allowed to trigger the entity.
+Respects `$use` and `$blacklist` permissions — you must be allowed to trigger the entity.
+
+**With a verb (entity-to-entity interaction):**
+
+The optional `verb` parameter sets `interaction_type` in the triggered entity's context, letting it react based on how it was interacted with. Requires you to have a persona bound (via `/bind`) — the interaction is attributed to your character, not to you directly.
+
+```
+/trigger HealthPotion drink    # Your persona drinks the potion
+/trigger StoneDoor open        # Your persona opens the door
+```
+
+The triggered entity can then use `$if interaction_type == "drink"` to only respond to that specific interaction.
 
 **Examples:**
 ```
-/trigger Aria              # Force Aria to respond now
+/trigger Aria                  # Force Aria to respond now
+/trigger HealthPotion drink    # Trigger HealthPotion with interaction_type "drink" (requires persona)
 ```
 
 ---

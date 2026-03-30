@@ -108,6 +108,38 @@ Remove a memory that is no longer relevant or was incorrect.
 | `entityId` | number | The entity ID |
 | `content` | string | The exact memory text to remove |
 
+## Entity Interactions
+
+### `trigger_entity`
+
+Trigger another entity to respond with a specific interaction type. The target entity's `interaction_type` variable is set to the verb, allowing it to react differently based on how it was interacted with.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `entityId` | number | The target entity ID |
+| `verb` | string | The interaction verb (e.g. `"drink"`, `"eat"`, `"open"`, `"use"`, `"equip"`) |
+| `author` | string | Your character's name — the entity initiating this interaction |
+
+**Agency model:** Only the entity's own LLM decides to call `trigger_entity`. Users cannot force an entity to interact with another entity — the action must emerge from the character's response.
+
+**Example use cases:**
+- A character drinks a potion entity — the potion fires and describes its effect
+- A character opens a door entity — the door fires and reveals what's behind it
+- A character equips an item — the item fires and applies its properties
+
+**Example entity facts (item being triggered):**
+
+```
+$if interaction_type == "drink": $respond
+when drunk, heals 50 HP and tastes of mint
+```
+
+The item entity won't respond to normal messages — only when explicitly triggered with `verb: "drink"`.
+
+::: info Chain depth
+`trigger_entity` calls are subject to the same chain depth limit as normal self-response chains (default: 3). If the limit is reached, the trigger is silently dropped.
+:::
+
 ## Response Control
 
 ### `skip_response`
