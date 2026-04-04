@@ -574,9 +574,9 @@ bot.events.messageCreate = async (message) => {
     return;
   }
 
-  // Welcome new users with a DM
+  // Welcome new users with a DM — only when they explicitly reply to a bot message
   const userId = message.author.id.toString();
-  if (isNewUser(userId)) {
+  if (isReplied && isNewUser(userId)) {
     markUserWelcomed(userId);
     sendWelcomeDm(message.author.id).catch(err => {
       warn("Failed to send welcome DM", { userId: message.author.id.toString(), err });
