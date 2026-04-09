@@ -1,0 +1,24 @@
+[Unit]
+Description=Hologram Discord Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/me/git/exoplace/hologram
+
+# Bun comes from the project flake — update this path when bun is upgraded.
+# Run `which bun` inside `nix develop` or `direnv allow` to get the current path.
+ExecStart=/nix/store/1xk3mgscq548ypyrgm2n5kwdii92w9ql-bun-1.3.6/bin/bun run src/index.ts
+
+# Load secrets from .env (DISCORD_TOKEN, API keys, etc.)
+EnvironmentFile=/home/me/git/exoplace/hologram/.env
+
+# Enable debug logging
+Environment=LOG_LEVEL=debug
+
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=default.target
