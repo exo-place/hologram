@@ -17,6 +17,10 @@ EnvironmentFile=/home/me/git/exoplace/hologram/.env
 # Enable debug logging
 Environment=LOG_LEVEL=debug
 
+# sharp's native module needs gcc/glibc libs from the nix store (not on PATH in service context).
+# Update these paths when nixpkgs bumps gcc or glibc.
+Environment=LD_LIBRARY_PATH=/nix/store/xc0ga87wdclrx54qjaryahkkmkmqi9qz-gcc-15.2.0-lib/lib:/nix/store/j193mfi0f921y0kfs8vjc1znnr45ispv-glibc-2.40-66/lib
+
 Restart=on-failure
 RestartSec=5s
 
