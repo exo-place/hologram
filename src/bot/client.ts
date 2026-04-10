@@ -305,8 +305,11 @@ const botMessageIds = new Set<string>();
 const MAX_BOT_MESSAGES = 1000;
 
 // In-memory tracking of our own webhook messages (for recursion limit)
-// This must be updated synchronously when we send, before yielding control
+// This must be updated synchronously when we send, before yielding control.
+// The entity map is also populated here to handle the race condition where Discord
+// fires MESSAGE_CREATE via WebSocket before our HTTP webhook response arrives.
 const ownWebhookMessageIds = new Set<string>();
+const ownWebhookEntityMap = new Map<string, { entityId: number; entityName: string }>();
 const MAX_OWN_WEBHOOK_IDS = 1000;
 
 // =============================================================================
@@ -401,17 +404,28 @@ function isOwnWebhookMessage(messageId: string): boolean {
 }
 
 function trackOwnWebhookMessage(messageId: string, entityId: number, entityName: string): void {
-  // Add to in-memory set immediately (synchronous)
+  // Add to in-memory structures immediately (synchronous), before the DB write.
+  // This handles the race where Discord fires MESSAGE_CREATE via WebSocket before
+  // our HTTP webhook response arrives, making the DB lookup miss.
   ownWebhookMessageIds.add(messageId);
+  ownWebhookEntityMap.set(messageId, { entityId, entityName });
   if (ownWebhookMessageIds.size > MAX_OWN_WEBHOOK_IDS) {
     const iter = ownWebhookMessageIds.values();
     for (let i = 0; i < MAX_OWN_WEBHOOK_IDS / 2; i++) {
       const v = iter.next().value;
-      if (v) ownWebhookMessageIds.delete(v);
+      if (v) {
+        ownWebhookMessageIds.delete(v);
+        ownWebhookEntityMap.delete(v);
+      }
     }
   }
-  // Also persist to DB for reply detection
+  // Also persist to DB for reply detection across restarts
   trackWebhookMessage(messageId, entityId, entityName);
+}
+
+/** Look up entity info for a webhook message, checking in-memory cache before DB. */
+function lookupWebhookEntity(messageId: string): { entityId: number; entityName: string } | null {
+  return ownWebhookEntityMap.get(messageId) ?? getWebhookMessageEntity(messageId);
 }
 
 function markProcessed(messageId: bigint): boolean {
@@ -481,7 +495,7 @@ bot.events.messageCreate = async (message) => {
   const messageRef = message.messageReference;
   const refMessageId = messageRef?.messageId?.toString();
   const isRepliedToBot = refMessageId ? botMessageIds.has(refMessageId) : false;
-  const repliedToWebhookEntity = refMessageId ? getWebhookMessageEntity(refMessageId) : undefined;
+  const repliedToWebhookEntity = refMessageId ? lookupWebhookEntity(refMessageId) : undefined;
   const isReplied = isRepliedToBot || !!repliedToWebhookEntity;
   const isForward = hasSnapshots; // forwarded messages have messageSnapshots
 
@@ -644,11 +658,11 @@ bot.events.messageCreate = async (message) => {
     // which breaks when two entities share a name or the webhook is renamed externally.
     let isSelf = false;
     if (message.webhookId) {
-      const webhookEntity = getWebhookMessageEntity(message.id.toString());
+      const webhookEntity = lookupWebhookEntity(message.id.toString());
       if (webhookEntity !== null) {
         isSelf = webhookEntity.entityId === entity.id;
       } else {
-        // Fallback: webhook message not tracked (e.g. sent before bot started)
+        // Fallback: webhook message not tracked (sent before bot started, or external webhook)
         isSelf = entity.name.toLowerCase() === authorName.toLowerCase();
         debug('isSelf fallback to name comparison (message not in webhook_messages)', {
           entity: entity.name,
