@@ -53,6 +53,7 @@ function testContext(overrides: Partial<Parameters<typeof createBaseContext>[0]>
     is_forward: false,
     is_self: false,
     is_hologram: false,
+    silent: false,
     interaction_type: "",
     name: "",
     chars: [],

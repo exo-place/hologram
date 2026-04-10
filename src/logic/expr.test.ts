@@ -36,6 +36,7 @@ function testContext(overrides: Partial<Parameters<typeof createBaseContext>[0]>
     is_forward: false,
     is_self: false,
     is_hologram: false,
+    silent: false,
     interaction_type: "",
     name: "",
     chars: [],
@@ -105,6 +106,7 @@ function makeContext(overrides: Partial<ExprContext> = {}): ExprContext {
     is_forward: false,
     is_self: false,
     is_hologram: false,
+    silent: false,
     mentioned_in_dialogue: (name: string) => checkMentionedInDialogue(messages(1, "%m"), name),
     content: messages(1, "%m"),
     author: messages(1, "%a"),
@@ -805,6 +807,30 @@ describe("integration", () => {
     const facts = ["$if is_hologram: $respond"];
     expect(evaluateFacts(facts, makeContext({ is_hologram: true })).shouldRespond).toBe(true);
     expect(evaluateFacts(facts, makeContext({ is_hologram: false })).shouldRespond).toBe(null);
+  });
+
+  test("silent variable is false by default", () => {
+    const ctx = makeContext();
+    expect(evalExpr("silent", ctx)).toBe(false);
+    expect(evalExpr("!silent", ctx)).toBe(true);
+  });
+
+  test("silent variable reflects @silent messages", () => {
+    const ctx = makeContext({ silent: true });
+    expect(evalExpr("silent", ctx)).toBe(true);
+    expect(evalExpr("!silent", ctx)).toBe(false);
+  });
+
+  test("$if silent controls $respond for explicit opt-in", () => {
+    const facts = ["$if silent: $respond"];
+    expect(evaluateFacts(facts, makeContext({ silent: true })).shouldRespond).toBe(true);
+    expect(evaluateFacts(facts, makeContext({ silent: false })).shouldRespond).toBe(null);
+  });
+
+  test("$if !silent suppresses on @silent messages", () => {
+    const facts = ["$if !silent: $respond"];
+    expect(evaluateFacts(facts, makeContext({ silent: false })).shouldRespond).toBe(true);
+    expect(evaluateFacts(facts, makeContext({ silent: true })).shouldRespond).toBe(null);
   });
 
   test("mentioned_in_dialogue function checks quoted text", () => {

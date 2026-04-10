@@ -56,6 +56,7 @@ function makeContext(overrides: Partial<ExprContext> = {}): ExprContext {
     is_forward: false,
     is_self: false,
     is_hologram: false,
+    silent: false,
     mentioned_in_dialogue: () => false,
     content: messages(1, "%m"),
     author: messages(1, "%a"),

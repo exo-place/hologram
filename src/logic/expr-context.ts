@@ -86,6 +86,8 @@ export interface BaseContextOptions {
   is_self: boolean;
   /** Whether the message is from any hologram entity (our webhook) */
   is_hologram: boolean;
+  /** Whether the message was sent with @silent (suppress notifications flag) */
+  silent: boolean;
   interaction_type: string;
   /** This entity's name */
   name: string;
@@ -196,6 +198,7 @@ export function createBaseContext(options: BaseContextOptions): ExprContext {
     is_forward: options.is_forward,
     is_self: options.is_self,
     is_hologram: options.is_hologram,
+    silent: options.silent,
     mentioned_in_dialogue: (name: string) => checkMentionedInDialogue(content, name),
     content,
     author: messages(1, "%a"),

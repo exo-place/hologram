@@ -35,6 +35,7 @@ function makeContext(overrides: Partial<ExprContext> = {}): ExprContext {
     is_forward: false,
     is_self: false,
     is_hologram: false,
+    silent: false,
     interaction_type: "",
     name: "",
     chars: [],

@@ -403,6 +403,7 @@ const EXPR_CONTEXT_REFERENCE: ExprContext = {
   is_forward: false,
   is_self: false,
   is_hologram: false,
+      silent: false,
   mentioned_in_dialogue: () => false,
   content: "",
   author: "",

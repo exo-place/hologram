@@ -102,6 +102,7 @@ export async function handleWebMessage(
       is_forward: false,
       is_self: false,
       is_hologram: false,
+      silent: false,
       interaction_type: "",
       name: entity.name,
       chars: channelEntities.map(e => e.name),

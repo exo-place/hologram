@@ -71,6 +71,8 @@ export interface ExprContext {
   is_self: boolean;
   /** Whether the message is from any hologram entity (our webhook) */
   is_hologram: boolean;
+  /** Whether the message was sent with @silent (suppress notifications flag) */
+  silent: boolean;
   /** Check if a name is mentioned in dialogue (excludes XML tags like <Name>) */
   mentioned_in_dialogue: (name: string) => boolean;
   /** Message content (alias for messages(1, "%m")) */

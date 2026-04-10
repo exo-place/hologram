@@ -793,7 +793,8 @@ registerCommand({
       replied_to: "",
       is_forward: false,
       is_self: false,
-      is_hologram: interactionAuthor !== null, // entity-to-entity if persona-initiated
+      is_hologram: interactionAuthor !== null,
+      silent: false,
       interaction_type: interactionType,
       name: entity.name,
       chars: [entity.name],

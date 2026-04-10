@@ -1,4 +1,5 @@
 import { createBot, Intents } from "@discordeno/bot";
+import { MessageFlags } from "@discordeno/types";
 import type { DiscordMessage } from "@discordeno/types";
 import { buildMsgDataAndContent, channelTypeString, guildNsfwLevelString, serializeComponents, serializeEmbed, serializeDiscordEmbed } from "./client-serialization";
 import { info, debug, warn, error } from "../logger";
@@ -498,6 +499,8 @@ bot.events.messageCreate = async (message) => {
   const repliedToWebhookEntity = refMessageId ? lookupWebhookEntity(refMessageId) : undefined;
   const isReplied = isRepliedToBot || !!repliedToWebhookEntity;
   const isForward = hasSnapshots; // forwarded messages have messageSnapshots
+  // flags is always present per Discordeno's alwaysPresents metadata but not reflected in SetupDesiredProps
+  const isSilent = (message as unknown as { flags?: { contains(flag: number): boolean } }).flags?.contains(MessageFlags.SuppressNotifications) ?? false; // @silent
 
   // Check if any mentioned user ID is one of our webhook IDs
   // (handles reply-with-@ping to webhook entity messages)
@@ -691,6 +694,7 @@ bot.events.messageCreate = async (message) => {
       is_forward: isForward,
       is_self: isSelf,
       is_hologram: isHologram,
+      silent: isSilent,
       interaction_type: "",
       name: entity.name,
       chars: channelEntities.map(e => e.name),
@@ -749,7 +753,10 @@ bot.events.messageCreate = async (message) => {
         (repliedToThis && (!isHologram || Math.random() < 0.75)) ||
         nameMentioned ||
         keywordMatch;
-      const shouldRespond = result.shouldRespond ?? defaultRespond;
+      // @silent messages suppress responses unless the entity explicitly opted in
+      // via a $if silent: $respond fact (result.shouldRespond set explicitly to true).
+      const silentSuppressed = isSilent && result.shouldRespond !== true;
+      const shouldRespond = !silentSuppressed && (result.shouldRespond ?? defaultRespond);
 
       if (shouldRespond) {
         // Log the trigger source
@@ -860,6 +867,7 @@ async function processEntityRetry(
     is_forward: false,
     is_self: false, // Retry is never self-triggered
     is_hologram: false, // Retry re-evaluates without original message context
+    silent: false, // Retries are not @silent
     interaction_type: "",
     name: entity.name,
     chars: allChannelEntities.map(e => e.name),
@@ -985,6 +993,7 @@ async function processEntityTick(
     is_forward: false,
     is_self: false,
     is_hologram: false,
+    silent: false,
     interaction_type: "",
     name: entity.name,
     chars: allChannelEntities.map(e => e.name),
@@ -1559,6 +1568,7 @@ export async function sendResponse(
         is_forward: false,
         is_self: false,
         is_hologram: true,
+        silent: false, // /trigger is never @silent
         interaction_type: verb,
         name: targetEntity.name,
         chars: channelEntityNames,
