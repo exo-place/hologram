@@ -48,5 +48,5 @@ Syntax highlighting for custom templates (edited via `/edit <entity> type:Templa
 </div>
 
 ::: tip
-See [Custom Templates](/reference/templates) for full template documentation, and [Triggers](/reference/triggers) for the complete expression context reference.
+See [Custom Templates](/reference/templates) for full template documentation, and [Triggers](/reference/expressions) for the complete expression context reference.
 :::

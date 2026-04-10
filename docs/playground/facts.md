@@ -6,7 +6,7 @@ title: Fact Evaluation Playground
 
 Write entity facts and see how they evaluate in real time. Conditional facts (`$if`) are evaluated against the context variables below, and directives (`$respond`, `$stream`, `$model`, etc.) are extracted separately.
 
-See the [Directives Reference](/reference/directives) and [Triggers Reference](/reference/triggers) for full documentation.
+See the [Directives Reference](/reference/facts) and [Triggers Reference](/reference/expressions) for full documentation.
 
 <script setup>
 import { defineClientComponent } from 'vitepress'

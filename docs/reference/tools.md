@@ -158,7 +158,7 @@ Use when the conversation doesn't require the entity's input, the entity would j
 
 ## Locking
 
-The [`$locked` directive](/reference/directives#locked) controls whether tools can modify an entity.
+The [`$locked` directive](/reference/facts#locked) controls whether tools can modify an entity.
 
 ### Entity-level lock
 

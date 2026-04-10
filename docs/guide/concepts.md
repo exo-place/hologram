@@ -51,7 +51,7 @@ The condition is a JavaScript expression evaluated against the current message c
 
 This is how you control when an entity responds, what it reveals, and how it behaves in different situations — all from within the facts list, without touching configuration files.
 
-See [Expressions Reference](/reference/directives) for the full variable and directive list.
+See [Expressions Reference](/reference/facts) for the full variable and directive list.
 
 ## Bindings — Connecting Entities to Discord
 
@@ -113,6 +113,6 @@ Once you have the mental model, the rest is details:
 - **[Getting Started](/guide/getting-started)** — set up your first character step by step
 - **[Personas](/guide/personas)** — speak as a character yourself
 - **[Multi-Character Channels](/guide/multi-character)** — run multiple entities in one channel
-- **[Directives Reference](/reference/directives)** — every `$if`, `$respond`, `$stream`, `$model`, and other directive
+- **[Directives Reference](/reference/facts)** — every `$if`, `$respond`, `$stream`, `$model`, and other directive
 - **[Facts Reference](/reference/facts)** — macros, patterns, and what's available in fact text
 - **[Commands Reference](/reference/commands)** — every slash command with its options

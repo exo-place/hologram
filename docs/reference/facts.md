@@ -138,7 +138,7 @@ has {{self.health}} health points
 was last seen {{idle_duration}} ago
 ```
 
-See [Expressions Reference](/reference/triggers) for all available variables.
+See [Expressions Reference](/reference/expressions) for all available variables.
 
 ---
 
@@ -175,7 +175,7 @@ $if content.includes("hello"): $respond   # correct
 $if content.includes(hello): $respond     # wrong — hello is an undefined variable
 ```
 
-For the full expression language including all available variables, see [Expressions Reference](/reference/triggers).
+For the full expression language including all available variables, see [Expressions Reference](/reference/expressions).
 
 ---
 

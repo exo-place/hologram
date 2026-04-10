@@ -105,5 +105,5 @@ She should respond based on her facts. If she doesn't:
 - [Core Concepts](/guide/concepts) — understand the entity-facts model before going further
 - [Personas](/guide/personas) — speak as a character yourself
 - [Multi-Character Channels](/guide/multi-character) — multiple entities in one channel
-- [Expressions Reference](/reference/directives) — full `$if`, `$respond`, `$stream`, and other directives
+- [Expressions Reference](/reference/facts) — full `$if`, `$respond`, `$stream`, and other directives
 - [Commands Reference](/reference/commands) — every slash command

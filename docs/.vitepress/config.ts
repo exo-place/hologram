@@ -1,6 +1,22 @@
 import { defineConfig } from 'vitepress'
 import path from 'node:path'
 
+// markdown-it plugin: add v-pre to inline <code> elements containing {{ }}
+// so VitePress doesn't try to compile them as Vue template expressions.
+function vPreInlineCode(md: { core: { ruler: { push: (name: string, fn: (state: { tokens: Array<{ type: string; children: Array<{ type: string; content: string }> | null }> }) => void) => void } } }) {
+  md.core.ruler.push('v_pre_inline_code', (state) => {
+    for (const token of state.tokens) {
+      if (token.type !== 'inline' || !token.children) continue
+      for (const child of token.children) {
+        if (child.type === 'code_inline' && child.content.includes('{{')) {
+          child.type = 'html_inline'
+          child.content = `<code v-pre>${child.content}</code>`
+        }
+      }
+    }
+  })
+}
+
 export default defineConfig({
   title: 'Hologram',
   description: 'Discord bot for collaborative worldbuilding and roleplay',
@@ -11,6 +27,12 @@ export default defineConfig({
   ],
   base: '/hologram/',
   srcExclude: ['archive/**'],
+
+  markdown: {
+    config: (md) => {
+      vPreInlineCode(md)
+    },
+  },
 
   vite: {
     resolve: {
