@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -e
+
+bun run lint
+bun run check:types
+~/git/rhizone/normalize/target/debug/normalize rules run .
+
+# Only build docs if docs/ files changed
+if git diff --cached --name-only | grep -q '^docs/'; then
+  echo "Docs files changed — building docs..."
+  (cd docs && bun run build)
+fi

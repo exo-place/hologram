@@ -14,6 +14,7 @@ LLM integration layer. Handles everything from prompt construction to streaming 
 - `parsing.ts` — Name-prefix stripping for single and multi-entity responses (`stripNamePrefix`, `parseNamePrefixResponse`). Also handles streaming name-prefix detection via sentinel characters.
 - `attachments.ts` — Resolves HATT attachment markers embedded in messages to `ImagePart`/`FilePart`/text-fallback content parts, routing by provider capability. Uses `attachment-cache` for fetched bytes.
 - `embeddings.ts` — Local embedding model (Transformers.js, 384-dim). `embed()`, `cosineSimilarity()`, `similarityMatrix()`, `maxSimilarityMatrix()`. Used by the memory retrieval pipeline.
+- `context.test.ts`, `*.test.ts` — Unit tests live next to their source files throughout this directory.
 
 ## Notes
 

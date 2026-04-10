@@ -11,6 +11,7 @@ Root source directory for Hologram. Contains the entry point, the structured log
 ## Subdirectories
 
 - `ai/` — LLM integration: prompt building, streaming, tools, template engine, attachment handling
+- `api/` — Bun.serve() REST API server, SSE streaming, chat adapter, debug routes
 - `bot/` — Discordeno client, slash commands, webhook delivery
 - `db/` — SQLite schema, entity/fact CRUD, Discord ID mappings, memories, effects, attachment cache
 - `debug/` — Inspection utilities shared by CLI debug tool and Discord `/debug` commands
