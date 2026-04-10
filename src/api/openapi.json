@@ -1,0 +1,1741 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Hologram API",
+    "version": "1.0.0",
+    "description": "REST API for Hologram — a collaborative worldbuilding and roleplay system built on an entity-facts model. Entities represent characters, locations, items, or any concept; facts are freeform strings that define their behaviour and appearance."
+  },
+  "servers": [
+    { "url": "http://localhost:3000", "description": "Local development server" }
+  ],
+  "tags": [
+    { "name": "entities", "description": "Entity CRUD — the core object in Hologram" },
+    { "name": "facts", "description": "Freeform fact strings attached to an entity" },
+    { "name": "config", "description": "Per-entity model/behaviour configuration" },
+    { "name": "templates", "description": "Nunjucks templates that override the default system prompt" },
+    { "name": "memories", "description": "Long-term memories recalled via semantic similarity" },
+    { "name": "channels", "description": "Web chat channels (not Discord)" },
+    { "name": "discord-channels", "description": "Read-only mirror of Discord channel state" },
+    { "name": "debug", "description": "Introspection endpoints — binding graph, eval errors, embedding coverage, trace" }
+  ],
+  "paths": {
+    "/api/entities": {
+      "get": {
+        "operationId": "listEntities",
+        "tags": ["entities"],
+        "summary": "List entities",
+        "description": "Returns a paginated list of entities, optionally filtered by name substring.",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Case-insensitive name substring filter.",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of results. Capped at 500.",
+            "schema": { "type": "integer", "default": 100, "maximum": 500 }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Number of results to skip for pagination.",
+            "schema": { "type": "integer", "default": 0 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Array of entities.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EntityListResponse" }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createEntity",
+        "tags": ["entities"],
+        "summary": "Create an entity",
+        "description": "Creates a new entity. Names do not have to be unique.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateEntityBody" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Entity created.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EntityResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" }
+        }
+      }
+    },
+    "/api/entities/{id}": {
+      "parameters": [{ "$ref": "#/components/parameters/entityId" }],
+      "get": {
+        "operationId": "getEntity",
+        "tags": ["entities"],
+        "summary": "Get entity with facts",
+        "description": "Returns a single entity together with its full fact list.",
+        "responses": {
+          "200": {
+            "description": "Entity with facts.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EntityWithFactsResponse" }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "put": {
+        "operationId": "updateEntity",
+        "tags": ["entities"],
+        "summary": "Rename an entity",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateEntityBody" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated entity.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EntityResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "delete": {
+        "operationId": "deleteEntity",
+        "tags": ["entities"],
+        "summary": "Delete an entity",
+        "description": "Deletes the entity and all associated facts, memories, and bindings.",
+        "responses": {
+          "200": {
+            "description": "Entity deleted.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/DeletedResponse" }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/entities/{id}/facts": {
+      "parameters": [{ "$ref": "#/components/parameters/entityId" }],
+      "get": {
+        "operationId": "listFacts",
+        "tags": ["facts"],
+        "summary": "List facts",
+        "description": "Returns all facts for an entity in insertion order.",
+        "responses": {
+          "200": {
+            "description": "Fact list.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/FactListResponse" }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "post": {
+        "operationId": "createFact",
+        "tags": ["facts"],
+        "summary": "Add a fact",
+        "description": "Appends a new fact to the entity. Facts are freeform strings; they may include `$if` conditions, `$respond` directives, and `{{macro}}` references.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateFactBody" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Fact created.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/FactResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/entities/{id}/facts/{fid}": {
+      "parameters": [
+        { "$ref": "#/components/parameters/entityId" },
+        { "$ref": "#/components/parameters/factId" }
+      ],
+      "put": {
+        "operationId": "updateFact",
+        "tags": ["facts"],
+        "summary": "Update a fact",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateFactBody" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated fact.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/FactResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "delete": {
+        "operationId": "deleteFact",
+        "tags": ["facts"],
+        "summary": "Delete a fact",
+        "responses": {
+          "200": {
+            "description": "Fact deleted.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/DeletedResponse" }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/entities/{id}/config": {
+      "parameters": [{ "$ref": "#/components/parameters/entityId" }],
+      "get": {
+        "operationId": "getEntityConfig",
+        "tags": ["config"],
+        "summary": "Get entity config",
+        "description": "Returns all configuration columns for the entity. Most values are JSON-encoded strings stored in SQLite text columns — null means the system default applies.",
+        "responses": {
+          "200": {
+            "description": "Entity configuration.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EntityConfigResponse" }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "patch": {
+        "operationId": "updateEntityConfig",
+        "tags": ["config"],
+        "summary": "Update entity config",
+        "description": "Partially updates entity configuration. Only the supplied fields are written; omitted fields are left unchanged.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ApiEntityConfig" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated configuration.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EntityConfigResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/entities/{id}/template": {
+      "parameters": [{ "$ref": "#/components/parameters/entityId" }],
+      "get": {
+        "operationId": "getTemplate",
+        "tags": ["templates"],
+        "summary": "Get main template",
+        "description": "Returns the entity's Nunjucks template that controls system-prompt formatting. `null` means the built-in DEFAULT_TEMPLATE is used.",
+        "responses": {
+          "200": {
+            "description": "Template value.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TemplateResponse" }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "put": {
+        "operationId": "setTemplate",
+        "tags": ["templates"],
+        "summary": "Set main template",
+        "description": "Replaces the entity's main template. Set to `null` to revert to the built-in default. The template is rendered with Nunjucks; use `{% call send_as(role) %}` blocks to designate message roles.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TemplateBody" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated template.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TemplateResponse" }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/entities/{id}/system-template": {
+      "parameters": [{ "$ref": "#/components/parameters/entityId" }],
+      "get": {
+        "operationId": "getSystemTemplate",
+        "tags": ["templates"],
+        "summary": "Get system template",
+        "description": "Returns the entity's system-parameter template. This is rendered and passed as the AI SDK `system` field — a separate channel from the main message list. `null` means an empty system parameter.",
+        "responses": {
+          "200": {
+            "description": "System template value.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SystemTemplateResponse" }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "put": {
+        "operationId": "setSystemTemplate",
+        "tags": ["templates"],
+        "summary": "Set system template",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SystemTemplateBody" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated system template.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SystemTemplateResponse" }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/entities/{id}/memories": {
+      "parameters": [{ "$ref": "#/components/parameters/entityId" }],
+      "get": {
+        "operationId": "listMemories",
+        "tags": ["memories"],
+        "summary": "List memories",
+        "description": "Returns all long-term memories for the entity. Memories are retrieved at inference time via semantic similarity against recent messages.",
+        "responses": {
+          "200": {
+            "description": "Memory list.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MemoryListResponse" }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "post": {
+        "operationId": "createMemory",
+        "tags": ["memories"],
+        "summary": "Add a memory",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateMemoryBody" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Memory created.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MemoryResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/entities/{id}/memories/{mid}": {
+      "parameters": [
+        { "$ref": "#/components/parameters/entityId" },
+        { "$ref": "#/components/parameters/memoryId" }
+      ],
+      "delete": {
+        "operationId": "deleteMemory",
+        "tags": ["memories"],
+        "summary": "Delete a memory",
+        "responses": {
+          "200": {
+            "description": "Memory deleted.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/DeletedResponse" }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/channels": {
+      "get": {
+        "operationId": "listChannels",
+        "tags": ["channels"],
+        "summary": "List web channels",
+        "description": "Returns all web chat channels. Web channels are isolated from Discord; they have their own message history and entity roster.",
+        "responses": {
+          "200": {
+            "description": "Channel list.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ChannelListResponse" }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createChannel",
+        "tags": ["channels"],
+        "summary": "Create a web channel",
+        "description": "Creates a new web channel with the given entity roster. The channel ID is auto-generated as `web:<uuid>`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateChannelBody" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Channel created.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ChannelResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" }
+        }
+      }
+    },
+    "/api/channels/{id}": {
+      "parameters": [{ "$ref": "#/components/parameters/channelId" }],
+      "patch": {
+        "operationId": "updateChannel",
+        "tags": ["channels"],
+        "summary": "Update a web channel",
+        "description": "Updates the channel name and/or entity roster. Only supplied fields are changed.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateChannelBody" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated channel.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ChannelResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "delete": {
+        "operationId": "deleteChannel",
+        "tags": ["channels"],
+        "summary": "Delete a web channel",
+        "description": "Deletes the channel and its message history.",
+        "responses": {
+          "200": {
+            "description": "Channel deleted.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/DeletedResponse" }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/channels/{id}/messages": {
+      "parameters": [{ "$ref": "#/components/parameters/channelId" }],
+      "get": {
+        "operationId": "getChannelMessages",
+        "tags": ["channels"],
+        "summary": "Get message history",
+        "description": "Returns recent messages for a channel in chronological order.",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Number of messages to return. Capped at 200.",
+            "schema": { "type": "integer", "default": 50, "maximum": 200 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Message list.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MessageListResponse" }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "post": {
+        "operationId": "sendMessage",
+        "tags": ["channels"],
+        "summary": "Send a message",
+        "description": "Stores a user message, broadcasts it to SSE subscribers, then asynchronously triggers entity responses. AI responses arrive via the SSE stream, not in this response.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SendMessageBody" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Message stored and AI response triggered.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SendMessageResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/channels/{id}/stream": {
+      "parameters": [{ "$ref": "#/components/parameters/channelId" }],
+      "get": {
+        "operationId": "streamChannel",
+        "tags": ["channels"],
+        "summary": "Subscribe to SSE stream",
+        "description": "Opens a Server-Sent Events stream for the channel. Events are newline-delimited JSON objects prefixed with `data: `. The connection stays open until the client disconnects.\n\nEvent types:\n- `message` — a new message was stored (`{ type: \"message\", message: ApiMessage }`)\n- `forget` — the context window was reset (`{ type: \"forget\", forget_at: string }`)\n- AI streaming events (token chunks, tool calls, etc.)",
+        "responses": {
+          "200": {
+            "description": "SSE stream. Connection is persistent.",
+            "content": {
+              "text/event-stream": {
+                "schema": { "type": "string" }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/channels/{id}/forget": {
+      "parameters": [{ "$ref": "#/components/parameters/channelId" }],
+      "post": {
+        "operationId": "forgetChannel",
+        "tags": ["channels"],
+        "summary": "Reset context window",
+        "description": "Instructs entities to ignore messages before the current timestamp. Useful for starting a fresh scene without deleting history. The cut-off time is broadcast to SSE subscribers.",
+        "responses": {
+          "200": {
+            "description": "Forget time set.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ForgetResponse" }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/channels/{id}/trigger": {
+      "parameters": [{ "$ref": "#/components/parameters/channelId" }],
+      "post": {
+        "operationId": "triggerResponse",
+        "tags": ["channels"],
+        "summary": "Trigger entity response",
+        "description": "Fires entity responses for the channel without a user message. Useful for prompting a continuation or resuming a paused scene.",
+        "responses": {
+          "202": {
+            "description": "Response triggered.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TriggeredResponse" }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/discord-channels": {
+      "get": {
+        "operationId": "listDiscordChannels",
+        "tags": ["discord-channels"],
+        "summary": "List Discord channels",
+        "description": "Returns all Discord channels that have at least one entity binding, plus DM channels, sorted by most recent message descending. Requires the Discord bot to be running.",
+        "responses": {
+          "200": {
+            "description": "Discord channel list.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/DiscordChannelListResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/discord-channels/{id}/messages": {
+      "parameters": [{ "$ref": "#/components/parameters/discordChannelId" }],
+      "get": {
+        "operationId": "getDiscordChannelMessages",
+        "tags": ["discord-channels"],
+        "summary": "Get Discord channel message history",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Number of messages to return. Capped at 200.",
+            "schema": { "type": "integer", "default": 50, "maximum": 200 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Message list.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MessageListResponse" }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "post": {
+        "operationId": "sendDiscordMessage",
+        "tags": ["discord-channels"],
+        "summary": "Send a message to a Discord channel",
+        "description": "Sends a message via the Discord bot. For server channels the message is sent through a webhook so it can carry a custom name and avatar. DMs are sent directly. Returns 503 if the bot is not connected.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SendDiscordMessageBody" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Message sent.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/Ok" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "properties": { "sent": { "type": "boolean", "enum": [true] } },
+                          "required": ["sent"]
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "503": { "$ref": "#/components/responses/BotUnavailable" }
+        }
+      }
+    },
+    "/api/discord-channels/{id}/stream": {
+      "parameters": [{ "$ref": "#/components/parameters/discordChannelId" }],
+      "get": {
+        "operationId": "streamDiscordChannel",
+        "tags": ["discord-channels"],
+        "summary": "Subscribe to Discord channel SSE stream",
+        "description": "Same SSE protocol as `/api/channels/{id}/stream`, but for a Discord channel.",
+        "responses": {
+          "200": {
+            "description": "SSE stream.",
+            "content": { "text/event-stream": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/api/debug/bindings": {
+      "get": {
+        "operationId": "getBindings",
+        "tags": ["debug"],
+        "summary": "Get binding graph",
+        "description": "Returns the full Discord→entity binding table, optionally scoped to a specific guild or channel.",
+        "parameters": [
+          {
+            "name": "guild",
+            "in": "query",
+            "description": "Filter by Discord guild snowflake.",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "channel",
+            "in": "query",
+            "description": "Filter by Discord channel snowflake.",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Binding graph.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/BindingGraphResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/debug/errors": {
+      "get": {
+        "operationId": "getEvalErrors",
+        "tags": ["debug"],
+        "summary": "Get fact evaluation errors",
+        "description": "Returns deduplicated fact evaluation errors. Each row represents a unique (entity, condition, error) triple — duplicate errors are suppressed until the error changes.",
+        "parameters": [
+          {
+            "name": "entity",
+            "in": "query",
+            "description": "Filter by entity ID.",
+            "schema": { "type": "integer" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum results. Capped at 200.",
+            "schema": { "type": "integer", "default": 50, "maximum": 200 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Eval error list.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EvalErrorListResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/debug/embedding-status": {
+      "get": {
+        "operationId": "getEmbeddingStatus",
+        "tags": ["debug"],
+        "summary": "Get embedding coverage summary",
+        "description": "Returns aggregate counts of embedded vs total facts and memories. Useful for checking whether the background embedding job is keeping up.",
+        "responses": {
+          "200": {
+            "description": "Embedding status.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmbeddingStatusResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/debug/embeddings": {
+      "get": {
+        "operationId": "getEmbeddingCoverage",
+        "tags": ["debug"],
+        "summary": "Get per-entity embedding coverage",
+        "description": "Returns embedding coverage details for a specific entity's facts and memories.",
+        "parameters": [
+          {
+            "name": "entity",
+            "in": "query",
+            "required": true,
+            "description": "Entity ID.",
+            "schema": { "type": "integer" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Embedding coverage data.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/OkAny" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" }
+        }
+      }
+    },
+    "/api/debug/trace/{entityId}": {
+      "parameters": [
+        {
+          "name": "entityId",
+          "in": "path",
+          "required": true,
+          "description": "Entity ID to trace.",
+          "schema": { "type": "integer" }
+        }
+      ],
+      "get": {
+        "operationId": "traceEntity",
+        "tags": ["debug"],
+        "summary": "Trace fact evaluation",
+        "description": "Evaluates all facts for the entity and returns a trace showing which facts were included, which were conditional, and why each was included or excluded. Useful for debugging `$if` conditions.",
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "query",
+            "description": "Channel ID to use as evaluation context. Defaults to `web:debug`.",
+            "schema": { "type": "string", "default": "web:debug" }
+          },
+          {
+            "name": "guild",
+            "in": "query",
+            "description": "Discord guild ID for scope resolution.",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Fact trace.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EntityTraceResponse" }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
+    },
+    "/api/debug/simulate/{channelId}": {
+      "parameters": [
+        {
+          "name": "channelId",
+          "in": "path",
+          "required": true,
+          "description": "Channel ID (web or Discord snowflake) to simulate.",
+          "schema": { "type": "string" }
+        }
+      ],
+      "get": {
+        "operationId": "simulateResponse",
+        "tags": ["debug"],
+        "summary": "Simulate entity responses",
+        "description": "Runs the respond-decision logic for all entities bound to the channel and reports whether each would respond and why. No message is sent.",
+        "parameters": [
+          {
+            "name": "guild",
+            "in": "query",
+            "description": "Discord guild ID for scope resolution.",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Simulation results.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SimulationResponse" }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
+    },
+    "/api/openapi.json": {
+      "get": {
+        "operationId": "getOpenApiSpec",
+        "tags": ["debug"],
+        "summary": "OpenAPI specification",
+        "description": "Returns this OpenAPI 3.1 specification as JSON.",
+        "responses": {
+          "200": {
+            "description": "OpenAPI spec.",
+            "content": { "application/json": { "schema": { "type": "object" } } }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "entityId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Entity ID (integer primary key).",
+        "schema": { "type": "integer" }
+      },
+      "factId": {
+        "name": "fid",
+        "in": "path",
+        "required": true,
+        "description": "Fact ID (integer primary key).",
+        "schema": { "type": "integer" }
+      },
+      "memoryId": {
+        "name": "mid",
+        "in": "path",
+        "required": true,
+        "description": "Memory ID (integer primary key).",
+        "schema": { "type": "integer" }
+      },
+      "channelId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Web channel ID. Format: `web:<uuid>`.",
+        "schema": { "type": "string", "pattern": "^web:" }
+      },
+      "discordChannelId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Discord channel ID (snowflake, 17–19 digit integer string).",
+        "schema": { "type": "string", "pattern": "^[0-9]{17,19}$" }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Bad request — invalid JSON, missing required field, or invalid ID.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ApiError" }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Resource not found.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ApiError" }
+          }
+        }
+      },
+      "InternalError": {
+        "description": "Internal server error.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ApiError" }
+          }
+        }
+      },
+      "BotUnavailable": {
+        "description": "Discord bot is not connected.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ApiError" }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Ok": {
+        "type": "object",
+        "properties": { "ok": { "type": "boolean", "enum": [true] } },
+        "required": ["ok"]
+      },
+      "OkAny": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Ok" },
+          {
+            "type": "object",
+            "properties": { "data": {} },
+            "required": ["data"]
+          }
+        ]
+      },
+      "ApiError": {
+        "type": "object",
+        "properties": {
+          "ok": { "type": "boolean", "enum": [false] },
+          "error": { "type": "string", "description": "Human-readable error message." }
+        },
+        "required": ["ok", "error"]
+      },
+      "DeletedResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Ok" },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": { "deleted": { "type": "boolean", "enum": [true] } },
+                "required": ["deleted"]
+              }
+            },
+            "required": ["data"]
+          }
+        ]
+      },
+      "ApiEntity": {
+        "type": "object",
+        "description": "An entity — the core object in Hologram. Represents any concept: character, location, item, help topic, etc.",
+        "properties": {
+          "id": { "type": "integer", "description": "Unique integer primary key." },
+          "name": { "type": "string", "description": "Display name. Not unique." },
+          "owned_by": { "type": ["string", "null"], "description": "Discord user ID of the owner, or null." },
+          "created_at": { "type": "string", "format": "date-time" }
+        },
+        "required": ["id", "name", "owned_by", "created_at"]
+      },
+      "ApiFact": {
+        "type": "object",
+        "description": "A freeform fact string attached to an entity. Facts are the primary input to the AI pipeline. They may include `$if` conditions, `$respond` directives, and `{{macro}}` references.",
+        "properties": {
+          "id": { "type": "integer" },
+          "entity_id": { "type": "integer" },
+          "content": {
+            "type": "string",
+            "description": "The fact text. Examples: `is a character`, `$if mentioned: $respond`, `has silver hair`, `is in {{entity:12}}`."
+          },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        },
+        "required": ["id", "entity_id", "content", "created_at", "updated_at"]
+      },
+      "ApiEntityConfig": {
+        "type": "object",
+        "description": "Per-entity configuration. All fields are nullable — null means inherit the system default.",
+        "properties": {
+          "config_context": {
+            "type": ["string", "null"],
+            "description": "A `$if`-style boolean expression controlling which messages this entity sees. Example: `channel.id == '1234567890'`."
+          },
+          "config_model": {
+            "type": ["string", "null"],
+            "description": "LLM override in `provider:model` format. Example: `google:gemini-2.5-pro-preview-05-06`. Null uses the server default."
+          },
+          "config_respond": {
+            "type": ["string", "null"],
+            "description": "Boolean expression that overrides whether this entity responds. Evaluated after fact-level `$if`/`$respond` conditions."
+          },
+          "config_stream_mode": {
+            "type": ["string", "null"],
+            "description": "Streaming mode: `null` (server default), `'true'`, or `'false'`."
+          },
+          "config_stream_delimiters": {
+            "type": ["string", "null"],
+            "description": "JSON array of delimiter strings used to split streamed output into separate messages."
+          },
+          "config_avatar": {
+            "type": ["string", "null"],
+            "description": "URL of the entity's avatar image, used in Discord webhook messages."
+          },
+          "config_memory": {
+            "type": ["string", "null"],
+            "description": "Memory retrieval mode. Controls whether memories are retrieved for this entity."
+          },
+          "config_freeform": {
+            "type": "integer",
+            "enum": [0, 1],
+            "description": "Whether the entity has free-form tool access (1) or restricted (0)."
+          },
+          "config_strip": {
+            "type": ["string", "null"],
+            "description": "JSON array of regex patterns. Matches are stripped from the entity's output before it is sent."
+          },
+          "config_view": {
+            "type": ["string", "null"],
+            "description": "JSON-encoded permission list for who can view this entity. `\"@everyone\"` (as JSON string) means no restriction."
+          },
+          "config_edit": {
+            "type": ["string", "null"],
+            "description": "JSON-encoded permission list for who can edit this entity."
+          },
+          "config_use": {
+            "type": ["string", "null"],
+            "description": "JSON-encoded permission list for who can use (bind) this entity."
+          },
+          "config_blacklist": {
+            "type": ["string", "null"],
+            "description": "JSON-encoded list of user/role IDs blocked from interacting with this entity. Null means no blacklist."
+          },
+          "config_thinking": {
+            "type": ["string", "null"],
+            "description": "Extended thinking budget in tokens, or null to disable. Only supported by models with thinking capability."
+          },
+          "config_collapse": {
+            "type": ["string", "null"],
+            "description": "Message collapse strategy for long histories."
+          },
+          "config_keywords": {
+            "type": ["string", "null"],
+            "description": "JSON array of keyword strings. When any keyword appears in a message, the entity is considered mentioned."
+          }
+        }
+      },
+      "ApiMemory": {
+        "type": "object",
+        "description": "A long-term memory for an entity. Retrieved at inference time via semantic similarity against recent messages.",
+        "properties": {
+          "id": { "type": "integer" },
+          "entity_id": { "type": "integer" },
+          "content": { "type": "string", "description": "The memory text." },
+          "source_message_id": {
+            "type": ["string", "null"],
+            "description": "Discord message ID where this memory originated, if any."
+          },
+          "source_channel_id": {
+            "type": ["string", "null"],
+            "description": "Discord channel ID where this memory originated, if any."
+          },
+          "source_guild_id": {
+            "type": ["string", "null"],
+            "description": "Discord guild ID where this memory originated, if any."
+          },
+          "frecency": {
+            "type": "number",
+            "description": "Frecency score (frequency × recency). Higher = more likely to be surfaced."
+          },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        },
+        "required": ["id", "entity_id", "content", "source_message_id", "source_channel_id", "source_guild_id", "frecency", "created_at", "updated_at"]
+      },
+      "ApiWebChannel": {
+        "type": "object",
+        "description": "A web chat channel. Web channels are independent of Discord and have their own message history.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^web:",
+            "description": "Channel ID. Always prefixed with `web:`."
+          },
+          "name": { "type": ["string", "null"], "description": "Optional display name." },
+          "entity_ids": {
+            "type": "array",
+            "items": { "type": "integer" },
+            "description": "IDs of entities active in this channel."
+          },
+          "created_at": { "type": "string", "format": "date-time" }
+        },
+        "required": ["id", "name", "entity_ids", "created_at"]
+      },
+      "ApiDiscordChannel": {
+        "type": "object",
+        "description": "A Discord channel or DM that has at least one entity binding.",
+        "properties": {
+          "id": { "type": "string", "description": "Discord channel snowflake." },
+          "name": { "type": ["string", "null"], "description": "Channel name, or null for DMs." },
+          "is_dm": { "type": "boolean" },
+          "entity_ids": {
+            "type": "array",
+            "items": { "type": "integer" }
+          },
+          "entity_names": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "latest_message": {
+            "type": ["object", "null"],
+            "properties": {
+              "author_name": { "type": "string" },
+              "content": { "type": "string" },
+              "created_at": { "type": "string", "format": "date-time" }
+            },
+            "required": ["author_name", "content", "created_at"]
+          }
+        },
+        "required": ["id", "name", "is_dm", "entity_ids", "entity_names", "latest_message"]
+      },
+      "ApiMessage": {
+        "type": "object",
+        "description": "A stored message from either a user or an entity.",
+        "properties": {
+          "id": { "type": "integer" },
+          "channel_id": { "type": "string" },
+          "author_id": { "type": "string", "description": "User or entity identifier." },
+          "author_name": { "type": "string" },
+          "content": { "type": "string" },
+          "discord_message_id": {
+            "type": ["string", "null"],
+            "description": "Discord message snowflake, if this message originated on Discord."
+          },
+          "data": {
+            "type": ["string", "null"],
+            "description": "JSON-encoded rich Discord data (embeds, components, attachments). Null for web-only messages."
+          },
+          "created_at": { "type": "string", "format": "date-time" }
+        },
+        "required": ["id", "channel_id", "author_id", "author_name", "content", "discord_message_id", "data", "created_at"]
+      },
+      "ApiBindingEntry": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "discord_id": { "type": "string" },
+          "discord_type": {
+            "type": "string",
+            "enum": ["channel", "guild", "user"],
+            "description": "Binding scope: `channel` = responds in that channel, `guild` = responds in all channels of that server, `user` = persona binding."
+          },
+          "entity_id": { "type": "integer" },
+          "entity_name": { "type": "string" },
+          "scope_guild_id": { "type": ["string", "null"] },
+          "scope_channel_id": { "type": ["string", "null"] }
+        },
+        "required": ["id", "discord_id", "discord_type", "entity_id", "entity_name", "scope_guild_id", "scope_channel_id"]
+      },
+      "ApiEvalError": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "entity_id": { "type": "integer" },
+          "entity_name": { "type": "string" },
+          "owner_id": { "type": "string" },
+          "error_message": { "type": "string" },
+          "condition": { "type": ["string", "null"], "description": "The `$if` expression that failed, if applicable." },
+          "created_at": { "type": "string", "format": "date-time" },
+          "notified_at": { "type": ["string", "null"], "format": "date-time" }
+        },
+        "required": ["id", "entity_id", "entity_name", "owner_id", "error_message", "condition", "created_at", "notified_at"]
+      },
+      "ApiEmbeddingStatus": {
+        "type": "object",
+        "properties": {
+          "model": { "type": ["string", "null"], "description": "Embedding model in use, or null if embeddings are disabled." },
+          "total_facts": { "type": "integer" },
+          "embedded_facts": { "type": "integer" },
+          "total_memories": { "type": "integer" },
+          "embedded_memories": { "type": "integer" }
+        },
+        "required": ["model", "total_facts", "embedded_facts", "total_memories", "embedded_memories"]
+      },
+      "ApiFactTrace": {
+        "type": "object",
+        "description": "Evaluation trace for a single fact.",
+        "properties": {
+          "raw": { "type": "string", "description": "The raw fact string as stored in the database." },
+          "conditional": { "type": "boolean", "description": "Whether the fact has a `$if` condition." },
+          "expression": { "type": ["string", "null"], "description": "The condition expression, if any." },
+          "result": { "type": ["boolean", "null"], "description": "The evaluated result of the condition. Null if evaluation errored." },
+          "error": { "type": ["string", "null"], "description": "Evaluation error message, if any." },
+          "category": {
+            "type": "string",
+            "enum": ["always", "conditional", "directive"],
+            "description": "Fact category: `always` = unconditional fact, `conditional` = has `$if`, `directive` = `$respond` or similar."
+          },
+          "included": { "type": "boolean", "description": "Whether this fact was included in the final prompt." }
+        },
+        "required": ["raw", "conditional", "expression", "result", "error", "category", "included"]
+      },
+      "ApiEntityTrace": {
+        "type": "object",
+        "properties": {
+          "entity_id": { "type": "integer" },
+          "entity_name": { "type": "string" },
+          "traces": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ApiFactTrace" }
+          }
+        },
+        "required": ["entity_id", "entity_name", "traces"]
+      },
+      "ApiResponseSimulation": {
+        "type": "object",
+        "properties": {
+          "entity_id": { "type": "integer" },
+          "entity_name": { "type": "string" },
+          "should_respond": { "type": "boolean" },
+          "respond_source": {
+            "type": ["string", "null"],
+            "description": "Which fact or config field triggered the respond decision."
+          },
+          "reason": { "type": "string", "description": "Human-readable explanation." }
+        },
+        "required": ["entity_id", "entity_name", "should_respond", "respond_source", "reason"]
+      },
+      "CreateEntityBody": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "description": "Entity name." },
+          "owned_by": { "type": "string", "description": "Discord user ID of the owner." }
+        },
+        "required": ["name"]
+      },
+      "UpdateEntityBody": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "minLength": 1 }
+        },
+        "required": ["name"]
+      },
+      "CreateFactBody": {
+        "type": "object",
+        "properties": {
+          "content": { "type": "string", "minLength": 1, "description": "Fact text." }
+        },
+        "required": ["content"]
+      },
+      "UpdateFactBody": {
+        "type": "object",
+        "properties": {
+          "content": { "type": "string", "minLength": 1 }
+        },
+        "required": ["content"]
+      },
+      "CreateMemoryBody": {
+        "type": "object",
+        "properties": {
+          "content": { "type": "string", "minLength": 1 }
+        },
+        "required": ["content"]
+      },
+      "CreateChannelBody": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "description": "Optional display name." },
+          "entity_ids": {
+            "type": "array",
+            "items": { "type": "integer" },
+            "description": "Entity IDs to include in the channel."
+          }
+        },
+        "required": ["entity_ids"]
+      },
+      "UpdateChannelBody": {
+        "type": "object",
+        "properties": {
+          "name": { "type": ["string", "null"], "description": "New display name, or null to clear." },
+          "entity_ids": {
+            "type": "array",
+            "items": { "type": "integer" }
+          }
+        }
+      },
+      "SendMessageBody": {
+        "type": "object",
+        "properties": {
+          "content": { "type": "string", "minLength": 1 },
+          "author_id": { "type": "string", "description": "Caller's user identifier. Defaults to a generated ID." },
+          "author_name": { "type": "string", "description": "Display name shown in history. Defaults to `\"user\"`." }
+        },
+        "required": ["content"]
+      },
+      "SendDiscordMessageBody": {
+        "type": "object",
+        "properties": {
+          "content": { "type": "string", "minLength": 1 },
+          "entity_id": {
+            "type": "integer",
+            "description": "Entity whose name and avatar are used for the webhook message."
+          },
+          "author_name": {
+            "type": "string",
+            "description": "Fallback display name if `entity_id` is not provided."
+          },
+          "is_dm": {
+            "type": "boolean",
+            "description": "Set to true to send a direct message instead of a webhook message."
+          }
+        },
+        "required": ["content"]
+      },
+      "TemplateBody": {
+        "type": "object",
+        "properties": {
+          "template": {
+            "type": ["string", "null"],
+            "description": "Nunjucks template source. Null resets to the built-in DEFAULT_TEMPLATE."
+          }
+        },
+        "required": ["template"]
+      },
+      "SystemTemplateBody": {
+        "type": "object",
+        "properties": {
+          "system_template": {
+            "type": ["string", "null"],
+            "description": "Nunjucks template rendered into the AI SDK `system` field. Null means an empty system parameter."
+          }
+        },
+        "required": ["system_template"]
+      },
+      "EntityListResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Ok" },
+          {
+            "type": "object",
+            "properties": {
+              "data": { "type": "array", "items": { "$ref": "#/components/schemas/ApiEntity" } }
+            },
+            "required": ["data"]
+          }
+        ]
+      },
+      "EntityResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Ok" },
+          {
+            "type": "object",
+            "properties": { "data": { "$ref": "#/components/schemas/ApiEntity" } },
+            "required": ["data"]
+          }
+        ]
+      },
+      "EntityWithFactsResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Ok" },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "allOf": [
+                  { "$ref": "#/components/schemas/ApiEntity" },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "facts": { "type": "array", "items": { "$ref": "#/components/schemas/ApiFact" } }
+                    },
+                    "required": ["facts"]
+                  }
+                ]
+              }
+            },
+            "required": ["data"]
+          }
+        ]
+      },
+      "FactListResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Ok" },
+          {
+            "type": "object",
+            "properties": {
+              "data": { "type": "array", "items": { "$ref": "#/components/schemas/ApiFact" } }
+            },
+            "required": ["data"]
+          }
+        ]
+      },
+      "FactResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Ok" },
+          {
+            "type": "object",
+            "properties": { "data": { "$ref": "#/components/schemas/ApiFact" } },
+            "required": ["data"]
+          }
+        ]
+      },
+      "EntityConfigResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Ok" },
+          {
+            "type": "object",
+            "properties": { "data": { "$ref": "#/components/schemas/ApiEntityConfig" } },
+            "required": ["data"]
+          }
+        ]
+      },
+      "TemplateResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Ok" },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": { "template": { "type": ["string", "null"] } },
+                "required": ["template"]
+              }
+            },
+            "required": ["data"]
+          }
+        ]
+      },
+      "SystemTemplateResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Ok" },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": { "system_template": { "type": ["string", "null"] } },
+                "required": ["system_template"]
+              }
+            },
+            "required": ["data"]
+          }
+        ]
+      },
+      "MemoryListResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Ok" },
+          {
+            "type": "object",
+            "properties": {
+              "data": { "type": "array", "items": { "$ref": "#/components/schemas/ApiMemory" } }
+            },
+            "required": ["data"]
+          }
+        ]
+      },
+      "MemoryResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Ok" },
+          {
+            "type": "object",
+            "properties": { "data": { "$ref": "#/components/schemas/ApiMemory" } },
+            "required": ["data"]
+          }
+        ]
+      },
+      "ChannelListResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Ok" },
+          {
+            "type": "object",
+            "properties": {
+              "data": { "type": "array", "items": { "$ref": "#/components/schemas/ApiWebChannel" } }
+            },
+            "required": ["data"]
+          }
+        ]
+      },
+      "ChannelResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Ok" },
+          {
+            "type": "object",
+            "properties": { "data": { "$ref": "#/components/schemas/ApiWebChannel" } },
+            "required": ["data"]
+          }
+        ]
+      },
+      "MessageListResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Ok" },
+          {
+            "type": "object",
+            "properties": {
+              "data": { "type": "array", "items": { "$ref": "#/components/schemas/ApiMessage" } }
+            },
+            "required": ["data"]
+          }
+        ]
+      },
+      "SendMessageResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Ok" },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "message": { "$ref": "#/components/schemas/ApiMessage" },
+                  "ai_response": { "type": "null", "description": "Always null — AI responses arrive via SSE." }
+                },
+                "required": ["message", "ai_response"]
+              }
+            },
+            "required": ["data"]
+          }
+        ]
+      },
+      "ForgetResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Ok" },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "forget_at": { "type": "string", "format": "date-time", "description": "Messages before this timestamp will be excluded from AI context." }
+                },
+                "required": ["forget_at"]
+              }
+            },
+            "required": ["data"]
+          }
+        ]
+      },
+      "TriggeredResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Ok" },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": { "triggered": { "type": "boolean", "enum": [true] } },
+                "required": ["triggered"]
+              }
+            },
+            "required": ["data"]
+          }
+        ]
+      },
+      "DiscordChannelListResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Ok" },
+          {
+            "type": "object",
+            "properties": {
+              "data": { "type": "array", "items": { "$ref": "#/components/schemas/ApiDiscordChannel" } }
+            },
+            "required": ["data"]
+          }
+        ]
+      },
+      "BindingGraphResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Ok" },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "bindings": { "type": "array", "items": { "$ref": "#/components/schemas/ApiBindingEntry" } },
+                  "total": { "type": "integer" }
+                },
+                "required": ["bindings", "total"]
+              }
+            },
+            "required": ["data"]
+          }
+        ]
+      },
+      "EvalErrorListResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Ok" },
+          {
+            "type": "object",
+            "properties": {
+              "data": { "type": "array", "items": { "$ref": "#/components/schemas/ApiEvalError" } }
+            },
+            "required": ["data"]
+          }
+        ]
+      },
+      "EmbeddingStatusResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Ok" },
+          {
+            "type": "object",
+            "properties": { "data": { "$ref": "#/components/schemas/ApiEmbeddingStatus" } },
+            "required": ["data"]
+          }
+        ]
+      },
+      "EntityTraceResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Ok" },
+          {
+            "type": "object",
+            "properties": {
+              "data": { "type": "array", "items": { "$ref": "#/components/schemas/ApiEntityTrace" } }
+            },
+            "required": ["data"]
+          }
+        ]
+      },
+      "SimulationResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Ok" },
+          {
+            "type": "object",
+            "properties": {
+              "data": { "type": "array", "items": { "$ref": "#/components/schemas/ApiResponseSimulation" } }
+            },
+            "required": ["data"]
+          }
+        ]
+      }
+    }
+  }
+}
