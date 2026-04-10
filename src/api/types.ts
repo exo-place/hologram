@@ -41,6 +41,7 @@ export interface ApiEntityConfig {
   config_thinking: string | null;
   config_collapse: string | null;
   config_keywords: string | null;
+  config_safety: string | null;
 }
 
 export interface ApiMemory {

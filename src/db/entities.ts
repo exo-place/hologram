@@ -108,6 +108,7 @@ export interface EntityConfig {
   config_thinking: string | null;
   config_collapse: string | null;
   config_keywords: string | null;
+  config_safety: string | null;
 }
 
 const CONFIG_COLUMNS = `
@@ -115,7 +116,7 @@ const CONFIG_COLUMNS = `
   config_stream_mode, config_stream_delimiters,
   config_avatar, config_memory, config_freeform,
   config_strip, config_view, config_edit, config_use, config_blacklist,
-  config_thinking, config_collapse, config_keywords
+  config_thinking, config_collapse, config_keywords, config_safety
 `.trim();
 
 export function getEntityConfig(entityId: number): EntityConfig | null {
@@ -176,6 +177,7 @@ export function getEntityEvalDefaults(entityId: number): EvaluatedFactsDefaults 
     shouldRespond: config.config_respond === "true" ? true : config.config_respond === "false" ? false : null,
     thinkingLevel: config.config_thinking as ThinkingLevel | null,
     collapseMessages: config.config_collapse ? parseCollapseRoles(config.config_collapse) : null,
+    configSafety: config.config_safety,
   };
 }
 

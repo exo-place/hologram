@@ -1409,6 +1409,8 @@ export interface EvaluatedFactsDefaults {
   shouldRespond?: boolean | null;
   thinkingLevel?: ThinkingLevel | null;
   collapseMessages?: CollapseRoles | null;
+  /** All-category content filter from config_safety column (processed before facts, can be overridden) */
+  configSafety?: string | null;
 }
 
 /**
@@ -1448,8 +1450,10 @@ export function evaluateFacts(
   let collapseMessages: CollapseRoles | null = defaults?.collapseMessages ?? null;
   const safetyMap = new Map<SafetyCategory, SafetyThreshold>();
 
-  // Strip comments first
-  const uncommented = stripComments(facts);
+  // Strip comments first; prepend config_safety as synthetic $safety fact (overridable by facts)
+  const uncommented = defaults?.configSafety
+    ? [`$safety ${defaults.configSafety}`, ...stripComments(facts)]
+    : stripComments(facts);
 
   for (const fact of uncommented) {
     const parsed = parseFact(fact);

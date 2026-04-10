@@ -293,6 +293,13 @@ function initSchema(db: Database) {
     // Column already exists
   }
 
+  // Add config_safety column (all-category content filter override)
+  try {
+    db.exec(`ALTER TABLE entities ADD COLUMN config_safety TEXT`);
+  } catch {
+    // Column already exists
+  }
+
   // Migrate webhook_messages to add FK constraint (ON DELETE CASCADE)
   // SQLite doesn't support ALTER TABLE ADD FOREIGN KEY, so recreate the table.
   try {

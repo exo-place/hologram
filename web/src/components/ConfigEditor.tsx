@@ -3,6 +3,7 @@ import { entities } from "../api/client";
 import "./ConfigEditor.css";
 
 const STREAM_MODES = ["", "sentence", "word", "token"];
+const COLLAPSE_ROLES = ["user", "assistant", "system"] as const;
 
 export default function ConfigEditor(props: { entityId: number }) {
   const [config, { mutate }] = createResource(() => props.entityId, entities.getConfig);
@@ -18,6 +19,10 @@ export default function ConfigEditor(props: { entityId: number }) {
   const [memory, setMemory] = createSignal("");
   const [thinking, setThinking] = createSignal("");
   const [freeform, setFreeform] = createSignal(false);
+  const [collapseNone, setCollapseNone] = createSignal(false);
+  const [collapseRoles, setCollapseRoles] = createSignal<Set<string>>(new Set());
+  const [safety, setSafety] = createSignal("");
+  const [keywords, setKeywords] = createSignal("");
   const [initialised, setInitialised] = createSignal(false);
 
   // Sync once when config first loads (or when entityId changes and resets initialised)
@@ -31,6 +36,18 @@ export default function ConfigEditor(props: { entityId: number }) {
       setMemory(c.config_memory ?? "");
       setThinking(c.config_thinking ?? "");
       setFreeform(c.config_freeform === 1);
+
+      const collapseVal = c.config_collapse ?? "";
+      if (collapseVal === "none") {
+        setCollapseNone(true);
+        setCollapseRoles(new Set());
+      } else {
+        setCollapseNone(false);
+        setCollapseRoles(new Set(collapseVal.split(/\s+/).filter(Boolean)));
+      }
+
+      setSafety(c.config_safety ?? "");
+      setKeywords(c.config_keywords ?? "");
       setInitialised(true);
     }
   });
@@ -41,11 +58,28 @@ export default function ConfigEditor(props: { entityId: number }) {
     setInitialised(false);
   });
 
+  function toggleCollapseRole(role: string) {
+    setCollapseRoles(prev => {
+      const next = new Set(prev);
+      if (next.has(role)) next.delete(role);
+      else next.add(role);
+      return next;
+    });
+  }
+
   async function save() {
     setSaving(true);
     setError(null);
     setSaved(false);
     try {
+      let collapseValue: string | null = null;
+      if (collapseNone()) {
+        collapseValue = "none";
+      } else {
+        const roles = [...collapseRoles()];
+        collapseValue = roles.length > 0 ? roles.join(" ") : null;
+      }
+
       const updated = await entities.patchConfig(props.entityId, {
         config_model: model() || null,
         config_context: context() || null,
@@ -54,6 +88,9 @@ export default function ConfigEditor(props: { entityId: number }) {
         config_memory: memory() || null,
         config_thinking: thinking() || null,
         config_freeform: freeform() ? 1 : 0,
+        config_collapse: collapseValue,
+        config_safety: safety() || null,
+        config_keywords: keywords().trim() || null,
       });
       mutate(updated);
       setSaved(true);
@@ -135,6 +172,57 @@ export default function ConfigEditor(props: { entityId: number }) {
               placeholder="minimal / low / medium / high (blank = default)"
               value={thinking()}
               onInput={(e) => setThinking(e.currentTarget.value)}
+            />
+          </div>
+
+          <div class="config-editor__field">
+            <label class="config-editor__label small">Collapse adjacent messages</label>
+            <div class="config-editor__checkboxes">
+              <label class="config-editor__checkbox-label small">
+                <input
+                  type="checkbox"
+                  class="config-editor__checkbox"
+                  checked={collapseNone()}
+                  onChange={(e) => setCollapseNone(e.currentTarget.checked)}
+                />
+                None (disable all merging)
+              </label>
+              {COLLAPSE_ROLES.map(role => (
+                <label
+                  class="config-editor__checkbox-label small"
+                  classList={{ "config-editor__checkbox-label--disabled": collapseNone() }}
+                >
+                  <input
+                    type="checkbox"
+                    class="config-editor__checkbox"
+                    disabled={collapseNone()}
+                    checked={collapseRoles().has(role)}
+                    onChange={() => toggleCollapseRole(role)}
+                  />
+                  {role[0].toUpperCase() + role.slice(1)}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div class="config-editor__field">
+            <label class="config-editor__label small">Content filters</label>
+            <input
+              class="input input--mono config-editor__input"
+              placeholder="off, channel.is_nsfw, … (blank = provider default)"
+              value={safety()}
+              onInput={(e) => setSafety(e.currentTarget.value)}
+            />
+          </div>
+
+          <div class="config-editor__field">
+            <label class="config-editor__label small">Trigger keywords</label>
+            <textarea
+              class="input input--mono config-editor__textarea"
+              placeholder={"hello\ngood morning\n/\\bhey\\b/i"}
+              value={keywords()}
+              onInput={(e) => setKeywords(e.currentTarget.value)}
+              rows={3}
             />
           </div>
 

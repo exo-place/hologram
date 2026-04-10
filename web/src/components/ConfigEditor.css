@@ -32,6 +32,31 @@
   cursor: pointer;
 }
 
+.config-editor__textarea {
+  width: 100%;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.config-editor__checkboxes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.config-editor__checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: var(--fg);
+}
+
+.config-editor__checkbox-label--disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .config-editor__actions {
   padding-top: 4px;
 }

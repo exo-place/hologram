@@ -18,7 +18,6 @@ import {
   setEntityConfig,
   getPermissionDefaults,
   addFact,
-  removeFactByContent,
   setFacts,
   updateEntity,
 } from "../../db/entities";
@@ -26,7 +25,7 @@ import {
   getMemoriesForEntity,
   setMemories,
 } from "../../db/memories";
-import { parseSafetyDirective, checkKeywordMatch } from "../../logic/expr";
+import { checkKeywordMatch } from "../../logic/expr";
 import { chunkContent, buildDefaultValues, buildEntries, type ResolvedData } from "./helpers";
 import { canUserEdit } from "./cmd-permissions";
 
@@ -311,15 +310,8 @@ registerCommand({
         (config?.config_collapse ?? "").split(/\s+/).filter(Boolean)
       );
 
-      // Pre-populate safety filter from entity facts: find the first all-categories $safety fact
-      const safetyFact = entity.facts.find(f => {
-        const c = f.content.trim();
-        const parsed = parseSafetyDirective(c);
-        return parsed !== null && parsed.category === "all";
-      });
-      const safetyValue = safetyFact
-        ? safetyFact.content.trim().slice("$safety".length).trim()
-        : "";
+      // Pre-populate safety filter from config column
+      const safetyValue = config?.config_safety ?? "";
 
       const advancedLabels = [
         {
@@ -817,18 +809,8 @@ registerModalHandler("edit-advanced", async (bot, interaction, _textValues) => {
       ? "none"
       : collapseSelected.join(" ");
 
-  // Safety filters: remove all all-category $safety facts, add new $safety fact if non-empty
+  // Safety: stored in config_safety column (empty string = clear / use provider default)
   const safetyRaw = textValues.safety?.trim() || null;
-  const existingFacts = entity.facts.map(f => f.content);
-  for (const fc of existingFacts) {
-    const parsed = parseSafetyDirective(fc.trim());
-    if (parsed !== null && parsed.category === "all") {
-      removeFactByContent(entityId, fc);
-    }
-  }
-  if (safetyRaw !== null) {
-    addFact(entityId, `$safety ${safetyRaw}`);
-  }
 
   // Validate and normalize keywords (reject invalid regex patterns)
   const keywordsRaw = textValues.keywords?.trim() || null;
@@ -857,6 +839,7 @@ registerModalHandler("edit-advanced", async (bot, interaction, _textValues) => {
     config_thinking: thinking,
     config_collapse: collapseRaw,
     config_keywords: keywordsNormalized,
+    config_safety: safetyRaw,
   });
 
   const changes: string[] = [];
