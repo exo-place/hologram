@@ -237,6 +237,12 @@ export async function executeWebhook(
   // Sanitize username (Discord forbids "discord" in webhook usernames)
   const safeUsername = sanitizeUsername(username);
 
+  // Discord only supports http/https avatar URLs — strip local file:// paths
+  const safeAvatarUrl =
+    avatarUrl && (avatarUrl.startsWith("http://") || avatarUrl.startsWith("https://"))
+      ? avatarUrl
+      : undefined;
+
   // Split content if too long (empty content treated as single empty chunk for files-only)
   const chunks = content.trim() ? splitContent(content) : [""];
 
@@ -256,8 +262,8 @@ export async function executeWebhook(
     username: safeUsername,
     contentLength: content.length,
     chunks: chunks.length,
-    hasAvatar: !!avatarUrl,
-    avatarUrl: avatarUrl ?? DEFAULT_AVATAR,
+    hasAvatar: !!safeAvatarUrl,
+    avatarUrl: safeAvatarUrl ?? DEFAULT_AVATAR,
     fileCount: discordFiles?.length ?? 0,
     contentPreview: content.slice(0, 100) + (content.length > 100 ? "..." : ""),
   });
@@ -270,7 +276,7 @@ export async function executeWebhook(
       const chunkFiles = i === 0 && discordFiles?.length ? discordFiles : undefined;
       const payload: Record<string, unknown> = {
         username: safeUsername,
-        avatarUrl: avatarUrl ?? DEFAULT_AVATAR,
+        avatarUrl: safeAvatarUrl ?? DEFAULT_AVATAR,
         wait: true,
         ...(threadId ? { threadId: BigInt(threadId) } : {}),
       };
@@ -322,7 +328,7 @@ export async function executeWebhook(
       threadId,
       webhookId: webhook.webhookId,
       username: safeUsername,
-      avatarUrl: avatarUrl ?? DEFAULT_AVATAR,
+      avatarUrl: safeAvatarUrl ?? DEFAULT_AVATAR,
       contentLength: content.length,
       contentPreview: content.slice(0, 200) + (content.length > 200 ? "..." : ""),
     });
