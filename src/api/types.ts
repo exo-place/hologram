@@ -127,6 +127,14 @@ export interface CreateMemoryBody {
   content: string;
 }
 
+export interface CreateBindingBody {
+  discord_id: string;
+  discord_type: string;
+  entity_id: number;
+  scope_guild_id?: string;
+  scope_channel_id?: string;
+}
+
 // ============================================================================
 // Response wrappers
 // ============================================================================

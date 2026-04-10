@@ -9,6 +9,7 @@ import { entityRoutes } from "./routes/entities";
 import { chatRoutes } from "./routes/chat";
 import { debugRoutes } from "./routes/debug";
 import { discordChannelRoutes } from "./routes/discord-channels";
+import { bindingRoutes } from "./routes/bindings";
 import { info, error } from "../logger";
 import { type RouteHandler } from "./helpers";
 export type { RouteHandler } from "./helpers";
@@ -31,7 +32,7 @@ function addCors(res: Response): Response {
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
 }
 
-const API_HANDLERS: RouteHandler[] = [entityRoutes, chatRoutes, discordChannelRoutes, debugRoutes];
+const API_HANDLERS: RouteHandler[] = [entityRoutes, chatRoutes, discordChannelRoutes, bindingRoutes, debugRoutes];
 
 async function handleRequest(req: Request): Promise<Response> {
   const url = new URL(req.url);
