@@ -1,9 +1,10 @@
 import { defineConfig } from 'vitepress'
 import path from 'node:path'
+import type MarkdownIt from '@types/markdown-it'
 
 // Inline <code> spans containing {{ }} are processed as Vue template expressions
 // by VitePress. This plugin converts them to <code v-pre> to prevent that.
-function vPreInlineCode(md: { core: { ruler: { push: (name: string, fn: (state: { tokens: Array<{ type: string; children: Array<{ type: string; content: string }> | null }> }) => void) => void } } }) {
+function vPreInlineCode(md: MarkdownIt) {
   md.core.ruler.push('v_pre_inline_code', (state) => {
     for (const token of state.tokens) {
       if (token.type !== 'inline' || !token.children) continue
@@ -29,7 +30,7 @@ export default defineConfig({
   srcExclude: ['archive/**'],
 
   markdown: {
-    config: (md) => { vPreInlineCode(md) },
+    config: vPreInlineCode,
   },
 
   vite: {

@@ -13,6 +13,8 @@ import { info, error } from "../logger";
 import { type RouteHandler } from "./helpers";
 export type { RouteHandler } from "./helpers";
 
+const OPENAPI_FILE = Bun.file(`${import.meta.dir}/openapi.json`);
+
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
@@ -39,11 +41,10 @@ async function handleRequest(req: Request): Promise<Response> {
 
   // API routes
   if (url.pathname.startsWith("/api/")) {
-    // OpenAPI spec — served as a static JSON file
     if (url.pathname === "/api/openapi.json" && req.method === "GET") {
-      return addCors(new Response(Bun.file(`${import.meta.dir}/openapi.json`), {
-        headers: { "Content-Type": "application/json" },
-      }));
+      return new Response(OPENAPI_FILE, {
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+      });
     }
 
     for (const handler of API_HANDLERS) {
