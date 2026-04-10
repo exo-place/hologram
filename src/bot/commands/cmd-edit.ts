@@ -17,7 +17,6 @@ import {
   getEntityConfig,
   setEntityConfig,
   getPermissionDefaults,
-  addFact,
   setFacts,
   updateEntity,
 } from "../../db/entities";
