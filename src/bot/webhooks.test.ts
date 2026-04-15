@@ -32,42 +32,7 @@ mock.module("../logger", () => ({
 }));
 
 import { clearWebhookCache, getOrCreateWebhook, setBot } from "./webhooks";
-
-function createWebhookSchema(db: Database) {
-  db.exec("PRAGMA foreign_keys = ON");
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS entities (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      owned_by TEXT,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      template TEXT,
-      system_template TEXT,
-      config_context TEXT,
-      config_model TEXT,
-      config_respond TEXT,
-      config_stream_mode TEXT,
-      config_stream_delimiters TEXT,
-      config_avatar TEXT,
-      config_memory TEXT,
-      config_freeform INTEGER DEFAULT 0,
-      config_strip TEXT,
-      config_view TEXT,
-      config_edit TEXT,
-      config_use TEXT,
-      config_blacklist TEXT
-    )
-  `);
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS webhooks (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      channel_id TEXT NOT NULL UNIQUE,
-      webhook_id TEXT NOT NULL,
-      webhook_token TEXT NOT NULL,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-}
+import { createTestDb } from "../db/test-utils";
 
 // Replicate the discordFiles conversion from webhooks.ts
 function toDiscordFiles(files: GeneratedFile[]): Array<{ blob: Blob; name: string }> {
@@ -286,8 +251,7 @@ describe("splitContent", () => {
 
 describe("clearWebhookCache", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createWebhookSchema(testDb);
+    testDb = createTestDb();
     // Ensure bot is null so getOrCreateWebhook won't try to call Discord
     setBot(null as never);
   });
@@ -330,8 +294,7 @@ describe("clearWebhookCache", () => {
 
 describe("getOrCreateWebhook", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createWebhookSchema(testDb);
+    testDb = createTestDb();
     setBot(null as never);
   });
 

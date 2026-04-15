@@ -15,39 +15,7 @@ mock.module("../db/index", () => ({
 import { withToJSON, processRawFacts, expandEntityRefs, withEmbedDefaults, withAttachmentDefaults, collapseAdjacentMessages, type MacroMeta } from "./prompt";
 import type { EmbedData, AttachmentData } from "../db/discord";
 import type { ExprContext } from "../logic/expr";
-
-function createTestSchema(db: Database) {
-  db.exec("PRAGMA foreign_keys = ON");
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS entities (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      owned_by TEXT,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      template TEXT,
-      system_template TEXT
-    )
-  `);
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS facts (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      entity_id INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-      content TEXT NOT NULL,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS effects (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      entity_id INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-      content TEXT NOT NULL,
-      source TEXT,
-      expires_at TEXT NOT NULL,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-}
+import { createTestDb } from "../db/test-utils";
 
 function createEntity(name: string): number {
   const row = testDb.prepare(`INSERT INTO entities (name) VALUES (?) RETURNING id`).get(name) as { id: number };
@@ -279,8 +247,7 @@ describe("processRawFacts", () => {
 
 describe("expandEntityRefs", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   // --- Simple text macros ---

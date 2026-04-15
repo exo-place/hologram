@@ -69,178 +69,7 @@ import {
   addMessage,
   recordEvalError,
 } from "../db/discord";
-
-function createTestSchema(db: Database) {
-  db.exec("PRAGMA foreign_keys = ON");
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS entities (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      owned_by TEXT,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      template TEXT,
-      system_template TEXT,
-      config_context TEXT,
-      config_model TEXT,
-      config_respond TEXT,
-      config_stream_mode TEXT,
-      config_stream_delimiters TEXT,
-      config_avatar TEXT,
-      config_memory TEXT,
-      config_freeform INTEGER DEFAULT 0,
-      config_strip TEXT,
-      config_view TEXT,
-      config_edit TEXT,
-      config_use TEXT,
-      config_blacklist TEXT,
-      config_thinking TEXT,
-      config_collapse TEXT,
-      config_keywords TEXT,
-      config_safety TEXT
-    )
-  `);
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS facts (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      entity_id INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-      content TEXT NOT NULL,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS discord_entities (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      discord_id TEXT NOT NULL,
-      discord_type TEXT NOT NULL CHECK (discord_type IN ('user', 'channel', 'guild')),
-      scope_guild_id TEXT,
-      scope_channel_id TEXT,
-      entity_id INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-      UNIQUE (discord_id, discord_type, scope_guild_id, scope_channel_id, entity_id)
-    )
-  `);
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS effects (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      entity_id INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-      content TEXT NOT NULL,
-      source TEXT,
-      expires_at TEXT NOT NULL,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS entity_memories (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      entity_id INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-      content TEXT NOT NULL,
-      source_message_id TEXT,
-      source_channel_id TEXT,
-      source_guild_id TEXT,
-      frecency REAL DEFAULT 1.0,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  // Use regular tables instead of vec0 virtual tables for testing
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS fact_embeddings (
-      fact_id INTEGER PRIMARY KEY,
-      embedding BLOB
-    )
-  `);
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS memory_embeddings (
-      memory_id INTEGER PRIMARY KEY,
-      embedding BLOB
-    )
-  `);
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS messages (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      channel_id TEXT NOT NULL,
-      author_id TEXT NOT NULL,
-      author_name TEXT NOT NULL,
-      content TEXT NOT NULL,
-      discord_message_id TEXT,
-      data TEXT,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS webhook_messages (
-      message_id TEXT PRIMARY KEY,
-      entity_id INTEGER NOT NULL,
-      entity_name TEXT NOT NULL,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS eval_errors (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      entity_id INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-      owner_id TEXT NOT NULL,
-      error_message TEXT NOT NULL,
-      condition TEXT,
-      notified_at TEXT,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE (entity_id, error_message)
-    )
-  `);
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS channel_forgets (
-      channel_id TEXT PRIMARY KEY,
-      forget_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS discord_config (
-      discord_id TEXT NOT NULL,
-      discord_type TEXT NOT NULL CHECK (discord_type IN ('channel', 'guild')),
-      config_bind TEXT,
-      config_persona TEXT,
-      config_blacklist TEXT,
-      PRIMARY KEY (discord_id, discord_type)
-    )
-  `);
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS webhooks (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      channel_id TEXT NOT NULL UNIQUE,
-      webhook_id TEXT NOT NULL,
-      webhook_token TEXT NOT NULL,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS welcomed_users (
-      discord_id TEXT PRIMARY KEY,
-      welcomed_at TEXT DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_facts_entity ON facts(entity_id)`);
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_effects_entity ON effects(entity_id)`);
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_effects_expires ON effects(expires_at)`);
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_memories_entity ON entity_memories(entity_id)`);
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_messages_channel ON messages(channel_id, created_at DESC)`);
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_messages_discord_id ON messages(discord_message_id)`);
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_eval_errors_owner ON eval_errors(owner_id, notified_at)`);
-}
+import { createTestDb } from "../db/test-utils";
 
 // =============================================================================
 // Embeddings Debug
@@ -248,8 +77,7 @@ function createTestSchema(db: Database) {
 
 describe("getEmbeddingStatus", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("returns status with model info", () => {
@@ -263,8 +91,7 @@ describe("getEmbeddingStatus", () => {
 
 describe("getEmbeddingCoverage", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("reports zero coverage for entity with no embeddings", () => {
@@ -310,8 +137,7 @@ describe("getEmbeddingCoverage", () => {
 
 describe("getBindingGraph", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("returns all bindings when no filter", () => {
@@ -343,8 +169,7 @@ describe("getBindingGraph", () => {
 
 describe("getMemoryStats", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("returns stats for entity with no memories", () => {
@@ -380,8 +205,7 @@ describe("getMemoryStats", () => {
 
 describe("getEvalErrors", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("returns empty list when no errors", () => {
@@ -414,8 +238,7 @@ describe("getEvalErrors", () => {
 
 describe("getActiveEffectsDebug", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("returns empty list when no effects", () => {
@@ -452,8 +275,7 @@ describe("getActiveEffectsDebug", () => {
 
 describe("getMessageStats", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("returns stats for channel with messages", () => {
@@ -483,8 +305,7 @@ describe("getMessageStats", () => {
 
 describe("traceFacts", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("returns null for nonexistent entity", () => {
@@ -573,8 +394,7 @@ describe("traceFacts", () => {
 
 describe("simulateResponse", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("returns empty for channel with no bindings", () => {
@@ -621,8 +441,7 @@ describe("simulateResponse", () => {
 
 describe("buildEvaluatedEntity", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("evaluates entity facts into an EvaluatedEntity", () => {

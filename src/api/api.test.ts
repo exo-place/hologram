@@ -7,7 +7,6 @@
 
 import { describe, test, expect, beforeEach, mock } from "bun:test";
 import { Database } from "bun:sqlite";
-import { load } from "sqlite-vec";
 
 // =============================================================================
 // In-memory DB + embedding mocks (must come before any DB imports)
@@ -41,136 +40,10 @@ mock.module("../ai/embeddings", () => ({
 import { entityRoutes } from "./routes/entities";
 import { chatRoutes } from "./routes/chat";
 import { debugRoutes } from "./routes/debug";
-
-// =============================================================================
-// Test schema + helpers
-// =============================================================================
-
-function createTestSchema(db: Database): void {
-  db.exec("PRAGMA foreign_keys = ON");
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS entities (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      owned_by TEXT,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      template TEXT,
-      system_template TEXT,
-      config_context TEXT, config_model TEXT, config_respond TEXT,
-      config_stream_mode TEXT, config_stream_delimiters TEXT,
-      config_avatar TEXT, config_memory TEXT, config_freeform INTEGER DEFAULT 0,
-      config_strip TEXT, config_view TEXT, config_edit TEXT, config_use TEXT,
-      config_blacklist TEXT, config_thinking TEXT, config_collapse TEXT, config_keywords TEXT, config_safety TEXT
-    )
-  `);
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS facts (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      entity_id INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-      content TEXT NOT NULL,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS entity_memories (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      entity_id INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-      content TEXT NOT NULL,
-      source_message_id TEXT,
-      source_channel_id TEXT,
-      source_guild_id TEXT,
-      frecency REAL DEFAULT 1.0,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-  db.exec(`
-    CREATE VIRTUAL TABLE IF NOT EXISTS memory_embeddings USING vec0(
-      memory_id INTEGER PRIMARY KEY,
-      embedding FLOAT[384]
-    )
-  `);
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS effects (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      entity_id INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-      content TEXT NOT NULL,
-      source TEXT,
-      expires_at TEXT NOT NULL,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS messages (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      channel_id TEXT NOT NULL,
-      author_id TEXT NOT NULL,
-      author_name TEXT NOT NULL,
-      content TEXT NOT NULL,
-      discord_message_id TEXT,
-      data TEXT,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS web_channels (
-      id TEXT PRIMARY KEY,
-      name TEXT,
-      entity_ids TEXT NOT NULL DEFAULT '[]',
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS discord_entities (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      discord_id TEXT NOT NULL,
-      discord_type TEXT NOT NULL,
-      scope_guild_id TEXT,
-      scope_channel_id TEXT,
-      entity_id INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-      UNIQUE (discord_id, discord_type, scope_guild_id, scope_channel_id, entity_id)
-    )
-  `);
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS eval_errors (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      entity_id INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-      owner_id TEXT NOT NULL,
-      error_message TEXT NOT NULL,
-      condition TEXT,
-      notified_at TEXT,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE (entity_id, error_message)
-    )
-  `);
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS channel_forgets (
-      channel_id TEXT PRIMARY KEY,
-      forget_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS webhook_messages (
-      message_id TEXT PRIMARY KEY,
-      entity_id INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-      entity_name TEXT NOT NULL,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-  db.exec(`
-    CREATE VIRTUAL TABLE IF NOT EXISTS fact_embeddings USING vec0(
-      fact_id INTEGER PRIMARY KEY,
-      embedding FLOAT[384]
-    )
-  `);
-}
+import { createTestDb } from "../db/test-utils";
 
 beforeEach(() => {
-  testDb = new Database(":memory:");
-  testDb.exec("PRAGMA journal_mode = WAL");
-  load(testDb);
-  createTestSchema(testDb);
+  testDb = createTestDb({ useVec0: true });
 });
 
 import type { RouteHandler } from "./helpers";

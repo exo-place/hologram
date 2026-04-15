@@ -1,5 +1,6 @@
 import { describe, expect, test, beforeEach, mock } from "bun:test";
 import { Database } from "bun:sqlite";
+import { createTestDb } from "./test-utils";
 
 // =============================================================================
 // In-memory DB mock
@@ -45,70 +46,13 @@ import {
   transferOwnership,
 } from "./entities";
 
-function createTestSchema(db: Database) {
-  db.exec("PRAGMA foreign_keys = ON");
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS entities (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      owned_by TEXT,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      template TEXT,
-      system_template TEXT,
-      config_context TEXT,
-      config_model TEXT,
-      config_respond TEXT,
-      config_stream_mode TEXT,
-      config_stream_delimiters TEXT,
-      config_avatar TEXT,
-      config_memory TEXT,
-      config_freeform INTEGER DEFAULT 0,
-      config_strip TEXT,
-      config_view TEXT,
-      config_edit TEXT,
-      config_use TEXT,
-      config_blacklist TEXT,
-      config_thinking TEXT,
-      config_collapse TEXT,
-      config_keywords TEXT,
-      config_safety TEXT
-    )
-  `);
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS facts (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      entity_id INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-      content TEXT NOT NULL,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS effects (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      entity_id INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-      content TEXT NOT NULL,
-      source TEXT,
-      expires_at TEXT NOT NULL,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_facts_entity ON facts(entity_id)`);
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_effects_entity ON effects(entity_id)`);
-}
-
 // =============================================================================
 // Entity CRUD
 // =============================================================================
 
 describe("createEntity / getEntity", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("creates entity and returns it", () => {
@@ -137,8 +81,7 @@ describe("createEntity / getEntity", () => {
 
 describe("getEntityByName", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("finds entity case-insensitively", () => {
@@ -155,8 +98,7 @@ describe("getEntityByName", () => {
 
 describe("updateEntity", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("updates entity name", () => {
@@ -173,8 +115,7 @@ describe("updateEntity", () => {
 
 describe("deleteEntity", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("deletes entity and returns true", () => {
@@ -197,8 +138,7 @@ describe("deleteEntity", () => {
 
 describe("listEntities", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("lists entities", () => {
@@ -224,8 +164,7 @@ describe("listEntities", () => {
 
 describe("searchEntities", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("searches by name substring", () => {
@@ -249,8 +188,7 @@ describe("searchEntities", () => {
 
 describe("searchEntitiesOwnedBy", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("filters by owner", () => {
@@ -275,8 +213,7 @@ describe("searchEntitiesOwnedBy", () => {
 
 describe("fact operations", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("addFact creates a fact", () => {
@@ -377,8 +314,7 @@ describe("fact operations", () => {
 
 describe("entity config", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("getEntityConfig returns config columns", () => {
@@ -410,8 +346,7 @@ describe("entity config", () => {
 
 describe("getPermissionDefaults", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("returns nulls for entity with no config", () => {
@@ -444,8 +379,7 @@ describe("getPermissionDefaults", () => {
 
 describe("getEntityEvalDefaults", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("returns defaults for unconfigured entity", () => {
@@ -493,8 +427,7 @@ describe("getEntityEvalDefaults", () => {
 
 describe("entity templates", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("getEntityTemplate returns null by default", () => {
@@ -533,8 +466,7 @@ describe("entity templates", () => {
 
 describe("getEntityWithFacts", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("returns entity with its facts", () => {
@@ -555,8 +487,7 @@ describe("getEntityWithFacts", () => {
 
 describe("getEntityWithFactsByName", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("finds by name case-insensitively", () => {
@@ -574,8 +505,7 @@ describe("getEntityWithFactsByName", () => {
 
 describe("getEntitiesWithFacts", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("batch loads entities with facts", () => {
@@ -607,8 +537,7 @@ describe("getEntitiesWithFacts", () => {
 
 describe("formatEntityForContext", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("formats entity with facts", () => {
@@ -624,8 +553,7 @@ describe("formatEntityForContext", () => {
 
 describe("formatEntitiesForContext", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("formats multiple entities separated by double newlines", () => {
@@ -647,8 +575,7 @@ describe("formatEntitiesForContext", () => {
 
 describe("transferOwnership", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("transfers ownership to new user", () => {

@@ -55,77 +55,7 @@ import {
   setDiscordConfig,
   resolveDiscordConfig,
 } from "../../db/discord";
-
-// =============================================================================
-// Schema setup
-// =============================================================================
-
-function createTestSchema(db: Database) {
-  db.exec("PRAGMA foreign_keys = ON");
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS entities (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      owned_by TEXT,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      template TEXT,
-      system_template TEXT,
-      config_context TEXT,
-      config_model TEXT,
-      config_respond TEXT,
-      config_stream_mode TEXT,
-      config_stream_delimiters TEXT,
-      config_avatar TEXT,
-      config_memory TEXT,
-      config_freeform INTEGER DEFAULT 0,
-      config_strip TEXT,
-      config_view TEXT,
-      config_edit TEXT,
-      config_use TEXT,
-      config_blacklist TEXT,
-      config_thinking TEXT,
-      config_collapse TEXT,
-      config_keywords TEXT,
-      config_safety TEXT
-    )
-  `);
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS facts (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      entity_id INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-      content TEXT NOT NULL,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS effects (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      entity_id INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-      content TEXT NOT NULL,
-      source TEXT,
-      expires_at TEXT NOT NULL,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS discord_config (
-      discord_id TEXT NOT NULL,
-      discord_type TEXT NOT NULL CHECK (discord_type IN ('channel', 'guild')),
-      config_bind TEXT,
-      config_persona TEXT,
-      config_blacklist TEXT,
-      PRIMARY KEY (discord_id, discord_type)
-    )
-  `);
-
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_facts_entity ON facts(entity_id)`);
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_effects_entity ON effects(entity_id)`);
-}
+import { createTestDb } from "../../db/test-utils";
 
 // =============================================================================
 // Helpers for permission tests — mirrors canUserEdit/View/Use logic
@@ -411,8 +341,7 @@ describe("buildEntries", () => {
 
 describe("canUserEdit (permission logic)", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("owner always can edit", () => {
@@ -486,8 +415,7 @@ describe("canUserEdit (permission logic)", () => {
 
 describe("canUserView (permission logic)", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("owner always can view", () => {
@@ -540,8 +468,7 @@ describe("canUserView (permission logic)", () => {
 
 describe("canUserUse (permission logic)", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("owner always can use", () => {
@@ -591,8 +518,7 @@ describe("canUserUse (permission logic)", () => {
 
 describe("canUserBindInLocation (permission logic)", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("allows everyone when no config exists", () => {
@@ -667,8 +593,7 @@ describe("canUserBindInLocation (permission logic)", () => {
 
 describe("canUserPersonaInLocation (permission logic)", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("allows everyone when no config exists", () => {
