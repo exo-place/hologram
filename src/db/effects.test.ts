@@ -1,5 +1,6 @@
 import { describe, expect, test, beforeEach, mock } from "bun:test";
 import { Database } from "bun:sqlite";
+import { createTestDb } from "./test-utils";
 
 // =============================================================================
 // In-memory DB mock
@@ -24,52 +25,6 @@ import {
   hasActiveEffects,
 } from "./effects";
 
-function createTestSchema(db: Database) {
-  db.exec("PRAGMA foreign_keys = ON");
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS entities (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      owned_by TEXT,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      template TEXT,
-      system_template TEXT,
-      config_context TEXT,
-      config_model TEXT,
-      config_respond TEXT,
-      config_stream_mode TEXT,
-      config_stream_delimiters TEXT,
-      config_avatar TEXT,
-      config_memory TEXT,
-      config_freeform INTEGER DEFAULT 0,
-      config_strip TEXT,
-      config_view TEXT,
-      config_edit TEXT,
-      config_use TEXT,
-      config_blacklist TEXT,
-      config_thinking TEXT,
-      config_collapse TEXT,
-      config_keywords TEXT,
-      config_safety TEXT
-    )
-  `);
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS effects (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      entity_id INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-      content TEXT NOT NULL,
-      source TEXT,
-      expires_at TEXT NOT NULL,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_effects_entity ON effects(entity_id)`);
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_effects_expires ON effects(expires_at)`);
-}
-
 function insertEntity(db: Database, name = "TestEntity"): number {
   const result = db.prepare(`INSERT INTO entities (name) VALUES (?) RETURNING id`).get(name) as { id: number };
   return result.id;
@@ -81,8 +36,7 @@ function insertEntity(db: Database, name = "TestEntity"): number {
 
 describe("addEffect / getActiveEffects", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("adds an effect and retrieves it", () => {
@@ -146,8 +100,7 @@ describe("addEffect / getActiveEffects", () => {
 
 describe("getActiveEffectFacts", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("returns content strings of active effects", () => {
@@ -171,8 +124,7 @@ describe("getActiveEffectFacts", () => {
 
 describe("removeEffect", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("removes an effect by ID", () => {
@@ -204,8 +156,7 @@ describe("removeEffect", () => {
 
 describe("clearEffects", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("deletes all effects for an entity and returns count", () => {
@@ -241,8 +192,7 @@ describe("clearEffects", () => {
 
 describe("clearEffectsBySource", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("removes effects matching the given source", () => {
@@ -271,8 +221,7 @@ describe("clearEffectsBySource", () => {
 
 describe("cleanupExpiredEffects", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("removes expired effects and returns count", () => {
@@ -301,8 +250,7 @@ describe("cleanupExpiredEffects", () => {
 
 describe("extendEffect", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("extends an effect's expiration", () => {
@@ -331,8 +279,7 @@ describe("extendEffect", () => {
 
 describe("hasActiveEffects", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("returns true when entity has active effects", () => {

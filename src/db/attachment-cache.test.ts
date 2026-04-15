@@ -1,5 +1,6 @@
 import { describe, expect, test, beforeEach, mock } from "bun:test";
 import { Database } from "bun:sqlite";
+import { createTestDb } from "./test-utils";
 import { createHash } from "crypto";
 
 // =============================================================================
@@ -59,22 +60,6 @@ async function realFetchAndCacheAttachment(
   return { data, contentType };
 }
 
-// Minimal schema for attachment_cache
-function createTestSchema(db: Database) {
-  db.exec("PRAGMA foreign_keys = ON");
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS attachment_cache (
-      url_hash TEXT PRIMARY KEY,
-      url TEXT NOT NULL,
-      data BLOB NOT NULL,
-      content_type TEXT NOT NULL,
-      fetched_at INTEGER NOT NULL,
-      message_id TEXT
-    )
-  `);
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_attachment_cache_message ON attachment_cache(message_id)`);
-}
-
 // =============================================================================
 // hashUrl
 // =============================================================================
@@ -110,8 +95,7 @@ describe("hashUrl", () => {
 
 describe("getCachedAttachment", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("returns null for a hash that does not exist", () => {
@@ -144,8 +128,7 @@ describe("getCachedAttachment", () => {
 
 describe("setCachedAttachment", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("stores data and content_type correctly", () => {
@@ -220,8 +203,7 @@ describe("setCachedAttachment", () => {
 
 describe("deleteCachedAttachmentsByMessageId", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("deletes all attachments for a given message_id", () => {
@@ -262,8 +244,7 @@ describe("deleteCachedAttachmentsByMessageId", () => {
 
 describe("fetchAndCacheAttachment", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("returns cached result without fetching if already in cache", async () => {

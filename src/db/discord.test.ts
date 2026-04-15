@@ -1,5 +1,6 @@
 import { describe, expect, test, beforeEach, mock } from "bun:test";
 import { Database } from "bun:sqlite";
+import { createTestDb } from "./test-utils";
 
 // =============================================================================
 // In-memory DB mock for DB-backed tests
@@ -55,122 +56,16 @@ import {
   type Message,
 } from "./discord";
 
-function createTestSchema(db: Database) {
-  db.exec("PRAGMA foreign_keys = ON");
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS entities (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      owned_by TEXT,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      template TEXT,
-      system_template TEXT
-    )
-  `);
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS facts (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      entity_id INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-      content TEXT NOT NULL,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS discord_entities (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      discord_id TEXT NOT NULL,
-      discord_type TEXT NOT NULL CHECK (discord_type IN ('user', 'channel', 'guild')),
-      scope_guild_id TEXT,
-      scope_channel_id TEXT,
-      entity_id INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-      UNIQUE (discord_id, discord_type, scope_guild_id, scope_channel_id, entity_id)
-    )
-  `);
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS discord_config (
-      discord_id TEXT NOT NULL,
-      discord_type TEXT NOT NULL CHECK (discord_type IN ('channel', 'guild')),
-      config_bind TEXT,
-      config_persona TEXT,
-      config_blacklist TEXT,
-      PRIMARY KEY (discord_id, discord_type)
-    )
-  `);
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS messages (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      channel_id TEXT NOT NULL,
-      author_id TEXT NOT NULL,
-      author_name TEXT NOT NULL,
-      content TEXT NOT NULL,
-      discord_message_id TEXT,
-      data TEXT,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS webhook_messages (
-      message_id TEXT PRIMARY KEY,
-      entity_id INTEGER NOT NULL,
-      entity_name TEXT NOT NULL,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS channel_forgets (
-      channel_id TEXT PRIMARY KEY,
-      forget_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS webhooks (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      channel_id TEXT NOT NULL UNIQUE,
-      webhook_id TEXT NOT NULL,
-      webhook_token TEXT NOT NULL,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS welcomed_users (
-      discord_id TEXT PRIMARY KEY,
-      welcomed_at TEXT DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS eval_errors (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      entity_id INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-      owner_id TEXT NOT NULL,
-      error_message TEXT NOT NULL,
-      condition TEXT,
-      notified_at TEXT,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE (entity_id, error_message)
-    )
-  `);
-
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_discord_entities_lookup ON discord_entities(discord_id, discord_type)`);
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_messages_channel ON messages(channel_id, created_at DESC)`);
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_messages_discord_id ON messages(discord_message_id)`);
-}
-
 /** Create a test entity and return its ID */
 function createEntity(name: string, ownedBy?: string): number {
   const row = testDb.prepare(`
     INSERT INTO entities (name, owned_by) VALUES (?, ?) RETURNING id
   `).get(name, ownedBy ?? null) as { id: number };
+  return row.id;
+}
+
+function insertEntity(name = "TestEntity"): number {
+  const row = testDb.prepare(`INSERT INTO entities (name) VALUES (?) RETURNING id`).get(name) as { id: number };
   return row.id;
 }
 
@@ -350,8 +245,7 @@ describe("parseMessageData", () => {
 
 describe("addDiscordEntity", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("creates a channel binding and returns it", () => {
@@ -392,8 +286,7 @@ describe("addDiscordEntity", () => {
 
 describe("resolveDiscordEntities", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("channel type: returns all bound entities", () => {
@@ -447,8 +340,7 @@ describe("resolveDiscordEntities", () => {
 
 describe("resolveDiscordEntity", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("returns first entity ID", () => {
@@ -464,8 +356,7 @@ describe("resolveDiscordEntity", () => {
 
 describe("getChannelScopedEntities", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("returns entities bound to channel", () => {
@@ -486,8 +377,7 @@ describe("getChannelScopedEntities", () => {
 
 describe("getGuildScopedEntities", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("returns entities bound to guild", () => {
@@ -503,8 +393,7 @@ describe("getGuildScopedEntities", () => {
 
 describe("removeDiscordEntityBinding", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("removes specific binding and returns true", () => {
@@ -530,8 +419,7 @@ describe("removeDiscordEntityBinding", () => {
 
 describe("removeDiscordEntity", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("removes all entities at a scope", () => {
@@ -550,8 +438,7 @@ describe("removeDiscordEntity", () => {
 
 describe("discord config", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("setDiscordConfig creates and getDiscordConfig retrieves", () => {
@@ -587,8 +474,7 @@ describe("discord config", () => {
 
 describe("resolveDiscordConfig", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("returns defaults when no config exists", () => {
@@ -647,8 +533,7 @@ describe("resolveDiscordConfig", () => {
 
 describe("addMessage / getMessages", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("adds and retrieves messages in DESC order", () => {
@@ -689,8 +574,7 @@ describe("addMessage / getMessages", () => {
 
 describe("countUnreadMessages", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("returns Infinity when entity has never replied", () => {
@@ -768,14 +652,14 @@ describe("countUnreadMessages", () => {
 
 describe("trackWebhookMessage / getWebhookMessageEntity", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("tracks and retrieves webhook message", () => {
-    trackWebhookMessage("msg-1", 42, "Aria");
+    const entityId = insertEntity("Aria");
+    trackWebhookMessage("msg-1", entityId, "Aria");
     const result = getWebhookMessageEntity("msg-1");
-    expect(result).toEqual({ entityId: 42, entityName: "Aria" });
+    expect(result).toEqual({ entityId, entityName: "Aria" });
   });
 
   test("returns null for unknown message", () => {
@@ -783,17 +667,18 @@ describe("trackWebhookMessage / getWebhookMessageEntity", () => {
   });
 
   test("overwrites on duplicate message_id", () => {
-    trackWebhookMessage("msg-1", 1, "First");
-    trackWebhookMessage("msg-1", 2, "Second");
+    const id1 = insertEntity("First");
+    const id2 = insertEntity("Second");
+    trackWebhookMessage("msg-1", id1, "First");
+    trackWebhookMessage("msg-1", id2, "Second");
     const result = getWebhookMessageEntity("msg-1");
-    expect(result).toEqual({ entityId: 2, entityName: "Second" });
+    expect(result).toEqual({ entityId: id2, entityName: "Second" });
   });
 });
 
 describe("eval error tracking", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("records error and returns true for new error", () => {
@@ -844,8 +729,7 @@ describe("eval error tracking", () => {
 
 describe("isNewUser / markUserWelcomed", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("returns true for user with no bindings and not welcomed", () => {
@@ -872,8 +756,7 @@ describe("isNewUser / markUserWelcomed", () => {
 
 describe("setChannelForgetTime", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("sets and returns a forget timestamp", () => {
@@ -929,8 +812,7 @@ describe("formatMessagesForContext", () => {
 
 describe("updateMessageByDiscordId", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("updates message content", () => {
@@ -956,8 +838,7 @@ describe("updateMessageByDiscordId", () => {
 
 describe("mergeMessageData", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("merges embed data without overwriting content", () => {
@@ -984,8 +865,7 @@ describe("mergeMessageData", () => {
 
 describe("deleteMessageByDiscordId", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("deletes message and returns true", () => {
@@ -1001,8 +881,7 @@ describe("deleteMessageByDiscordId", () => {
 
 describe("clearMessages", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("clears all messages in channel and returns count", () => {
@@ -1027,23 +906,24 @@ describe("clearMessages", () => {
 
 describe("getFilteredMessages", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("$char filter returns only webhook entity messages", () => {
+    const entityId = insertEntity("Aria");
     insertMessage("chan-1", "u1", "Alice", "user msg", null, "2024-01-01 10:00:00");
     insertMessage("chan-1", "bot", "Aria", "entity msg", "msg-1", "2024-01-01 10:01:00");
-    trackWebhookMessage("msg-1", 1, "Aria");
+    trackWebhookMessage("msg-1", entityId, "Aria");
     const filtered = getFilteredMessages("chan-1", 50, "$char");
     expect(filtered.length).toBe(1);
     expect(filtered[0].content).toBe("entity msg");
   });
 
   test("$user filter returns non-webhook, non-bot messages", () => {
+    const entityId = insertEntity("Aria");
     insertMessage("chan-1", "u1", "Alice", "user msg", "umsg-1", "2024-01-01 10:00:00");
     insertMessage("chan-1", "bot", "Aria", "entity msg", "msg-1", "2024-01-01 10:01:00");
-    trackWebhookMessage("msg-1", 1, "Aria");
+    trackWebhookMessage("msg-1", entityId, "Aria");
     const filtered = getFilteredMessages("chan-1", 50, "$user");
     expect(filtered.length).toBe(1);
     expect(filtered[0].content).toBe("user msg");
@@ -1081,8 +961,7 @@ describe("getFilteredMessages", () => {
 
 describe("getChannelForgetTime / clearChannelForgetTime", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("returns null when no forget time set", () => {
@@ -1107,8 +986,7 @@ describe("getChannelForgetTime / clearChannelForgetTime", () => {
 
 describe("listDiscordMappings", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("lists all mappings for a discord ID", () => {
@@ -1127,8 +1005,7 @@ describe("listDiscordMappings", () => {
 
 describe("getBoundEntityIds", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("returns all bound entities without scope filter", () => {
@@ -1161,8 +1038,7 @@ describe("getBoundEntityIds", () => {
 
 describe("isOurWebhookUserId", () => {
   beforeEach(() => {
-    testDb = new Database(":memory:");
-    createTestSchema(testDb);
+    testDb = createTestDb();
   });
 
   test("returns true for known webhook ID", () => {
