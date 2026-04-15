@@ -50,7 +50,8 @@ function createTestSchema(db: Database) {
       config_blacklist TEXT,
       config_thinking TEXT,
       config_collapse TEXT,
-      config_keywords TEXT
+      config_keywords TEXT,
+      config_safety TEXT
     )
   `);
 

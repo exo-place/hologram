@@ -60,7 +60,7 @@ function createTestSchema(db: Database): void {
       config_stream_mode TEXT, config_stream_delimiters TEXT,
       config_avatar TEXT, config_memory TEXT, config_freeform INTEGER DEFAULT 0,
       config_strip TEXT, config_view TEXT, config_edit TEXT, config_use TEXT,
-      config_blacklist TEXT, config_thinking TEXT, config_collapse TEXT, config_keywords TEXT
+      config_blacklist TEXT, config_thinking TEXT, config_collapse TEXT, config_keywords TEXT, config_safety TEXT
     )
   `);
   db.exec(`
