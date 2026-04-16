@@ -32,7 +32,11 @@ export function initSchema(db: Database, { useVec0 = true } = {}) {
       config_view TEXT,
       config_edit TEXT,
       config_use TEXT,
-      config_blacklist TEXT
+      config_blacklist TEXT,
+      config_thinking TEXT,
+      config_collapse TEXT,
+      config_keywords TEXT,
+      config_safety TEXT
     )
   `);
 
@@ -234,8 +238,6 @@ export function initSchema(db: Database, { useVec0 = true } = {}) {
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     )
   `);
-  // Migration: add is_dm to pre-existing databases
-  try { db.exec(`ALTER TABLE discord_channel_meta ADD COLUMN is_dm INTEGER NOT NULL DEFAULT 0`); } catch { /* already exists */ }
 
   // Web channels - synthetic channel sessions for the web frontend
   // entity_ids is a JSON array of bound entity IDs
@@ -252,17 +254,6 @@ export function initSchema(db: Database, { useVec0 = true } = {}) {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_facts_entity ON facts(entity_id)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_discord_entities_lookup ON discord_entities(discord_id, discord_type)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_messages_channel ON messages(channel_id, created_at DESC)`);
-  // Migration: deduplicate messages by discord_message_id (keep lowest id) before
-  // creating the unique index. Idempotent — no-op if no duplicates exist.
-  db.exec(`
-    DELETE FROM messages
-    WHERE discord_message_id IS NOT NULL
-    AND id NOT IN (
-      SELECT MIN(id) FROM messages
-      WHERE discord_message_id IS NOT NULL
-      GROUP BY discord_message_id
-    )
-  `);
   // Partial unique index: prevents duplicate storage of the same Discord message.
   // NULL discord_message_id (synthetic messages) are excluded — SQLite NULL != NULL.
   db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_discord_id ON messages(discord_message_id) WHERE discord_message_id IS NOT NULL`);
@@ -273,98 +264,4 @@ export function initSchema(db: Database, { useVec0 = true } = {}) {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_webhooks_channel ON webhooks(channel_id)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_eval_errors_owner ON eval_errors(owner_id, notified_at)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_attachment_cache_message ON attachment_cache(message_id)`);
-
-  // Migrations
-  // Add system_template column (per-entity system prompt template)
-  try {
-    db.exec(`ALTER TABLE entities ADD COLUMN system_template TEXT`);
-  } catch {
-    // Column already exists
-  }
-
-  // Add config_thinking column (thinking level for Google models)
-  try {
-    db.exec(`ALTER TABLE entities ADD COLUMN config_thinking TEXT`);
-  } catch {
-    // Column already exists
-  }
-
-  // Add config_collapse column (adjacent message collapsing roles)
-  try {
-    db.exec(`ALTER TABLE entities ADD COLUMN config_collapse TEXT`);
-  } catch {
-    // Column already exists
-  }
-
-  // Add config_keywords column (trigger keywords for automatic response)
-  try {
-    db.exec(`ALTER TABLE entities ADD COLUMN config_keywords TEXT`);
-  } catch {
-    // Column already exists
-  }
-
-  // Add config_safety column (all-category content filter override)
-  try {
-    db.exec(`ALTER TABLE entities ADD COLUMN config_safety TEXT`);
-  } catch {
-    // Column already exists
-  }
-
-  // Enforce scope invariant on discord_entities: channel/guild bindings must
-  // have NULL scope columns. Legacy data (pre commit 18d8361) stored
-  // scope_channel_id = discord_id for channel bindings, which broke unbind.
-  // Recreate the table to add the CHECK constraint and normalize in transit.
-  try {
-    const row = db
-      .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='discord_entities'")
-      .get() as { sql: string } | undefined;
-    if (row && !row.sql.includes("discord_type = 'user'")) {
-      db.exec(`
-        CREATE TABLE discord_entities_new (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          discord_id TEXT NOT NULL,
-          discord_type TEXT NOT NULL CHECK (discord_type IN ('user', 'channel', 'guild')),
-          scope_guild_id TEXT,
-          scope_channel_id TEXT,
-          entity_id INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-          UNIQUE (discord_id, discord_type, scope_guild_id, scope_channel_id, entity_id),
-          CHECK (
-            discord_type = 'user'
-            OR (scope_channel_id IS NULL AND scope_guild_id IS NULL)
-          )
-        )
-      `);
-      db.exec(`
-        INSERT OR IGNORE INTO discord_entities_new (id, discord_id, discord_type, scope_guild_id, scope_channel_id, entity_id)
-        SELECT id, discord_id, discord_type,
-          CASE WHEN discord_type = 'guild'   THEN NULL ELSE scope_guild_id   END,
-          CASE WHEN discord_type = 'channel' THEN NULL ELSE scope_channel_id END,
-          entity_id
-        FROM discord_entities
-      `);
-      db.exec(`DROP TABLE discord_entities`);
-      db.exec(`ALTER TABLE discord_entities_new RENAME TO discord_entities`);
-      db.exec(`CREATE INDEX IF NOT EXISTS idx_discord_entities_lookup ON discord_entities(discord_id, discord_type)`);
-    }
-  } catch {
-    // Migration already applied or table in expected state
-  }
-
-  // Migrate webhook_messages to add FK constraint (ON DELETE CASCADE)
-  // SQLite doesn't support ALTER TABLE ADD FOREIGN KEY, so recreate the table.
-  try {
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS webhook_messages_new (
-        message_id TEXT PRIMARY KEY,
-        entity_id INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-        entity_name TEXT NOT NULL,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-    db.exec(`INSERT OR IGNORE INTO webhook_messages_new SELECT * FROM webhook_messages`);
-    db.exec(`DROP TABLE webhook_messages`);
-    db.exec(`ALTER TABLE webhook_messages_new RENAME TO webhook_messages`);
-  } catch {
-    // Migration already applied or table in expected state
-  }
 }
