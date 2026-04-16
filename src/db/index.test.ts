@@ -268,12 +268,12 @@ describe("schema: unique constraints", () => {
     const id = insertEntity(db);
     db.prepare(
       "INSERT INTO discord_entities (discord_id, discord_type, scope_guild_id, scope_channel_id, entity_id) VALUES (?, ?, ?, ?, ?)",
-    ).run("ch-1", "channel", "g-1", "sc-1", id);
+    ).run("user-1", "user", "g-1", "sc-1", id);
 
     expect(() => {
       db.prepare(
         "INSERT INTO discord_entities (discord_id, discord_type, scope_guild_id, scope_channel_id, entity_id) VALUES (?, ?, ?, ?, ?)",
-      ).run("ch-1", "channel", "g-1", "sc-1", id);
+      ).run("user-1", "user", "g-1", "sc-1", id);
     }).toThrow();
   });
 

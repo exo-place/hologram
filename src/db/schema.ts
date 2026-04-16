@@ -47,7 +47,10 @@ export function initSchema(db: Database, { useVec0 = true } = {}) {
     )
   `);
 
-  // Discord ID to entity mapping (scoped, multiple entities per target)
+  // Discord ID to entity mapping (scoped, multiple entities per target).
+  // Invariant: for 'channel' and 'guild' types, discord_id IS the scope, so
+  // scope_channel_id / scope_guild_id must be NULL. Only 'user' bindings use
+  // them (channel-scoped persona, guild-scoped persona, global persona).
   db.exec(`
     CREATE TABLE IF NOT EXISTS discord_entities (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,7 +59,11 @@ export function initSchema(db: Database, { useVec0 = true } = {}) {
       scope_guild_id TEXT,
       scope_channel_id TEXT,
       entity_id INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-      UNIQUE (discord_id, discord_type, scope_guild_id, scope_channel_id, entity_id)
+      UNIQUE (discord_id, discord_type, scope_guild_id, scope_channel_id, entity_id),
+      CHECK (
+        discord_type = 'user'
+        OR (scope_channel_id IS NULL AND scope_guild_id IS NULL)
+      )
     )
   `);
 
@@ -301,6 +308,46 @@ export function initSchema(db: Database, { useVec0 = true } = {}) {
     db.exec(`ALTER TABLE entities ADD COLUMN config_safety TEXT`);
   } catch {
     // Column already exists
+  }
+
+  // Enforce scope invariant on discord_entities: channel/guild bindings must
+  // have NULL scope columns. Legacy data (pre commit 18d8361) stored
+  // scope_channel_id = discord_id for channel bindings, which broke unbind.
+  // Recreate the table to add the CHECK constraint and normalize in transit.
+  try {
+    const row = db
+      .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='discord_entities'")
+      .get() as { sql: string } | undefined;
+    if (row && !row.sql.includes("discord_type = 'user'")) {
+      db.exec(`
+        CREATE TABLE discord_entities_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          discord_id TEXT NOT NULL,
+          discord_type TEXT NOT NULL CHECK (discord_type IN ('user', 'channel', 'guild')),
+          scope_guild_id TEXT,
+          scope_channel_id TEXT,
+          entity_id INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+          UNIQUE (discord_id, discord_type, scope_guild_id, scope_channel_id, entity_id),
+          CHECK (
+            discord_type = 'user'
+            OR (scope_channel_id IS NULL AND scope_guild_id IS NULL)
+          )
+        )
+      `);
+      db.exec(`
+        INSERT OR IGNORE INTO discord_entities_new (id, discord_id, discord_type, scope_guild_id, scope_channel_id, entity_id)
+        SELECT id, discord_id, discord_type,
+          CASE WHEN discord_type = 'guild'   THEN NULL ELSE scope_guild_id   END,
+          CASE WHEN discord_type = 'channel' THEN NULL ELSE scope_channel_id END,
+          entity_id
+        FROM discord_entities
+      `);
+      db.exec(`DROP TABLE discord_entities`);
+      db.exec(`ALTER TABLE discord_entities_new RENAME TO discord_entities`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_discord_entities_lookup ON discord_entities(discord_id, discord_type)`);
+    }
+  } catch {
+    // Migration already applied or table in expected state
   }
 
   // Migrate webhook_messages to add FK constraint (ON DELETE CASCADE)

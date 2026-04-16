@@ -299,6 +299,7 @@ error("Message", err, { key: "value" });
 - **Update docs after every task.** Keep `docs/`, `README.md`, and `CLAUDE.md` in sync with code changes. Outdated docs are bugs.
 - **Keep SUMMARY.md files current.** Every directory under `src/` and `docs/` needs a `SUMMARY.md` describing its purpose and contents. When you add, remove, or significantly change files in a directory, update that directory's `SUMMARY.md`. The pre-commit hook runs `normalize rules run` — a `stale-summary` warning means the SUMMARY.md is out of date and must be refreshed before committing.
 - **Always write tests for new features.** Every new feature, bug fix, or behavior change must include corresponding tests. Tests go in `*.test.ts` files next to the code they test. Run `bun test` to execute.
+- **Single-instance project — no DB migrations.** There is only one deployed Hologram database. When schema changes, edit `CREATE TABLE` / `CREATE INDEX` in `src/db/schema.ts` directly and apply the change to `hologram.db` manually (`sqlite3 hologram.db "ALTER TABLE ..."` or a one-shot `bun -e` script). Do not add `ALTER TABLE` / recreate-table migration blocks — `schema.ts` should describe the current state, not history.
 - **Coverage refresh rule.** At the start of each session, read `test/coverage-meta.json`. If either condition is true, run `bun test --coverage`, update the file, and commit it:
   - `git rev-list <meta.commit>..HEAD --count` ≥ 5 commits since last run, OR
   - Days elapsed since `meta.date` ≥ 7

@@ -282,6 +282,20 @@ describe("addDiscordEntity", () => {
     expect(result!.scope_guild_id).toBe("guild-1");
     expect(result!.scope_channel_id).toBe("chan-1");
   });
+
+  test("rejects channel binding with scope_channel_id (CHECK constraint)", () => {
+    const entityId = createEntity("Aria");
+    expect(() => testDb.prepare(
+      `INSERT INTO discord_entities (discord_id, discord_type, scope_channel_id, entity_id) VALUES (?, ?, ?, ?)`
+    ).run("chan-1", "channel", "chan-1", entityId)).toThrow();
+  });
+
+  test("rejects guild binding with scope_guild_id (CHECK constraint)", () => {
+    const entityId = createEntity("Aria");
+    expect(() => testDb.prepare(
+      `INSERT INTO discord_entities (discord_id, discord_type, scope_guild_id, entity_id) VALUES (?, ?, ?, ?)`
+    ).run("guild-1", "guild", "guild-1", entityId)).toThrow();
+  });
 });
 
 describe("resolveDiscordEntities", () => {
