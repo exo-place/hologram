@@ -78,6 +78,29 @@ describe("supportsImageOutput", () => {
     expect(supportsImageOutput("gemini-2.5-flash-image")).toBe(true);
   });
 
+  test("returns true for xAI image models", () => {
+    expect(supportsImageOutput("grok-2-image")).toBe(true);
+    expect(supportsImageOutput("grok-imagine-image")).toBe(true);
+    expect(supportsImageOutput("grok-imagine-image-pro")).toBe(true);
+  });
+
+  test("returns true for OpenAI image models", () => {
+    expect(supportsImageOutput("dall-e-3")).toBe(true);
+    expect(supportsImageOutput("gpt-image-1")).toBe(true);
+  });
+
+  test("returns true for Google Imagen models", () => {
+    expect(supportsImageOutput("imagen-4.0-generate-001")).toBe(true);
+  });
+
+  test("returns true for DeepInfra FLUX models", () => {
+    expect(supportsImageOutput("black-forest-labs/FLUX-1.1-pro")).toBe(true);
+  });
+
+  test("returns true for Together AI FLUX models", () => {
+    expect(supportsImageOutput("black-forest-labs/FLUX.1.1-pro")).toBe(true);
+  });
+
   test("returns false for regular gemini model", () => {
     expect(supportsImageOutput("gemini-2.0-flash")).toBe(false);
   });

@@ -126,10 +126,69 @@ export function supportsVision(providerName: string): boolean {
   return VISION_CAPABLE_PROVIDERS.has(providerName);
 }
 
-/** Model names known to support inline image output via generateText().files */
+/** Model names known to support image generation output (inline via generateText().files or via generateImage()) */
 const IMAGE_OUTPUT_MODEL_NAMES = new Set([
+  // Google (inline via generateText().files)
   "gemini-2.5-flash-image",
   "gemini-2.0-flash-image-generation",
+  "gemini-3-pro-image-preview",
+  "gemini-3.1-flash-image-preview",
+  // Google Imagen (via generateImage())
+  "imagen-4.0-generate-001",
+  "imagen-4.0-ultra-generate-001",
+  "imagen-4.0-fast-generate-001",
+  // Google Vertex Imagen
+  "imagen-3.0-generate-001",
+  "imagen-3.0-generate-002",
+  "imagen-3.0-fast-generate-001",
+  // xAI
+  "grok-2-image",
+  "grok-2-image-1212",
+  "grok-imagine-image",
+  "grok-imagine-image-pro",
+  // OpenAI
+  "dall-e-3",
+  "dall-e-2",
+  "gpt-image-1",
+  "gpt-image-1-mini",
+  "gpt-image-1.5",
+  "chatgpt-image-latest",
+  // Amazon Bedrock
+  "amazon.nova-canvas-v1:0",
+  // DeepInfra
+  "stabilityai/sd3.5",
+  "stabilityai/sd3.5-medium",
+  "stabilityai/sdxl-turbo",
+  "black-forest-labs/FLUX-1.1-pro",
+  "black-forest-labs/FLUX-1-schnell",
+  "black-forest-labs/FLUX-1-dev",
+  "black-forest-labs/FLUX-pro",
+  "black-forest-labs/FLUX.1-Kontext-dev",
+  "black-forest-labs/FLUX.1-Kontext-pro",
+  // Fireworks
+  "accounts/fireworks/models/flux-1-dev-fp8",
+  "accounts/fireworks/models/flux-1-schnell-fp8",
+  "accounts/fireworks/models/flux-kontext-pro",
+  "accounts/fireworks/models/flux-kontext-max",
+  "accounts/fireworks/models/playground-v2-5-1024px-aesthetic",
+  "accounts/fireworks/models/japanese-stable-diffusion-xl",
+  "accounts/fireworks/models/playground-v2-1024px-aesthetic",
+  "accounts/fireworks/models/SSD-1B",
+  "accounts/fireworks/models/stable-diffusion-xl-1024-v1-0",
+  // Together AI
+  "stabilityai/stable-diffusion-xl-base-1.0",
+  "black-forest-labs/FLUX.1-dev",
+  "black-forest-labs/FLUX.1-dev-lora",
+  "black-forest-labs/FLUX.1-schnell",
+  "black-forest-labs/FLUX.1-canny",
+  "black-forest-labs/FLUX.1-depth",
+  "black-forest-labs/FLUX.1-redux",
+  "black-forest-labs/FLUX.1.1-pro",
+  "black-forest-labs/FLUX.1-pro",
+  "black-forest-labs/FLUX.1-schnell-Free",
+  "black-forest-labs/FLUX.1-kontext-pro",
+  "black-forest-labs/FLUX.1-kontext-max",
+  "black-forest-labs/FLUX.1-kontext-dev",
 ]);
 
 /** Returns true if the model is known to support inline image generation output */
