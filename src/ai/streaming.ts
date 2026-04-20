@@ -1,5 +1,6 @@
-import { streamText, stepCountIs } from "ai";
-import { getLanguageModel, DEFAULT_MODEL, InferenceError, parseModelSpec, buildThinkingOptions, buildSafetyOptions, modelSupportsTools, recordNoToolModel, isToolsNotSupportedError } from "./models";
+import { streamText, generateImage, stepCountIs } from "ai";
+import type { ModelMessage } from "ai";
+import { getLanguageModel, getImageModel, isDedicatedImageModel, DEFAULT_MODEL, InferenceError, parseModelSpec, buildThinkingOptions, buildSafetyOptions, modelSupportsTools, recordNoToolModel, isToolsNotSupportedError } from "./models";
 import { debug, error } from "../logger";
 import {
   type EvaluatedEntity,
@@ -109,6 +110,12 @@ export async function* handleMessageStreaming(
   const { providerName, modelName } = parseModelSpec(modelSpec);
   const thinkingLevel = entities[0]?.thinkingLevel;
   const contentFilters = entities[0]?.contentFilters ?? [];
+
+  // Dedicated image generation models don't stream — call generateImage() and emit files + done
+  if (isDedicatedImageModel(modelName)) {
+    yield* handleImageGenerationStream(modelSpec, systemPrompt, llmMessages);
+    return;
+  }
 
   try {
     const model = getLanguageModel(modelSpec);
@@ -591,5 +598,53 @@ async function* streamMultiEntityNamePrefix(
     if (currentChar.content.trim()) {
       yield { type: "char_end", name: currentChar.name, content: currentChar.content.trim() };
     }
+  }
+}
+
+// =============================================================================
+// Image Generation (non-streaming fallback)
+// =============================================================================
+
+async function* handleImageGenerationStream(
+  modelSpec: string,
+  systemPrompt: string,
+  messages: ModelMessage[],
+): AsyncGenerator<StreamEvent, void, unknown> {
+  const parts: string[] = [];
+  if (systemPrompt) parts.push(systemPrompt);
+  for (const msg of messages) {
+    const text = typeof msg.content === "string"
+      ? msg.content
+      : msg.content
+          .filter(p => p.type === "text")
+          .map(p => p.type === "text" ? p.text : "")
+          .join("");
+    if (text.trim()) parts.push(text.trim());
+  }
+  const prompt = parts.join("\n\n");
+  if (!prompt) {
+    throw new InferenceError("No prompt available for image generation", modelSpec);
+  }
+
+  debug("Calling image generation model (stream path)", { modelSpec, promptLength: prompt.length });
+
+  try {
+    const model = getImageModel(modelSpec);
+    const result = await generateImage({ model, prompt });
+    const files: import("./handler").GeneratedFile[] = result.images.map(img => ({
+      data: img.uint8Array,
+      mediaType: img.mediaType,
+    }));
+    if (files.length > 0) {
+      yield { type: "files" as const, files };
+    }
+    yield { type: "done" as const, fullText: "" };
+  } catch (err) {
+    error("Image generation error (stream path)", err);
+    throw new InferenceError(
+      err instanceof Error ? err.message : String(err),
+      modelSpec,
+      err,
+    );
   }
 }

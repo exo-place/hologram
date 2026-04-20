@@ -153,13 +153,26 @@ export function supportsVision(providerName: string): boolean {
   return VISION_CAPABLE_PROVIDERS.has(providerName);
 }
 
-/** Model names known to support image generation output (inline via generateText().files or via generateImage()) */
-const IMAGE_OUTPUT_MODEL_NAMES = new Set([
+/**
+ * Models that generate images inline as part of generateText().files.
+ * These are chat/multimodal models that happen to emit image outputs alongside text.
+ */
+const INLINE_IMAGE_MODEL_NAMES = new Set([
   // Google (inline via generateText().files)
   "gemini-2.5-flash-image",
   "gemini-2.0-flash-image-generation",
   "gemini-3-pro-image-preview",
   "gemini-3.1-flash-image-preview",
+  // xAI grok-2-image variants appear in both chat and image model IDs — usable as language models
+  "grok-2-image",
+  "grok-2-image-1212",
+]);
+
+/**
+ * Models that require generateImage() — they have no chat/language model API.
+ * Prompt is derived from the last user message.
+ */
+const DEDICATED_IMAGE_MODEL_NAMES = new Set([
   // Google Imagen (via generateImage())
   "imagen-4.0-generate-001",
   "imagen-4.0-ultra-generate-001",
@@ -168,9 +181,7 @@ const IMAGE_OUTPUT_MODEL_NAMES = new Set([
   "imagen-3.0-generate-001",
   "imagen-3.0-generate-002",
   "imagen-3.0-fast-generate-001",
-  // xAI
-  "grok-2-image",
-  "grok-2-image-1212",
+  // xAI dedicated image generation
   "grok-imagine-image",
   "grok-imagine-image-pro",
   // OpenAI
@@ -218,9 +229,26 @@ const IMAGE_OUTPUT_MODEL_NAMES = new Set([
   "black-forest-labs/FLUX.1-kontext-dev",
 ]);
 
-/** Returns true if the model is known to support inline image generation output */
+const IMAGE_OUTPUT_MODEL_NAMES = new Set([...INLINE_IMAGE_MODEL_NAMES, ...DEDICATED_IMAGE_MODEL_NAMES]);
+
+/** Returns true if the model produces image output (either inline or via generateImage()) */
 export function supportsImageOutput(modelName: string): boolean {
   return IMAGE_OUTPUT_MODEL_NAMES.has(modelName);
+}
+
+/** Returns true if the model requires generateImage() rather than generateText() */
+export function isDedicatedImageModel(modelName: string): boolean {
+  return DEDICATED_IMAGE_MODEL_NAMES.has(modelName);
+}
+
+export function getImageModel(modelSpec: string) {
+  const { providerName, modelName } = parseModelSpec(modelSpec);
+  const provider = getProvider(providerName);
+  const p = provider as unknown as { imageModel?: (id: string) => import("@ai-sdk/provider").ImageModelV3 };
+  if (typeof p.imageModel !== "function") {
+    throw new Error(`Provider '${providerName}' does not support image generation`);
+  }
+  return p.imageModel(modelName);
 }
 
 /** Returns true if the provider accepts this MIME type as a document/file part */

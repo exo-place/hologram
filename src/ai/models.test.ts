@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseModelSpec, InferenceError, supportsImageOutput, buildSafetyOptions, buildThinkingOptions } from "./models";
+import { parseModelSpec, InferenceError, supportsImageOutput, isDedicatedImageModel, buildSafetyOptions, buildThinkingOptions } from "./models";
 import type { ContentFilter } from "../logic/expr";
 
 describe("parseModelSpec", () => {
@@ -128,6 +128,33 @@ describe("supportsImageOutput", () => {
 
   test("returns false for unknown model", () => {
     expect(supportsImageOutput("gpt-4o")).toBe(false);
+  });
+});
+
+describe("isDedicatedImageModel", () => {
+  test("returns true for xAI dedicated image models", () => {
+    expect(isDedicatedImageModel("grok-imagine-image")).toBe(true);
+    expect(isDedicatedImageModel("grok-imagine-image-pro")).toBe(true);
+  });
+
+  test("returns true for OpenAI image models", () => {
+    expect(isDedicatedImageModel("dall-e-3")).toBe(true);
+    expect(isDedicatedImageModel("gpt-image-1")).toBe(true);
+  });
+
+  test("returns true for Google Imagen models", () => {
+    expect(isDedicatedImageModel("imagen-4.0-generate-001")).toBe(true);
+  });
+
+  test("returns false for inline image models (use generateText)", () => {
+    expect(isDedicatedImageModel("gemini-2.5-flash-image")).toBe(false);
+    expect(isDedicatedImageModel("gemini-2.0-flash-image-generation")).toBe(false);
+    expect(isDedicatedImageModel("grok-2-image")).toBe(false);
+  });
+
+  test("returns false for regular language models", () => {
+    expect(isDedicatedImageModel("gpt-4o")).toBe(false);
+    expect(isDedicatedImageModel("gemini-2.0-flash")).toBe(false);
   });
 });
 

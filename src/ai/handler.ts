@@ -1,5 +1,6 @@
-import { generateText, stepCountIs } from "ai";
-import { getLanguageModel, DEFAULT_MODEL, InferenceError, parseModelSpec, buildThinkingOptions, buildSafetyOptions, modelSupportsTools, recordNoToolModel, isToolsNotSupportedError } from "./models";
+import { generateText, generateImage, stepCountIs } from "ai";
+import type { ModelMessage } from "ai";
+import { getLanguageModel, getImageModel, isDedicatedImageModel, DEFAULT_MODEL, InferenceError, parseModelSpec, buildThinkingOptions, buildSafetyOptions, modelSupportsTools, recordNoToolModel, isToolsNotSupportedError } from "./models";
 import { debug, error } from "../logger";
 import {
   type EvaluatedEntity,
@@ -76,6 +77,11 @@ export async function handleMessage(ctx: MessageContext): Promise<ResponseResult
   const { providerName, modelName } = parseModelSpec(modelSpec);
   const thinkingLevel = evaluated[0]?.thinkingLevel;
   const contentFilters = evaluated[0]?.contentFilters ?? [];
+
+  // Dedicated image generation models don't use the chat API — route through generateImage()
+  if (isDedicatedImageModel(modelName)) {
+    return handleImageGeneration(modelSpec, systemPrompt, llmMessages);
+  }
 
   try {
     const model = getLanguageModel(modelSpec);
@@ -190,6 +196,64 @@ export async function handleMessage(ctx: MessageContext): Promise<ResponseResult
     };
   } catch (err) {
     error("LLM error", err);
+    throw new InferenceError(
+      err instanceof Error ? err.message : String(err),
+      modelSpec,
+      err,
+    );
+  }
+}
+
+// =============================================================================
+// Image Generation
+// =============================================================================
+
+function buildImagePrompt(systemPrompt: string, messages: ModelMessage[]): string {
+  const parts: string[] = [];
+  if (systemPrompt) parts.push(systemPrompt);
+  for (const msg of messages) {
+    const text = typeof msg.content === "string"
+      ? msg.content
+      : msg.content
+          .filter(p => p.type === "text")
+          .map(p => p.type === "text" ? p.text : "")
+          .join("");
+    if (text.trim()) parts.push(text.trim());
+  }
+  return parts.join("\n\n");
+}
+
+async function handleImageGeneration(
+  modelSpec: string,
+  systemPrompt: string,
+  messages: ModelMessage[],
+): Promise<ResponseResult | null> {
+  const prompt = buildImagePrompt(systemPrompt, messages);
+  if (!prompt) {
+    throw new InferenceError("No prompt available for image generation", modelSpec);
+  }
+
+  debug("Calling image generation model", { modelSpec, promptLength: prompt.length });
+
+  try {
+    const model = getImageModel(modelSpec);
+    const result = await generateImage({ model, prompt });
+    const files: GeneratedFile[] = result.images.map(img => ({
+      data: img.uint8Array,
+      mediaType: img.mediaType,
+    }));
+    return {
+      response: "",
+      files: files.length > 0 ? files : undefined,
+      factsAdded: 0,
+      factsUpdated: 0,
+      factsRemoved: 0,
+      memoriesSaved: 0,
+      memoriesUpdated: 0,
+      memoriesRemoved: 0,
+    };
+  } catch (err) {
+    error("Image generation error", err);
     throw new InferenceError(
       err instanceof Error ? err.message : String(err),
       modelSpec,
