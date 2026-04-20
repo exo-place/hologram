@@ -433,3 +433,47 @@ describe("createTools — trigger_entity", () => {
     await expect(callTriggerEntity(tools, { entityId: 1, verb: "use", author: "Bob" })).rejects.toThrow("chain limit");
   });
 });
+
+// ---------------------------------------------------------------------------
+// createTools — generate_image tool
+// ---------------------------------------------------------------------------
+
+describe("createTools — generate_image tool", () => {
+  test("generate_image tool absent when imageOptions not provided", () => {
+    const tools = createTools();
+    expect(tools.generate_image).toBeUndefined();
+  });
+
+  test("generate_image tool present when imageOptions provided", () => {
+    const tools = createTools(undefined, undefined, undefined, {
+      imageModelSpec: "xai:grok-imagine-image-pro",
+      onImage: () => {},
+    });
+    expect(tools.generate_image).toBeDefined();
+    expect(typeof tools.generate_image!.execute).toBe("function");
+  });
+
+  test("generate_image calls onImage with generated file and returns count", async () => {
+    const collected: Array<{ data: Uint8Array; mediaType: string }> = [];
+    const mockImage = { uint8Array: new Uint8Array([1, 2, 3]), mediaType: "image/png" };
+    mock.module("ai", () => ({
+      ...require("ai"),
+      generateImage: async () => ({ images: [mockImage] }),
+    }));
+    mock.module("./models", () => ({
+      ...require("./models"),
+      getImageModel: () => ({}),
+    }));
+
+    const { createTools: createToolsFresh } = await import("./tools");
+    const tools = createToolsFresh(undefined, undefined, undefined, {
+      imageModelSpec: "xai:grok-imagine-image-pro",
+      onImage: (f) => collected.push(f),
+    });
+    const result = await tools.generate_image!.execute!({ prompt: "a portrait" }, {} as never) as { success: boolean; count?: number };
+    expect(result.success).toBe(true);
+    expect(result.count).toBe(1);
+    expect(collected).toHaveLength(1);
+    expect(collected[0]!.mediaType).toBe("image/png");
+  });
+});

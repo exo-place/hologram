@@ -9,6 +9,7 @@
  */
 
 import { getEntitiesWithFacts, getEntityEvalDefaults, getEntityKeywords } from "../db/entities";
+import { isDedicatedImageModel, parseModelSpec } from "../ai/models";
 import { getMessages, addMessage, countUnreadMessages, formatMessagesForContext } from "../db/discord";
 import { retrieveRelevantMemories } from "../db/memories";
 import { createBaseContext, evaluateFacts, compileContextExpr, type MemoryScope } from "../logic/expr";
@@ -111,9 +112,10 @@ export async function handleWebMessage(
       keywords: getEntityKeywords(entity.id),
     });
 
+    const evalDefaults = getEntityEvalDefaults(entity.id);
     let result;
     try {
-      result = evaluateFacts(facts, ctx, getEntityEvalDefaults(entity.id));
+      result = evaluateFacts(facts, ctx, evalDefaults);
     } catch (err) {
       warn("Fact evaluation failed (web)", {
         entity: entity.name,
@@ -126,6 +128,9 @@ export async function handleWebMessage(
     const shouldRespond = result.shouldRespond ?? true;
 
     if (shouldRespond && result.retryMs === null) {
+      const imageModelSpec = result.modelSpec && isDedicatedImageModel(parseModelSpec(result.modelSpec).modelName)
+        ? result.modelSpec : null;
+      const resolvedModelSpec = imageModelSpec ? (evalDefaults.modelSpec ?? null) : result.modelSpec;
       respondingEntities.push({
         id: entity.id,
         name: entity.name,
@@ -136,7 +141,8 @@ export async function handleWebMessage(
         memoryScope: result.memoryScope,
         contextExpr: result.contextExpr,
         isFreeform: result.isFreeform,
-        modelSpec: result.modelSpec,
+        modelSpec: resolvedModelSpec,
+        imageModelSpec,
         stripPatterns: result.stripPatterns,
         thinkingLevel: result.thinkingLevel,
         collapseMessages: result.collapseMessages,

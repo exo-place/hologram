@@ -40,6 +40,8 @@ export interface EvaluatedEntity {
   isFreeform: boolean;
   /** Model spec from $model directive (e.g. "google:gemini-2.0-flash") */
   modelSpec: string | null;
+  /** Dedicated image generation model spec (from $model with an image-only model). When set, modelSpec holds the conversation model and this holds the image model. */
+  imageModelSpec?: string | null;
   /** Strip patterns from $strip directive. null = no directive (use default), [] = explicit no-strip */
   stripPatterns: string[] | null;
   /** Thinking level from $thinking directive. null = no directive (use default) */

@@ -1,6 +1,6 @@
-import { tool } from "ai";
+import { tool, generateImage, type Tool } from "ai";
 import { z } from "zod";
-import { debug } from "../logger";
+import { debug, error } from "../logger";
 import {
   getFactsForEntity,
   addFact,
@@ -13,6 +13,7 @@ import {
   removeMemoryByContent,
 } from "../db/memories";
 import { parseFact } from "../logic/expr";
+import { getImageModel } from "./models";
 
 // =============================================================================
 // Permission Checking
@@ -69,7 +70,8 @@ export function createTools(
   channelId?: string,
   guildId?: string,
   triggerEntityFn?: (entityId: number, verb: string, authorName: string) => Promise<void>,
-) {
+  imageOptions?: { imageModelSpec: string; onImage: (file: { data: Uint8Array; mediaType: string }) => void },
+): Record<string, Tool> {
   return {
     add_fact: tool({
       description: "Add a permanent defining trait to an entity. Use very sparingly - only for core personality, appearance, abilities, or key relationships. Most interactions don't need facts saved.",
@@ -221,5 +223,28 @@ export function createTools(
         return { success: true };
       },
     }),
+
+    ...(imageOptions ? {
+      generate_image: tool({
+        description: "Generate an image using the configured image model. Call this when asked for a selfie, photo, drawing, picture, or any visual content. Craft a focused, detailed prompt describing the subject, style, and mood — do NOT dump conversation history into the prompt.",
+        inputSchema: z.object({
+          prompt: z.string().describe("A concise, descriptive image generation prompt. Describe subject, appearance, style, mood, and setting. Keep it focused — 1-3 sentences max."),
+        }),
+        execute: async ({ prompt }) => {
+          debug("Tool: generate_image", { imageModelSpec: imageOptions.imageModelSpec, promptLength: prompt.length });
+          try {
+            const model = getImageModel(imageOptions.imageModelSpec);
+            const result = await generateImage({ model, prompt });
+            for (const img of result.images) {
+              imageOptions.onImage({ data: img.uint8Array, mediaType: img.mediaType });
+            }
+            return { success: true, count: result.images.length };
+          } catch (err) {
+            error("Tool: generate_image failed", err);
+            return { success: false, error: err instanceof Error ? err.message : String(err) };
+          }
+        },
+      }),
+    } : {}),
   };
 }

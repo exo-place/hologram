@@ -7,9 +7,8 @@ import { registerCommands, handleInteraction } from "./commands";
 import { handleMessage } from "../ai/handler";
 import type { GeneratedFile } from "../ai/handler";
 import { handleMessageStreaming } from "../ai/streaming";
-import { InferenceError } from "../ai/models";
+import { InferenceError, isDedicatedImageModel, isModelAllowed, parseModelSpec } from "../ai/models";
 import type { EvaluatedEntity } from "../ai/context";
-import { isModelAllowed } from "../ai/models";
 import { retrieveRelevantMemories, type MemoryScope } from "../db/memories";
 import { resolveDiscordEntity, resolveDiscordEntities, isNewUser, markUserWelcomed, addMessage, updateMessageByDiscordId, mergeMessageData, deleteMessageByDiscordId, trackWebhookMessage, getWebhookMessageEntity, getMessages, getFilteredMessages, formatMessagesForContext, recordEvalError, isOurWebhookUserId, countUnreadMessages, getLastMessageSnowflake, getAllBoundChannelIds, getChannelScopedEntities, storeChannelMeta, type MessageData } from "../db/discord";
 import { getEntity, getEntityWithFacts, getSystemEntity, getFactsForEntity, getEntityEvalDefaults, getEntityKeywords, getPermissionDefaults, type EntityWithFacts } from "../db/entities";
@@ -295,6 +294,17 @@ const lastTickTime = new Map<number, number>();
 
 function retryKey(channelId: string, entityId: number): string {
   return `${channelId}:${entityId}`;
+}
+
+/** Split $model result into conversation modelSpec + imageModelSpec (for dedicated image models). */
+function splitModelSpec(
+  resultModelSpec: string | null,
+  configModelSpec: string | null,
+): { modelSpec: string | null; imageModelSpec: string | null } {
+  if (resultModelSpec && isDedicatedImageModel(parseModelSpec(resultModelSpec).modelName)) {
+    return { modelSpec: configModelSpec, imageModelSpec: resultModelSpec };
+  }
+  return { modelSpec: resultModelSpec, imageModelSpec: null };
 }
 
 // Message deduplication
@@ -703,9 +713,10 @@ bot.events.messageCreate = async (message) => {
       keywords: getEntityKeywords(entity.id),
     });
 
+    const evalDefaults = getEntityEvalDefaults(entity.id);
     let result;
     try {
-      result = evaluateFacts(facts, ctx, getEntityEvalDefaults(entity.id));
+      result = evaluateFacts(facts, ctx, evalDefaults);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       warn("Fact evaluation failed", {
@@ -766,6 +777,7 @@ bot.events.messageCreate = async (message) => {
             : "unknown");
         debug("Entity responding", { entity: entity.name, source });
 
+        const { modelSpec: resolvedModelSpec, imageModelSpec } = splitModelSpec(result.modelSpec, evalDefaults.modelSpec ?? null);
         respondingEntities.push({
           id: entity.id,
           name: entity.name,
@@ -776,7 +788,8 @@ bot.events.messageCreate = async (message) => {
           memoryScope: result.memoryScope,
           contextExpr: result.contextExpr,
           isFreeform: result.isFreeform,
-          modelSpec: result.modelSpec,
+          modelSpec: resolvedModelSpec,
+          imageModelSpec,
           stripPatterns: result.stripPatterns,
           thinkingLevel: result.thinkingLevel,
           collapseMessages: result.collapseMessages,
@@ -874,9 +887,10 @@ async function processEntityRetry(
     keywords: getEntityKeywords(entityId),
   });
 
+  const evalDefaults = getEntityEvalDefaults(entityId);
   let result;
   try {
-    result = evaluateFacts(facts, ctx, getEntityEvalDefaults(entityId));
+    result = evaluateFacts(facts, ctx, evalDefaults);
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     warn("Fact evaluation failed during retry", {
@@ -923,6 +937,7 @@ async function processEntityRetry(
   }
 
   // Respond with just this entity (as EvaluatedEntity)
+  const { modelSpec: resolvedModelSpecRetry, imageModelSpec: imageModelSpecRetry } = splitModelSpec(result.modelSpec, evalDefaults.modelSpec ?? null);
   await sendResponse(channelId, guildId, username, content, false, [{
     id: entity.id,
     name: entity.name,
@@ -933,7 +948,8 @@ async function processEntityRetry(
     memoryScope: result.memoryScope,
     contextExpr: result.contextExpr,
     isFreeform: result.isFreeform,
-    modelSpec: result.modelSpec,
+    modelSpec: resolvedModelSpecRetry,
+    imageModelSpec: imageModelSpecRetry,
     stripPatterns: result.stripPatterns,
     thinkingLevel: result.thinkingLevel,
     collapseMessages: result.collapseMessages,
@@ -1000,9 +1016,10 @@ async function processEntityTick(
     keywords: getEntityKeywords(entityId),
   });
 
+  const tickEvalDefaults = getEntityEvalDefaults(entityId);
   let result;
   try {
-    result = evaluateFacts(facts, ctx, getEntityEvalDefaults(entityId));
+    result = evaluateFacts(facts, ctx, tickEvalDefaults);
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     warn("Fact evaluation failed during tick", { entity: entity.name, error: errorMsg });
@@ -1016,6 +1033,7 @@ async function processEntityTick(
     return;
   }
 
+  const { modelSpec: resolvedModelSpecTick, imageModelSpec: imageModelSpecTick } = splitModelSpec(result.modelSpec, tickEvalDefaults.modelSpec ?? null);
   const evaluated: EvaluatedEntity = {
     id: entity.id,
     name: entity.name,
@@ -1026,7 +1044,8 @@ async function processEntityTick(
     memoryScope: result.memoryScope,
     contextExpr: result.contextExpr,
     isFreeform: result.isFreeform,
-    modelSpec: result.modelSpec,
+    modelSpec: resolvedModelSpecTick,
+    imageModelSpec: imageModelSpecTick,
     stripPatterns: result.stripPatterns,
     thinkingLevel: result.thinkingLevel,
     collapseMessages: result.collapseMessages,
@@ -1575,9 +1594,10 @@ export async function sendResponse(
         keywords: getEntityKeywords(targetEntity.id),
       });
 
+      const triggerEvalDefaults = getEntityEvalDefaults(targetEntity.id);
       let triggerResult;
       try {
-        triggerResult = evaluateFacts(facts, ctx, getEntityEvalDefaults(targetEntity.id));
+        triggerResult = evaluateFacts(facts, ctx, triggerEvalDefaults);
       } catch (err) {
         warn("trigger_entity: fact evaluation failed", { entity: targetEntity.name, error: String(err) });
         return;
@@ -1585,6 +1605,7 @@ export async function sendResponse(
 
       debug("trigger_entity firing", { target: targetEntity.name, verb, author: authorName });
 
+      const { modelSpec: resolvedModelSpecTrigger, imageModelSpec: imageModelSpecTrigger } = splitModelSpec(triggerResult.modelSpec, triggerEvalDefaults.modelSpec ?? null);
       await sendResponse(channelId, guildId, authorName, "", true, [{
         id: targetEntity.id,
         name: targetEntity.name,
@@ -1595,7 +1616,8 @@ export async function sendResponse(
         memoryScope: triggerResult.memoryScope,
         contextExpr: triggerResult.contextExpr,
         isFreeform: triggerResult.isFreeform,
-        modelSpec: triggerResult.modelSpec,
+        modelSpec: resolvedModelSpecTrigger,
+        imageModelSpec: imageModelSpecTrigger,
         stripPatterns: triggerResult.stripPatterns,
         thinkingLevel: triggerResult.thinkingLevel,
         collapseMessages: triggerResult.collapseMessages,
