@@ -122,6 +122,13 @@ Set the env var for whichever provider(s) you want to use. At least one is requi
 | Google Vertex | `GOOGLE_VERTEX_API_KEY` | [console.cloud.google.com](https://console.cloud.google.com/) |
 | Amazon Bedrock | AWS credentials | [aws.amazon.com](https://aws.amazon.com/) |
 
+**OpenAI-compatible endpoints** (Ollama, LMStudio, custom proxies) don't need an API key entry — use the base URL directly as the provider in your model spec:
+
+```bash
+DEFAULT_MODEL=http://localhost:11434:llama3   # Ollama
+DEFAULT_MODEL=https://my.proxy.io/v1:gpt-4   # Custom proxy
+```
+
 ### 3. Run
 
 ```bash

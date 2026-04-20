@@ -400,10 +400,26 @@ Some LLM models can generate images directly. When an entity uses an image-gener
 
 **Supported models:**
 
-| Model | Provider spec |
-|-------|--------------|
-| Gemini 2.5 Flash (image) | `google:gemini-2.5-flash-image` |
-| Gemini 2.0 Flash Image Generation | `google:gemini-2.0-flash-image-generation` |
+| Provider | Model | Spec |
+|----------|-------|------|
+| Google | Gemini 2.5 Flash Image | `google:gemini-2.5-flash-image` |
+| Google | Gemini 2.0 Flash Image Generation | `google:gemini-2.0-flash-image-generation` |
+| Google | Gemini 3 Pro Image Preview | `google:gemini-3-pro-image-preview` |
+| Google | Gemini 3.1 Flash Image Preview | `google:gemini-3.1-flash-image-preview` |
+| Google | Imagen 4.0 | `google:imagen-4.0-generate-001` |
+| Google | Imagen 4.0 Ultra | `google:imagen-4.0-ultra-generate-001` |
+| Google | Imagen 4.0 Fast | `google:imagen-4.0-fast-generate-001` |
+| Google Vertex | Imagen 3.0 | `google-vertex:imagen-3.0-generate-001` |
+| Google Vertex | Imagen 4.0 | `google-vertex:imagen-4.0-generate-001` |
+| xAI | Grok 2 Image | `xai:grok-2-image` |
+| xAI | Grok Imagine Image | `xai:grok-imagine-image` |
+| xAI | Grok Imagine Image Pro | `xai:grok-imagine-image-pro` |
+| OpenAI | DALL-E 3 | `openai:dall-e-3` |
+| OpenAI | GPT Image 1 | `openai:gpt-image-1` |
+| Amazon Bedrock | Nova Canvas | `amazon-bedrock:amazon.nova-canvas-v1:0` |
+| DeepInfra | FLUX 1.1 Pro | `deepinfra:black-forest-labs/FLUX-1.1-pro` |
+| Fireworks | FLUX 1 Dev | `fireworks:accounts/fireworks/models/flux-1-dev-fp8` |
+| Together AI | FLUX 1.1 Pro | `togetherai:black-forest-labs/FLUX.1.1-pro` |
 
 Set the model with `$model` on the entity:
 

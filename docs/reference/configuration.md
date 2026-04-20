@@ -16,13 +16,21 @@ Your bot's application ID (numeric), from the same page.
 
 ### `DEFAULT_MODEL`
 
-The model used when no `$model` directive is set on an entity. Format: `provider:model`.
+The model used when no `$model` directive is set on an entity. Format: `provider:model` for known providers, or a URL-based spec for OpenAI-compatible endpoints.
 
 ```
 DEFAULT_MODEL=google:gemini-3-flash-preview
 ```
 
-See [provider list](#api-keys) below for supported providers.
+**Known providers:** See [provider list](#api-keys) below.
+
+**OpenAI-compatible endpoints:** Use the base URL as the provider — unknown provider names are routed through `@ai-sdk/openai-compatible`:
+
+```
+DEFAULT_MODEL=http://localhost:11434:llama3          # Ollama (local)
+DEFAULT_MODEL=https://my.proxy.io/v1:gpt-4          # Custom proxy
+DEFAULT_MODEL=api.example.com:mistral-7b             # HTTPS assumed if no scheme
+```
 
 ### `ALLOWED_MODELS`
 

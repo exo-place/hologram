@@ -239,16 +239,20 @@ $freeform
 
 #### `$model <provider:model>`
 
-Override the LLM used for this entity's responses. Must be in `provider:model` format.
+Override the LLM used for this entity's responses. Format: `provider:model` for known providers, or a URL-based spec for OpenAI-compatible endpoints.
 
 ```
 $model google:gemini-2.0-flash
 $model anthropic:claude-opus-4-5
 $model openai:gpt-4o
 $if mentioned: $model anthropic:claude-opus-4-5
+
+# OpenAI-compatible endpoints (unknown provider = base URL)
+$model http://localhost:11434:llama3
+$model https://my.proxy.io/v1:gpt-4
 ```
 
-The model spec must match a configured provider (see environment variables). Can also be set via `/edit <entity> type:config`.
+The model spec must match a configured provider or a reachable OpenAI-compatible endpoint. Can also be set via `/edit <entity> type:config`.
 
 #### `$context <expr>`
 
