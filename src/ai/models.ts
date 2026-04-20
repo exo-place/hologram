@@ -1,3 +1,4 @@
+import type { ImageModelV3 } from "@ai-sdk/provider";
 import type { ContentFilter, SafetyCategory, SafetyThreshold } from "../logic/expr";
 import { getDb } from "../db";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
@@ -39,10 +40,28 @@ const providerMap = {
   xai,
 };
 
+/** Providers that support image generation via imageModel() */
+const imageProviderMap = {
+  "amazon-bedrock": bedrock,
+  azure,
+  deepinfra,
+  fireworks,
+  google,
+  "google-vertex": vertex,
+  openai,
+  togetherai,
+  xai,
+} satisfies Record<string, { imageModel: (id: string) => ImageModelV3 }>;
+
 const providerNames = new Set(Object.keys(providerMap) as (keyof typeof providerMap)[]);
+const imageProviderNames = new Set(Object.keys(imageProviderMap) as (keyof typeof imageProviderMap)[]);
 
 function isProviderName(name: string): name is keyof typeof providerMap {
   return providerNames.has(name as keyof typeof providerMap);
+}
+
+function isImageProviderName(name: string): name is keyof typeof imageProviderMap {
+  return imageProviderNames.has(name as keyof typeof imageProviderMap);
 }
 
 export function parseModelSpec(modelSpec: string): {
@@ -241,14 +260,12 @@ export function isDedicatedImageModel(modelName: string): boolean {
   return DEDICATED_IMAGE_MODEL_NAMES.has(modelName);
 }
 
-export function getImageModel(modelSpec: string) {
+export function getImageModel(modelSpec: string): ImageModelV3 {
   const { providerName, modelName } = parseModelSpec(modelSpec);
-  const provider = getProvider(providerName);
-  const p = provider as unknown as { imageModel?: (id: string) => import("@ai-sdk/provider").ImageModelV3 };
-  if (typeof p.imageModel !== "function") {
+  if (!isImageProviderName(providerName)) {
     throw new Error(`Provider '${providerName}' does not support image generation`);
   }
-  return p.imageModel(modelName);
+  return imageProviderMap[providerName].imageModel(modelName);
 }
 
 /** Returns true if the provider accepts this MIME type as a document/file part */
