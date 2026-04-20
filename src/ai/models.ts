@@ -1,5 +1,6 @@
 import type { ContentFilter, SafetyCategory, SafetyThreshold } from "../logic/expr";
 import { getDb } from "../db";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { anthropic } from "@ai-sdk/anthropic";
 import { azure } from "@ai-sdk/azure";
 import { bedrock } from "@ai-sdk/amazon-bedrock";
@@ -48,21 +49,47 @@ export function parseModelSpec(modelSpec: string): {
   providerName: string;
   modelName: string;
 } {
-  const matches = modelSpec.match(/^([^:]+):(.+)$/);
-  if (!matches) {
+  const firstColon = modelSpec.indexOf(":");
+  if (firstColon === -1) {
     throw new Error(
-      `Invalid model spec: ${modelSpec}. Expected format: provider:model`
+      `Invalid model spec: ${modelSpec}. Expected format: provider:model or host:port:model`
     );
   }
-  const [, providerName, modelName] = matches;
-  return { providerName, modelName };
+  const firstSegment = modelSpec.slice(0, firstColon);
+  // Known provider: standard first-colon split
+  if (isProviderName(firstSegment)) {
+    const modelName = modelSpec.slice(firstColon + 1);
+    if (!modelName) {
+      throw new Error(
+        `Invalid model spec: ${modelSpec}. Expected format: provider:model or host:port:model`
+      );
+    }
+    return { providerName: firstSegment, modelName };
+  }
+  // URL-based openai-compatible: split on last colon so `http://host:port:model` works
+  const lastColon = modelSpec.lastIndexOf(":");
+  const modelName = modelSpec.slice(lastColon + 1);
+  if (!modelName) {
+    throw new Error(
+      `Invalid model spec: ${modelSpec}. Expected format: provider:model or host:port:model`
+    );
+  }
+  return { providerName: modelSpec.slice(0, lastColon), modelName };
+}
+
+function normalizeBaseUrl(providerName: string): string {
+  if (providerName.startsWith("http://") || providerName.startsWith("https://")) {
+    return providerName;
+  }
+  return `https://${providerName}`;
 }
 
 function getProvider(providerName: string) {
-  if (!isProviderName(providerName)) {
-    throw new Error(`Unknown provider: ${providerName}`);
+  if (isProviderName(providerName)) {
+    return providerMap[providerName];
   }
-  return providerMap[providerName];
+  // Treat as openai-compatible base URL
+  return createOpenAICompatible({ name: providerName, baseURL: normalizeBaseUrl(providerName) });
 }
 
 export function getLanguageModel(modelSpec: string) {

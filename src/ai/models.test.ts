@@ -46,6 +46,27 @@ describe("parseModelSpec", () => {
   test("throws for trailing colon with no model", () => {
     expect(() => parseModelSpec("google:")).toThrow("Invalid model spec");
   });
+
+  test("parses hostname as openai-compatible base URL", () => {
+    expect(parseModelSpec("api.example.com:llama-3")).toEqual({
+      providerName: "api.example.com",
+      modelName: "llama-3",
+    });
+  });
+
+  test("parses http URL with port as openai-compatible", () => {
+    expect(parseModelSpec("http://localhost:11434:llama-3")).toEqual({
+      providerName: "http://localhost:11434",
+      modelName: "llama-3",
+    });
+  });
+
+  test("parses https URL as openai-compatible", () => {
+    expect(parseModelSpec("https://my.proxy.io/v1:gpt-4")).toEqual({
+      providerName: "https://my.proxy.io/v1",
+      modelName: "gpt-4",
+    });
+  });
 });
 
 describe("InferenceError", () => {
