@@ -1,0 +1,11 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "overrides": [
+    {
+      "files": ["web/src/**/*.tsx"],
+      "rules": {
+        "no-unassigned-vars": "off"
+      }
+    }
+  ]
+}
