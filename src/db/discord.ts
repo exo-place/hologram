@@ -909,29 +909,35 @@ export interface EvalError {
   error_message: string;
   condition: string | null;
   notified_at: string | null;
+  notify_count: number;
   created_at: string;
 }
 
 /**
- * Record an evaluation error for an entity.
- * Returns true if this is a new error (not seen before), false if duplicate.
+ * Record an evaluation error for an entity and increment its occurrence counter.
+ * Returns the new occurrence count (1 = first time, 2 = second time, ...).
+ * Callers use this to implement two-strike DM dedup: notify when count <= 2,
+ * then suppress further DMs for the same (entity, error) pair.
  */
 export function recordEvalError(
   entityId: number,
   ownerId: string,
   errorMessage: string,
   condition?: string
-): boolean {
+): number {
   const db = getDb();
   try {
-    db.prepare(`
-      INSERT INTO eval_errors (entity_id, owner_id, error_message, condition)
-      VALUES (?, ?, ?, ?)
-    `).run(entityId, ownerId, errorMessage, condition ?? null);
-    return true;
+    const row = db.prepare(`
+      INSERT INTO eval_errors (entity_id, owner_id, error_message, condition, notify_count)
+      VALUES (?, ?, ?, ?, 1)
+      ON CONFLICT (entity_id, error_message) DO UPDATE SET notify_count = notify_count + 1
+      RETURNING notify_count
+    `).get(entityId, ownerId, errorMessage, condition ?? null) as { notify_count: number };
+    return row.notify_count;
   } catch {
-    // UNIQUE constraint violation - error already recorded
-    return false;
+    // Entity may have been deleted between the error firing and this insert (FK failure),
+    // or the DB is otherwise unwilling to accept the row. Treat as "do not notify".
+    return 0;
   }
 }
 

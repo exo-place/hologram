@@ -727,10 +727,11 @@ bot.events.messageCreate = async (message) => {
       // Notify all editors of the error (deduped by error message)
       const editors = getEditorsToNotify(entity.id, entity.owned_by, facts);
       if (editors.length > 0) {
-        const isNew = recordEvalError(entity.id, editors[0], errorMsg);
-        if (isNew) {
+        const count = recordEvalError(entity.id, editors[0], errorMsg);
+        if (count <= 2) {
+          const isRecurring = count === 2;
           for (const userId of editors) {
-            notifyUserOfError(userId, entity.name, errorMsg).catch(() => {
+            notifyUserOfError(userId, entity.name, errorMsg, undefined, undefined, isRecurring).catch(() => {
               // DMs may fail if user has them disabled
             });
           }
@@ -901,10 +902,11 @@ async function processEntityRetry(
     // Notify all editors of the error (deduped by error message)
     const editors = getEditorsToNotify(entity.id, entity.owned_by, facts);
     if (editors.length > 0) {
-      const isNew = recordEvalError(entity.id, editors[0], errorMsg);
-      if (isNew) {
+      const count = recordEvalError(entity.id, editors[0], errorMsg);
+      if (count <= 2) {
+        const isRecurring = count === 2;
         for (const userId of editors) {
-          notifyUserOfError(userId, entity.name, errorMsg).catch(() => {
+          notifyUserOfError(userId, entity.name, errorMsg, undefined, undefined, isRecurring).catch(() => {
             // DMs may fail if user has them disabled
           });
         }
@@ -1528,10 +1530,11 @@ export async function sendResponse(
         if (entityData) {
           const editors = getEditorsToNotify(entity.id, entityData.owned_by, entityData.facts.map(f => f.content));
           const errorMsg = `Model "${entityModelSpec}" is not in the allowed models list`;
-          const isNew = recordEvalError(entity.id, editors[0] ?? "", errorMsg);
-          if (isNew) {
+          const count = recordEvalError(entity.id, editors[0] ?? "", errorMsg);
+          if (count <= 2) {
+            const isRecurring = count === 2;
             for (const uid of editors) {
-              notifyUserOfError(uid, entity.name, errorMsg).catch(() => {});
+              notifyUserOfError(uid, entity.name, errorMsg, undefined, undefined, isRecurring).catch(() => {});
             }
           }
         }
@@ -1747,10 +1750,11 @@ export async function sendResponse(
           const editors = getEditorsToNotify(entity.id, entityData.owned_by, entityData.facts.map(f => f.content));
           const blockReason = extractBlockReason(err.cause);
           const errorMsg = `LLM error with model "${err.modelSpec}": ${err.message}${blockReason ? ` (${blockReason})` : ""}`;
-          const isNew = recordEvalError(entity.id, editors[0] ?? "", errorMsg);
-          if (isNew) {
+          const count = recordEvalError(entity.id, editors[0] ?? "", errorMsg);
+          if (count <= 2) {
+            const isRecurring = count === 2;
             for (const uid of editors) {
-              notifyUserOfError(uid, entity.name, errorMsg, "LLM error", `Check the model config with \`/edit ${entity.name} type:config\`.`).catch(() => {});
+              notifyUserOfError(uid, entity.name, errorMsg, "LLM error", `Check the model config with \`/edit ${entity.name} type:config\`.`, isRecurring).catch(() => {});
             }
           }
         }
@@ -1764,10 +1768,11 @@ export async function sendResponse(
         if (entityData) {
           const editors = getEditorsToNotify(entity.id, entityData.owned_by, entityData.facts.map(f => f.content));
           const errorMsg = err.message;
-          const isNew = recordEvalError(entity.id, editors[0] ?? "", errorMsg);
-          if (isNew) {
+          const count = recordEvalError(entity.id, editors[0] ?? "", errorMsg);
+          if (count <= 2) {
+            const isRecurring = count === 2;
             for (const uid of editors) {
-              notifyUserOfError(uid, entity.name, errorMsg).catch(() => {});
+              notifyUserOfError(uid, entity.name, errorMsg, undefined, undefined, isRecurring).catch(() => {});
             }
           }
         }
@@ -1909,13 +1914,18 @@ async function notifyUserOfError(
   errorMsg: string,
   title = "Condition error",
   suggestion = `Use \`/edit ${entityName}\` to fix the condition.`,
+  isRecurring = false,
 ): Promise<void> {
   try {
     const dmChannel = await bot.helpers.getDmChannel(BigInt(userId));
+    const heading = isRecurring ? `Recurring ${title.toLowerCase()}` : title;
+    const footer = isRecurring
+      ? `\n\n_This error has recurred. Further occurrences will be suppressed until the facts are edited or \`/debug\` clears the state._`
+      : "";
     await bot.helpers.sendMessage(dmChannel.id, {
-      content: `**${title} in ${entityName}**\n\`\`\`\n${errorMsg}\n\`\`\`\n${suggestion}`,
+      content: `**${heading} in ${entityName}**\n\`\`\`\n${errorMsg}\n\`\`\`\n${suggestion}${footer}`,
     });
-    debug("Sent error DM", { userId, entityName });
+    debug("Sent error DM", { userId, entityName, isRecurring });
   } catch (err) {
     warn("Failed to send error DM", { userId, entityName, err });
   }
@@ -1936,8 +1946,9 @@ async function notifyToolsAutoDisabled(modelSpec: string, entity: EvaluatedEntit
   const allRecipients = [...new Set([...editors, ...ownerIds])];
 
   const errorMsg = `Tool calls auto-disabled for model "${modelSpec}" (model does not support function calling)`;
-  const isNew = recordEvalError(entity.id, allRecipients[0] ?? "", errorMsg);
-  if (!isNew) return;
+  // One-shot notification — the message states the change is permanent, so further DMs add no info.
+  const count = recordEvalError(entity.id, allRecipients[0] ?? "", errorMsg);
+  if (count !== 1) return;
 
   for (const uid of allRecipients) {
     try {

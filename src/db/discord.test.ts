@@ -695,21 +695,24 @@ describe("eval error tracking", () => {
     testDb = createTestDb();
   });
 
-  test("records error and returns true for new error", () => {
+  test("records error and returns count 1 for new error", () => {
     const entityId = createEntity("Aria", "owner-1");
-    expect(recordEvalError(entityId, "owner-1", "ReferenceError: x is not defined")).toBe(true);
+    expect(recordEvalError(entityId, "owner-1", "ReferenceError: x is not defined")).toBe(1);
   });
 
-  test("returns false for duplicate error", () => {
+  test("increments count on duplicate error", () => {
     const entityId = createEntity("Aria", "owner-1");
-    recordEvalError(entityId, "owner-1", "some error");
-    expect(recordEvalError(entityId, "owner-1", "some error")).toBe(false);
+    expect(recordEvalError(entityId, "owner-1", "some error")).toBe(1);
+    expect(recordEvalError(entityId, "owner-1", "some error")).toBe(2);
+    expect(recordEvalError(entityId, "owner-1", "some error")).toBe(3);
+    expect(recordEvalError(entityId, "owner-1", "some error")).toBe(4);
   });
 
-  test("allows different error messages for same entity", () => {
+  test("counts are independent across different error messages", () => {
     const entityId = createEntity("Aria", "owner-1");
-    expect(recordEvalError(entityId, "owner-1", "error A")).toBe(true);
-    expect(recordEvalError(entityId, "owner-1", "error B")).toBe(true);
+    expect(recordEvalError(entityId, "owner-1", "error A")).toBe(1);
+    expect(recordEvalError(entityId, "owner-1", "error B")).toBe(1);
+    expect(recordEvalError(entityId, "owner-1", "error A")).toBe(2);
   });
 
   test("gets unnotified errors for owner", () => {

@@ -184,6 +184,7 @@ export function initSchema(db: Database, { useVec0 = true } = {}) {
       error_message TEXT NOT NULL,
       condition TEXT,
       notified_at TEXT,
+      notify_count INTEGER NOT NULL DEFAULT 0,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       UNIQUE (entity_id, error_message)
     )
