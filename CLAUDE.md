@@ -244,6 +244,8 @@ bun run check:types  # TypeScript check
 bun run debug        # CLI debug tools (embeddings, state, eval)
 ```
 
+Production runs as a **user** systemd unit (`~/.config/systemd/user/hologram.service`). Restart with `systemctl --user restart hologram.service` — no sudo. (`systemctl list-units` without `--user` still lists it, which is misleading.)
+
 ## Environment Variables
 
 ```
