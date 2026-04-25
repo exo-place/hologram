@@ -28,6 +28,7 @@ import {
   getDiscordConfig,
   deleteDiscordConfig,
   resolveDiscordConfig,
+  resolveChainLimit,
   addMessage,
   getMessages,
   getFilteredMessages,
@@ -493,7 +494,7 @@ describe("resolveDiscordConfig", () => {
 
   test("returns defaults when no config exists", () => {
     const result = resolveDiscordConfig("chan-1", "guild-1");
-    expect(result).toEqual({ bind: null, persona: null, blacklist: null });
+    expect(result).toEqual({ bind: null, persona: null, blacklist: null, chainLimit: null });
   });
 
   test("uses channel config when available", () => {
@@ -531,7 +532,7 @@ describe("resolveDiscordConfig", () => {
 
   test("returns defaults when both channelId and guildId are undefined", () => {
     const result = resolveDiscordConfig(undefined, undefined);
-    expect(result).toEqual({ bind: null, persona: null, blacklist: null });
+    expect(result).toEqual({ bind: null, persona: null, blacklist: null, chainLimit: null });
   });
 
   test("parses @everyone string from config", () => {
@@ -1065,5 +1066,83 @@ describe("isOurWebhookUserId", () => {
 
   test("returns false for unknown ID", () => {
     expect(isOurWebhookUserId("unknown")).toBe(false);
+  });
+});
+
+// =============================================================================
+// config_chain_limit + resolveDiscordConfig field-level precedence
+// =============================================================================
+
+describe("config_chain_limit", () => {
+  beforeEach(() => {
+    testDb = createTestDb();
+  });
+
+  test("round-trips via setDiscordConfig", () => {
+    setDiscordConfig("chan-1", "channel", { config_chain_limit: 5 });
+    const cfg = getDiscordConfig("chan-1", "channel");
+    expect(cfg?.config_chain_limit).toBe(5);
+  });
+
+  test("can be cleared to null", () => {
+    setDiscordConfig("chan-1", "channel", { config_chain_limit: 5 });
+    setDiscordConfig("chan-1", "channel", { config_chain_limit: null });
+    const cfg = getDiscordConfig("chan-1", "channel");
+    expect(cfg?.config_chain_limit).toBeNull();
+  });
+});
+
+describe("resolveDiscordConfig field-level precedence", () => {
+  beforeEach(() => {
+    testDb = createTestDb();
+  });
+
+  test("channel-NULL chain_limit falls through to guild value", () => {
+    setDiscordConfig("guild-1", "guild", { config_chain_limit: 5 });
+    // channel row exists but has no chain_limit
+    setDiscordConfig("chan-1", "channel", { config_bind: JSON.stringify(["user-1"]) });
+    const result = resolveDiscordConfig("chan-1", "guild-1");
+    expect(result.chainLimit).toBe(5);
+  });
+
+  test("channel chain_limit takes precedence over guild", () => {
+    setDiscordConfig("guild-1", "guild", { config_chain_limit: 5 });
+    setDiscordConfig("chan-1", "channel", { config_chain_limit: 2 });
+    const result = resolveDiscordConfig("chan-1", "guild-1");
+    expect(result.chainLimit).toBe(2);
+  });
+
+  test("both null → chainLimit is null", () => {
+    const result = resolveDiscordConfig("chan-1", "guild-1");
+    expect(result.chainLimit).toBeNull();
+  });
+
+  test("channel-NULL bind falls through to guild bind", () => {
+    setDiscordConfig("guild-1", "guild", { config_bind: JSON.stringify(["user-1"]) });
+    setDiscordConfig("chan-1", "channel", { config_chain_limit: 3 });
+    const result = resolveDiscordConfig("chan-1", "guild-1");
+    expect(result.bind).toEqual(["user-1"]);
+    expect(result.chainLimit).toBe(3);
+  });
+});
+
+describe("resolveChainLimit", () => {
+  beforeEach(() => {
+    testDb = createTestDb();
+  });
+
+  test("returns null when no override set", () => {
+    expect(resolveChainLimit("chan-1", "guild-1")).toBeNull();
+  });
+
+  test("returns guild value when only guild is set", () => {
+    setDiscordConfig("guild-1", "guild", { config_chain_limit: 7 });
+    expect(resolveChainLimit("chan-1", "guild-1")).toBe(7);
+  });
+
+  test("returns channel value when both are set", () => {
+    setDiscordConfig("guild-1", "guild", { config_chain_limit: 7 });
+    setDiscordConfig("chan-1", "channel", { config_chain_limit: 2 });
+    expect(resolveChainLimit("chan-1", "guild-1")).toBe(2);
   });
 });

@@ -1,5 +1,9 @@
 # TODO
 
+## Behaviour Changes (2026-04-26)
+
+- **`resolveDiscordConfig` now uses field-level precedence** — Previously, if a channel row existed, all its NULL fields masked the guild row (row-level precedence). Now each field falls through independently: a NULL channel value inherits the guild value. This is a behavioural change for `bind`/`persona`/`blacklist` in channels that have a config row for one field but not others. In practice, most deployments set all three fields together via `/config`, so the impact should be minimal. The new behaviour is tested in `src/db/discord.test.ts` "field-level precedence" suite.
+
 ## Audit Findings (2026-03-08)
 
 Findings from parallel consistency + gaps + adversarial audit across entire codebase.

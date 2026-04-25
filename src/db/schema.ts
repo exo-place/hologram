@@ -207,6 +207,7 @@ export function initSchema(db: Database, { useVec0 = true } = {}) {
       config_bind TEXT,
       config_persona TEXT,
       config_blacklist TEXT,
+      config_chain_limit INTEGER,
       PRIMARY KEY (discord_id, discord_type)
     )
   `);

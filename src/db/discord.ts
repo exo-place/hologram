@@ -341,12 +341,14 @@ export interface DiscordConfig {
   config_bind: string | null;
   config_persona: string | null;
   config_blacklist: string | null;
+  config_chain_limit: number | null;
 }
 
 export interface ResolvedDiscordConfig {
   bind: string[] | null;
   persona: string[] | null;
   blacklist: string[] | null;
+  chainLimit: number | null;
 }
 
 export function getDiscordConfig(discordId: string, discordType: "channel" | "guild"): DiscordConfig | null {
@@ -359,22 +361,24 @@ export function getDiscordConfig(discordId: string, discordType: "channel" | "gu
 export function setDiscordConfig(
   discordId: string,
   discordType: "channel" | "guild",
-  config: { config_bind?: string | null; config_persona?: string | null; config_blacklist?: string | null }
+  config: { config_bind?: string | null; config_persona?: string | null; config_blacklist?: string | null; config_chain_limit?: number | null }
 ): void {
   const db = getDb();
   db.prepare(`
-    INSERT INTO discord_config (discord_id, discord_type, config_bind, config_persona, config_blacklist)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO discord_config (discord_id, discord_type, config_bind, config_persona, config_blacklist, config_chain_limit)
+    VALUES (?, ?, ?, ?, ?, ?)
     ON CONFLICT(discord_id, discord_type) DO UPDATE SET
       config_bind = excluded.config_bind,
       config_persona = excluded.config_persona,
-      config_blacklist = excluded.config_blacklist
+      config_blacklist = excluded.config_blacklist,
+      config_chain_limit = excluded.config_chain_limit
   `).run(
     discordId,
     discordType,
     config.config_bind ?? null,
     config.config_persona ?? null,
     config.config_blacklist ?? null,
+    config.config_chain_limit ?? null,
   );
 }
 
@@ -387,37 +391,36 @@ export function deleteDiscordConfig(discordId: string, discordType: "channel" | 
 }
 
 /**
- * Resolve discord config with scope precedence: channel > guild > default.
- * Returns parsed allowlists. null = no restriction (everyone allowed).
+ * Resolve discord config with field-level scope precedence: channel > guild > default.
+ *
+ * Each field is resolved independently — a NULL channel value falls through to the
+ * guild value rather than masking it. This means a channel row with only
+ * config_chain_limit set still inherits bind/persona/blacklist from the guild row.
  */
 export function resolveDiscordConfig(channelId: string | undefined, guildId: string | undefined): ResolvedDiscordConfig {
-  const defaultConfig: ResolvedDiscordConfig = { bind: null, persona: null, blacklist: null };
+  const channelConfig = channelId ? getDiscordConfig(channelId, "channel") : null;
+  const guildConfig = guildId ? getDiscordConfig(guildId, "guild") : null;
 
-  // Try channel-scoped first
-  if (channelId) {
-    const channelConfig = getDiscordConfig(channelId, "channel");
-    if (channelConfig) {
-      return {
-        bind: safeParseFallback<string[] | null>(channelConfig.config_bind, null),
-        persona: safeParseFallback<string[] | null>(channelConfig.config_persona, null),
-        blacklist: safeParseFallback<string[] | null>(channelConfig.config_blacklist, null),
-      };
-    }
-  }
+  // Field-level precedence: use channel value if non-null, else guild value, else default.
+  const rawBind = channelConfig?.config_bind ?? guildConfig?.config_bind ?? null;
+  const rawPersona = channelConfig?.config_persona ?? guildConfig?.config_persona ?? null;
+  const rawBlacklist = channelConfig?.config_blacklist ?? guildConfig?.config_blacklist ?? null;
+  const rawChainLimit = channelConfig?.config_chain_limit ?? guildConfig?.config_chain_limit ?? null;
 
-  // Try guild-scoped
-  if (guildId) {
-    const guildConfig = getDiscordConfig(guildId, "guild");
-    if (guildConfig) {
-      return {
-        bind: safeParseFallback<string[] | null>(guildConfig.config_bind, null),
-        persona: safeParseFallback<string[] | null>(guildConfig.config_persona, null),
-        blacklist: safeParseFallback<string[] | null>(guildConfig.config_blacklist, null),
-      };
-    }
-  }
+  return {
+    bind: safeParseFallback<string[] | null>(rawBind, null),
+    persona: safeParseFallback<string[] | null>(rawPersona, null),
+    blacklist: safeParseFallback<string[] | null>(rawBlacklist, null),
+    chainLimit: rawChainLimit,
+  };
+}
 
-  return defaultConfig;
+/**
+ * Resolve the effective MAX_RESPONSE_CHAIN limit for a channel/guild pair.
+ * Returns null if no per-scope override is set (caller uses env default).
+ */
+export function resolveChainLimit(channelId: string | undefined, guildId: string | undefined): number | null {
+  return resolveDiscordConfig(channelId, guildId).chainLimit;
 }
 
 // =============================================================================

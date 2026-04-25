@@ -32,6 +32,7 @@ import {
   getDiscordConfig,
   setDiscordConfig,
   deleteDiscordConfig,
+  resolveDiscordConfig,
   formatMessagesForContext,
   getFilteredMessages,
   resolvePersona,
@@ -692,6 +693,108 @@ registerModalHandler("config", async (bot, interaction, _values) => {
 
   const scopeLabel = discordType === "guild" ? "server" : "channel";
   await respond(bot, interaction, `Updated bind settings for this ${scopeLabel}`, true);
+});
+
+// =============================================================================
+// /config-chain - Set per-channel/guild MAX_RESPONSE_CHAIN override
+// =============================================================================
+
+registerCommand({
+  name: "config-chain",
+  description: "Set or clear the response chain limit for this channel or server",
+  noDefer: true,
+  defaultMemberPermissions: "536870912", // MANAGE_WEBHOOKS
+  options: [
+    {
+      name: "scope",
+      description: "What to configure",
+      type: ApplicationCommandOptionTypes.String,
+      required: true,
+      choices: [
+        { name: "This channel", value: "channel" },
+        { name: "This server", value: "server" },
+      ],
+    },
+  ],
+  async handler(ctx, options) {
+    const scope = options.scope as string;
+
+    if (!ctx.guildId) {
+      await respond(ctx.bot, ctx.interaction, "This command is only available in servers", true);
+      return;
+    }
+
+    const discordId = scope === "server" ? ctx.guildId : ctx.channelId;
+    const discordType = scope === "server" ? "guild" as const : "channel" as const;
+    const scopeLabel = scope === "server" ? "server" : "channel";
+
+    const currentConfig = getDiscordConfig(discordId, discordType);
+    const currentLimit = currentConfig?.config_chain_limit ?? null;
+
+    const fields = [
+      {
+        customId: "chain_limit",
+        label: "Response Chain Limit",
+        style: TextStyles.Short,
+        value: currentLimit !== null ? String(currentLimit) : "",
+        required: false,
+        placeholder: "1–20, or empty to inherit from server/env default",
+      },
+    ];
+
+    await respondWithModal(
+      ctx.bot,
+      ctx.interaction,
+      `config-chain:${discordType}:${discordId}:${scopeLabel}`,
+      `Chain Limit: ${scopeLabel}`,
+      fields,
+    );
+  },
+});
+
+registerModalHandler("config-chain", async (bot, interaction, values) => {
+  const customId = interaction.data?.customId ?? "";
+  const parts = customId.split(":");
+  const discordType = parts[1] as "channel" | "guild";
+  const discordId = parts[2];
+  const scopeLabel = parts[3] ?? discordType;
+
+  const raw = values.chain_limit?.trim() ?? "";
+
+  if (raw === "") {
+    // Clear the override — preserve other fields on the row
+    const existing = resolveDiscordConfig(
+      discordType === "channel" ? discordId : undefined,
+      discordType === "guild" ? discordId : undefined,
+    );
+    setDiscordConfig(discordId, discordType, {
+      config_bind: existing.bind !== null ? JSON.stringify(existing.bind) : null,
+      config_persona: existing.persona !== null ? JSON.stringify(existing.persona) : null,
+      config_blacklist: existing.blacklist !== null ? JSON.stringify(existing.blacklist) : null,
+      config_chain_limit: null,
+    });
+    await respond(bot, interaction, `Cleared chain limit override for this ${scopeLabel} (inheriting default)`, true);
+    return;
+  }
+
+  const value = parseInt(raw, 10);
+  if (isNaN(value) || value < 1 || value > 20) {
+    await respond(bot, interaction, "Chain limit must be a number between 1 and 20, or empty to clear the override", true);
+    return;
+  }
+
+  const existing = resolveDiscordConfig(
+    discordType === "channel" ? discordId : undefined,
+    discordType === "guild" ? discordId : undefined,
+  );
+  setDiscordConfig(discordId, discordType, {
+    config_bind: existing.bind !== null ? JSON.stringify(existing.bind) : null,
+    config_persona: existing.persona !== null ? JSON.stringify(existing.persona) : null,
+    config_blacklist: existing.blacklist !== null ? JSON.stringify(existing.blacklist) : null,
+    config_chain_limit: value,
+  });
+
+  await respond(bot, interaction, `Set response chain limit to **${value}** for this ${scopeLabel}`, true);
 });
 
 // =============================================================================

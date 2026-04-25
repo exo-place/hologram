@@ -256,7 +256,7 @@ ANTHROPIC_API_KEY=             # For anthropic:* models (optional)
 OPENAI_API_KEY=                # For openai:* models (optional)
 # + 14 more providers, each with standard env var (see .env.example)
 ALLOWED_MODELS=      # Comma-separated allowlist for $model (e.g. "google:*,anthropic:*")
-MAX_RESPONSE_CHAIN=  # Max consecutive self-response chain depth (default: 3, 0 = unlimited)
+MAX_RESPONSE_CHAIN=  # Default max consecutive self-response chain depth (default: 3, 0 = unlimited); overridable per channel/guild via /config-chain
 CATCHUP_ON_STARTUP=  # all (default) | lazy | off — backfill missed messages on startup
 CATCHUP_RESPOND=     # true | false (default) — respond to recent missed messages
 CATCHUP_RESPOND_MAX_AGE_MS=  # Max age to respond to (default: 300000 = 5 min)

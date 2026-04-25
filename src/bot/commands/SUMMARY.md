@@ -4,7 +4,7 @@ Slash command definitions and interaction routing. All user-facing Discord comma
 
 ## Key Files
 
-- `commands.ts` — The core slash commands: `/create`, `/view`, `/delete`, `/transfer`, `/bind`, `/unbind`, `/config`, `/trigger`, `/forget`. Also re-exports permission helpers from `cmd-permissions.ts`. Each command is registered via `registerCommand()` from `index.ts`.
+- `commands.ts` — The core slash commands: `/create`, `/view`, `/delete`, `/transfer`, `/bind`, `/unbind`, `/config`, `/config-chain`, `/trigger`, `/forget`. Also re-exports permission helpers from `cmd-permissions.ts`. Each command is registered via `registerCommand()` from `index.ts`.
 - `cmd-edit.ts` — The `/edit` command and all its modal handlers (facts, config, system prompt, advanced, permissions). Handles multiple `type:` variants using Discord modals and select menus.
 - `cmd-debug.ts` — The `/debug` command with subcommands: `status`, `prompt`, `context`, `rag`. Shows entity state, rendered prompt/context, and embedding/RAG debug info.
 - `cmd-permissions.ts` — Permission helper functions shared across commands: `canUserEdit`, `canUserView`, `canUserUse`, `canUserBindInLocation`, `canUserPersonaInLocation`.

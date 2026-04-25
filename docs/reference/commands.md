@@ -187,6 +187,24 @@ Each field accepts users and roles. Clearing all fields removes the configuratio
 
 ---
 
+### `/config-chain`
+
+Set or clear the response chain limit for a channel or server. Requires **Manage Webhooks**.
+
+```
+/config-chain <scope>
+```
+
+**Scopes:**
+- `This channel` - Override for the current channel
+- `This server` - Override server-wide
+
+Opens a modal with a single field: enter a number from 1–20 to cap the self-response chain, or leave blank to inherit the server/global default (`MAX_RESPONSE_CHAIN` env var, default 3).
+
+The channel-level override takes precedence over the server-level override, which takes precedence over the environment variable.
+
+---
+
 ## Status and Debugging
 
 ### `/debug`

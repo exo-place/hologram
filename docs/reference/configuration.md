@@ -44,11 +44,13 @@ When unset, all models are allowed.
 
 ### `MAX_RESPONSE_CHAIN`
 
-Maximum number of consecutive self-triggered responses (an entity responding to itself). Prevents infinite loops. Default: `3`. Set to `0` for unlimited.
+Default maximum number of consecutive self-triggered responses (an entity responding to itself). Prevents infinite loops. Default: `3`. Set to `0` for unlimited.
 
 ```
 MAX_RESPONSE_CHAIN=3
 ```
+
+This is the global default. Per-channel and per-server overrides can be set with `/config-chain` (requires Manage Webhooks). The override takes precedence over this env var.
 
 ## Startup Catch-Up
 

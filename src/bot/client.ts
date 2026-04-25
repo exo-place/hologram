@@ -10,7 +10,7 @@ import { handleMessageStreaming } from "../ai/streaming";
 import { InferenceError, isDedicatedImageModel, isModelAllowed, parseModelSpec } from "../ai/models";
 import type { EvaluatedEntity } from "../ai/context";
 import { retrieveRelevantMemories, type MemoryScope } from "../db/memories";
-import { resolveDiscordEntity, resolveDiscordEntities, isNewUser, markUserWelcomed, addMessage, updateMessageByDiscordId, mergeMessageData, deleteMessageByDiscordId, trackWebhookMessage, getWebhookMessageEntity, getMessages, getFilteredMessages, formatMessagesForContext, recordEvalError, isOurWebhookUserId, countUnreadMessages, getLastMessageSnowflake, getAllBoundChannelIds, getChannelScopedEntities, storeChannelMeta, type MessageData } from "../db/discord";
+import { resolveDiscordEntity, resolveDiscordEntities, isNewUser, markUserWelcomed, addMessage, updateMessageByDiscordId, mergeMessageData, deleteMessageByDiscordId, trackWebhookMessage, getWebhookMessageEntity, getMessages, getFilteredMessages, formatMessagesForContext, recordEvalError, isOurWebhookUserId, countUnreadMessages, getLastMessageSnowflake, getAllBoundChannelIds, getChannelScopedEntities, storeChannelMeta, resolveChainLimit, type MessageData } from "../db/discord";
 import { getEntity, getEntityWithFacts, getSystemEntity, getFactsForEntity, getEntityEvalDefaults, getEntityKeywords, getEntityConfig, getPermissionDefaults, type EntityWithFacts } from "../db/entities";
 import { evaluateFacts, getTickInterval, createBaseContext, parsePermissionDirectives, isUserBlacklisted, isUserAllowed, compileContextExpr, ExprError } from "../logic/expr";
 import { DEFAULT_CONTEXT_EXPR } from "../ai/context";
@@ -282,7 +282,8 @@ if (_maxResponseChainRaw === 0) {
     "Defaulting to 3. Use a positive integer or unset the variable to use the default."
   );
 }
-const MAX_RESPONSE_CHAIN = _maxResponseChainRaw === 0 ? 3 : _maxResponseChainRaw;
+// Default chain limit — can be overridden per channel/guild via /config-chain.
+const MAX_RESPONSE_CHAIN_DEFAULT = _maxResponseChainRaw === 0 ? 3 : _maxResponseChainRaw;
 
 // Pending retry timers per channel:entity
 const retryTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -550,8 +551,9 @@ bot.events.messageCreate = async (message) => {
     // This is our own webhook - increment chain depth
     const depth = (responseChainDepth.get(channelId) ?? 0) + 1;
     responseChainDepth.set(channelId, depth);
-    if (depth > MAX_RESPONSE_CHAIN) {
-      debug("Response chain limit reached", { channel: channelId, depth, max: MAX_RESPONSE_CHAIN });
+    const chainLimit = resolveChainLimit(channelId, guildId) ?? MAX_RESPONSE_CHAIN_DEFAULT;
+    if (depth > chainLimit) {
+      debug("Response chain limit reached", { channel: channelId, depth, max: chainLimit });
       return;
     }
   } else if (!isBot && !isWebhookMessage) {
@@ -1573,8 +1575,9 @@ export async function sendResponse(
     const triggerEntityFn = async (entityId: number, verb: string, authorName: string): Promise<void> => {
       // Guard against infinite chains
       const depth = responseChainDepth.get(channelId) ?? 0;
-      if (depth >= MAX_RESPONSE_CHAIN) {
-        debug("trigger_entity blocked by chain depth", { channelId, depth, max: MAX_RESPONSE_CHAIN });
+      const triggerChainLimit = resolveChainLimit(channelId, guildId) ?? MAX_RESPONSE_CHAIN_DEFAULT;
+      if (depth >= triggerChainLimit) {
+        debug("trigger_entity blocked by chain depth", { channelId, depth, max: triggerChainLimit });
         return;
       }
 
