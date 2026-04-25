@@ -589,3 +589,30 @@ describe("transferOwnership", () => {
     expect(transferOwnership(999, "owner")).toBeNull();
   });
 });
+
+// =============================================================================
+// config_queue_disabled
+// =============================================================================
+
+describe("config_queue_disabled", () => {
+  beforeEach(() => {
+    testDb = createTestDb();
+  });
+
+  test("defaults to 0 for new entities", () => {
+    const entity = createEntity("Aria", "owner-1");
+    const config = getEntityConfig(entity.id);
+    expect(config?.config_queue_disabled).toBe(0);
+  });
+
+  test("round-trips via setEntityConfig", () => {
+    const entity = createEntity("Aria", "owner-1");
+    setEntityConfig(entity.id, { config_queue_disabled: 1 });
+    const config = getEntityConfig(entity.id);
+    expect(config?.config_queue_disabled).toBe(1);
+
+    setEntityConfig(entity.id, { config_queue_disabled: 0 });
+    const config2 = getEntityConfig(entity.id);
+    expect(config2?.config_queue_disabled).toBe(0);
+  });
+});

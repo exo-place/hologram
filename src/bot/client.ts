@@ -11,7 +11,7 @@ import { InferenceError, isDedicatedImageModel, isModelAllowed, parseModelSpec }
 import type { EvaluatedEntity } from "../ai/context";
 import { retrieveRelevantMemories, type MemoryScope } from "../db/memories";
 import { resolveDiscordEntity, resolveDiscordEntities, isNewUser, markUserWelcomed, addMessage, updateMessageByDiscordId, mergeMessageData, deleteMessageByDiscordId, trackWebhookMessage, getWebhookMessageEntity, getMessages, getFilteredMessages, formatMessagesForContext, recordEvalError, isOurWebhookUserId, countUnreadMessages, getLastMessageSnowflake, getAllBoundChannelIds, getChannelScopedEntities, storeChannelMeta, type MessageData } from "../db/discord";
-import { getEntity, getEntityWithFacts, getSystemEntity, getFactsForEntity, getEntityEvalDefaults, getEntityKeywords, getPermissionDefaults, type EntityWithFacts } from "../db/entities";
+import { getEntity, getEntityWithFacts, getSystemEntity, getFactsForEntity, getEntityEvalDefaults, getEntityKeywords, getEntityConfig, getPermissionDefaults, type EntityWithFacts } from "../db/entities";
 import { evaluateFacts, getTickInterval, createBaseContext, parsePermissionDirectives, isUserBlacklisted, isUserAllowed, compileContextExpr, ExprError } from "../logic/expr";
 import { DEFAULT_CONTEXT_EXPR } from "../ai/context";
 import { executeWebhook, editWebhookMessage, setBot } from "./webhooks";
@@ -488,7 +488,24 @@ bot.events.messageCreate = async (message) => {
   if (!markProcessed(message.id)) return;
 
   const channelId = message.channelId.toString();
-  runOnChannel(channelId, async () => {
+  const guildId = message.guildId?.toString();
+
+  // Check if all channel-bound entities have opted out of the response queue.
+  // Skips serialization only when EVERY entity is opted out — mixing opt-out and
+  // non-opt-out entities would break ordering for the non-exempt ones.
+  const preCheckIds = [
+    ...resolveDiscordEntities(channelId, "channel", guildId, channelId),
+    ...(guildId ? resolveDiscordEntities(guildId, "guild", guildId, channelId) : []),
+  ];
+  const uniquePreCheckIds = [...new Set(preCheckIds)];
+  const allQueueDisabled = uniquePreCheckIds.length > 0 &&
+    uniquePreCheckIds.every(id => getEntityConfig(id)?.config_queue_disabled === 1);
+
+  const enqueue = allQueueDisabled
+    ? (fn: () => Promise<void>) => fn()
+    : (fn: () => Promise<void>) => runOnChannel(channelId, fn, { label: "messageCreate" });
+
+  enqueue(async () => {
   // Lazy catch-up: on first message in a channel, backfill history before processing
   if ((process.env.CATCHUP_ON_STARTUP ?? "all") === "lazy") {
     await catchUpChannel(channelId);
@@ -501,7 +518,6 @@ bot.events.messageCreate = async (message) => {
     message.mentionedUserIds?.includes(botUserId) ||
     content.includes(`<@${botUserId}>`)
   );
-  const guildId = message.guildId?.toString();
   const messageTime = Date.now();
 
   // Detect reply to bot and forwarded messages
@@ -833,7 +849,7 @@ bot.events.messageCreate = async (message) => {
     }, retryMs);
     retryTimers.set(key, timer);
   }
-  }, { label: "messageCreate" }).catch(err => {
+  }).catch(err => {
     error("Unhandled error in messageCreate queue", err, { channelId });
   });
 };

@@ -36,7 +36,8 @@ export function initSchema(db: Database, { useVec0 = true } = {}) {
       config_thinking TEXT,
       config_collapse TEXT,
       config_keywords TEXT,
-      config_safety TEXT
+      config_safety TEXT,
+      config_queue_disabled INTEGER DEFAULT 0
     )
   `);
 

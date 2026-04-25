@@ -371,6 +371,22 @@ registerCommand({
             placeholder: "hello\ngood morning\n/\\bhey\\b/i",
           },
         },
+        {
+          type: MessageComponentTypes.Label,
+          label: "Response Queue",
+          description: "Skip the per-channel response queue (power users only — may cause context races)",
+          component: {
+            type: MessageComponentTypes.StringSelect,
+            customId: "queue_disabled",
+            minValues: 0,
+            maxValues: 1,
+            required: false,
+            placeholder: "Enabled (default)",
+            options: [
+              { label: "Disabled (skip queue)", value: "1", default: config?.config_queue_disabled === 1 },
+            ],
+          },
+        },
       ];
 
       await respondWithV2Modal(ctx.bot, ctx.interaction, `edit-advanced:${entity.id}`, `Advanced: ${entity.name}`, advancedLabels);
@@ -834,11 +850,15 @@ registerModalHandler("edit-advanced", async (bot, interaction, _textValues) => {
     keywordsNormalized = lines.length > 0 ? lines.join("\n") : null;
   }
 
+  const queueDisabledSelected = selectValues.queue_disabled ?? [];
+  const queueDisabled = queueDisabledSelected.includes("1") ? 1 : 0;
+
   setEntityConfig(entityId, {
     config_thinking: thinking,
     config_collapse: collapseRaw,
     config_keywords: keywordsNormalized,
     config_safety: safetyRaw,
+    config_queue_disabled: queueDisabled,
   });
 
   const changes: string[] = [];
@@ -847,6 +867,7 @@ registerModalHandler("edit-advanced", async (bot, interaction, _textValues) => {
   if (safetyRaw !== null) changes.push(`safety: ${safetyRaw}`);
   if (keywordsNormalized !== null) changes.push(`keywords: ${keywordsNormalized.split("\n").length} set`);
   else if (keywordsRaw !== null) changes.push("keywords: cleared");
+  if (queueDisabled === 1) changes.push("queue: disabled");
   if (changes.length === 0) changes.push("all cleared");
 
   await respond(bot, interaction, `Updated advanced config for "${entity.name}": ${changes.join(", ")}`, true);
