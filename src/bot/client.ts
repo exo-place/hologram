@@ -15,6 +15,7 @@ import { getEntity, getEntityWithFacts, getSystemEntity, getFactsForEntity, getE
 import { evaluateFacts, getTickInterval, createBaseContext, parsePermissionDirectives, isUserBlacklisted, isUserAllowed, compileContextExpr, ExprError } from "../logic/expr";
 import { DEFAULT_CONTEXT_EXPR } from "../ai/context";
 import { executeWebhook, editWebhookMessage, setBot } from "./webhooks";
+import { runOnChannel } from "./channel-queue";
 import { broadcastSSE } from "../api/routes/chat";
 import { setBotBridge } from "./bridge";
 import "./commands/commands"; // Register /create, /view, /delete, /transfer, /bind, /unbind, /config, /trigger, /forget
@@ -486,8 +487,9 @@ bot.events.messageCreate = async (message) => {
   if (!isBot && !hasComponents && !message.content && !message.stickerItems?.length && !hasEmbeds && !hasAttachments && !hasSnapshots) return;
   if (!markProcessed(message.id)) return;
 
-  // Lazy catch-up: on first message in a channel, backfill history before processing
   const channelId = message.channelId.toString();
+  runOnChannel(channelId, async () => {
+  // Lazy catch-up: on first message in a channel, backfill history before processing
   if ((process.env.CATCHUP_ON_STARTUP ?? "all") === "lazy") {
     await catchUpChannel(channelId);
   }
@@ -831,6 +833,9 @@ bot.events.messageCreate = async (message) => {
     }, retryMs);
     retryTimers.set(key, timer);
   }
+  }, { label: "messageCreate" }).catch(err => {
+    error("Unhandled error in messageCreate queue", err, { channelId });
+  });
 };
 
 async function processEntityRetry(
@@ -1545,6 +1550,10 @@ export async function sendResponse(
 
     // Build triggerEntityFn: fires another entity's pipeline with interaction_type set.
     // Used by the trigger_entity tool and /trigger <entity> <verb> (with persona).
+    // IMPORTANT: do NOT wrap this in runOnChannel. triggerEntityFn is called from within
+    // an LLM tool call that is already executing inside the channel's queue slot.
+    // Re-queuing here would deadlock — the parent slot never releases while waiting for
+    // a child slot that can never start.
     const triggerEntityFn = async (entityId: number, verb: string, authorName: string): Promise<void> => {
       // Guard against infinite chains
       const depth = responseChainDepth.get(channelId) ?? 0;

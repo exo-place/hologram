@@ -19,6 +19,7 @@ import { DEFAULT_CONTEXT_EXPR } from "../ai/context";
 import type { EvaluatedEntity } from "../ai/context";
 import { broadcastSSE } from "./routes/chat";
 import { warn, debug } from "../logger";
+import { runOnChannel } from "../bot/channel-queue";
 
 // ── Per-channel timing ─────────────────────────────────────────────────────
 // Simple in-memory maps tracking last response and last message times per channel.
@@ -35,7 +36,17 @@ const lastMessageTime = new Map<string, number>();
  * @param authorName  Sender display name
  * @param content     Message text
  */
-export async function handleWebMessage(
+export function handleWebMessage(
+  channelId: string,
+  entityIds: number[],
+  authorId: string,
+  authorName: string,
+  content: string,
+): Promise<void> {
+  return runOnChannel(channelId, () => _handleWebMessageInner(channelId, entityIds, authorId, authorName, content), { label: "handleWebMessage" });
+}
+
+async function _handleWebMessageInner(
   channelId: string,
   entityIds: number[],
   authorId: string,
