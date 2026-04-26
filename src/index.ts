@@ -1,9 +1,14 @@
 import { getDb, closeDb } from "./db";
 import { info, warn } from "./logger";
+import { gcOldEvents, gcExpiredMutes } from "./db/moderation";
 
 // Initialize database
 info("Initializing database");
 getDb();
+
+// Prune stale moderation data from previous runs
+gcOldEvents(7);
+gcExpiredMutes();
 
 // Discord bot (optional — requires DISCORD_TOKEN)
 if (process.env.DISCORD_TOKEN) {

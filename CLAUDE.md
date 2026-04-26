@@ -256,13 +256,17 @@ ANTHROPIC_API_KEY=             # For anthropic:* models (optional)
 OPENAI_API_KEY=                # For openai:* models (optional)
 # + 14 more providers, each with standard env var (see .env.example)
 ALLOWED_MODELS=      # Comma-separated allowlist for $model (e.g. "google:*,anthropic:*")
-MAX_RESPONSE_CHAIN=  # Default max consecutive self-response chain depth (default: 3, 0 = unlimited); overridable per channel/guild via /config-chain
+MAX_RESPONSE_CHAIN=  # Default max consecutive self-response chain depth (default: 3, 0 = unlimited); overridable per channel/guild via /config-chain or /admin config chain
 CATCHUP_ON_STARTUP=  # all (default) | lazy | off — backfill missed messages on startup
 CATCHUP_RESPOND=     # true | false (default) — respond to recent missed messages
 CATCHUP_RESPOND_MAX_AGE_MS=  # Max age to respond to (default: 300000 = 5 min)
 LOG_LEVEL=           # debug, info (default), warn, error
 WEB=false            # Set to disable the web API server (on by default)
 WEB_PORT=3000        # Web API server port (default 3000); PORT= is also accepted as a fallback
+DISCORD_CLIENT_ID=   # Discord OAuth app client ID (for web UI login; optional)
+DISCORD_CLIENT_SECRET= # Discord OAuth app client secret
+DISCORD_REDIRECT_URI=  # OAuth callback URL — must match app settings (e.g. https://host/api/auth/discord/callback)
+COOKIE_SECRET=       # 32+ char secret for session cookie signing (default: dev placeholder — set in production)
 ```
 
 ## Logging

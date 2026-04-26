@@ -205,6 +205,92 @@ The channel-level override takes precedence over the server-level override, whic
 
 ---
 
+## Moderation
+
+### `/admin`
+
+Moderation tools: mutes, kill switches, rate and chain config, and audit log. Visible to users with **Manage Messages** at minimum. Each subcommand enforces its own permission requirement.
+
+#### `/admin mute create`
+
+```
+/admin mute create target:<name-or-id> scope:<entity|owner|channel|server|global> duration:<10m|1h|1d|forever> [reason:<text>]
+```
+
+Mute an entity or owner. Permissions vary by scope:
+- `entity` or `owner` scope at channel level: **Manage Messages**
+- `server` or `global` scope: **Manage Webhooks** (global also requires **Administrator**)
+
+After muting, the affected entity/owner no longer responds until the mute expires or is removed.
+
+#### `/admin mute list`
+
+```
+/admin mute list [scope:<entity|owner|channel|server>] [target:<name-or-id>]
+```
+
+List active mutes, optionally filtered. Shows mute IDs for use with `/admin mute remove`. Requires **Manage Messages**.
+
+#### `/admin mute remove`
+
+```
+/admin mute remove id:<mute-id>
+```
+
+Remove a mute by its ID (from `/admin mute list`). Requires **Manage Messages**.
+
+#### `/admin mute clear`
+
+```
+/admin mute clear target:<name-or-id> [scope:<entity|owner>]
+```
+
+Remove the most recently created mute for a target. Requires **Manage Messages**.
+
+#### `/admin disable channel` / `/admin enable channel`
+
+```
+/admin disable channel [reason:<text>]
+/admin enable channel
+```
+
+Kill switch for the current channel. No entity responds here until re-enabled. Requires **Manage Channels**.
+
+#### `/admin disable server` / `/admin enable server`
+
+```
+/admin disable server [reason:<text>]
+/admin enable server
+```
+
+Guild-wide kill switch. No entity responds in any channel of this server until re-enabled. Requires **Manage Webhooks**.
+
+#### `/admin config rate`
+
+```
+/admin config rate scope:<channel|server>
+```
+
+Opens a modal to set per-channel and per-owner response rate limits (messages per minute). Leave a field blank to remove its limit. Requires **Manage Webhooks**.
+
+#### `/admin config chain`
+
+```
+/admin config chain scope:<channel|server>
+```
+
+Opens a modal to set the max consecutive entity-to-entity response chain depth. Same behavior as `/config-chain`. Requires **Manage Webhooks**.
+
+#### `/admin audit`
+
+```
+/admin audit [filter:<rate_limits|mutes|config_changes|all>] [target:<name-or-id>] [hours:<N>]
+```
+
+View recent moderation events (rate limit hits, mutes, config changes). Defaults to the last 24 hours. Requires **Manage Messages**.
+
+---
+
 ## Status and Debugging
 
 ### `/debug`

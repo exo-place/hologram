@@ -50,7 +50,23 @@ Default maximum number of consecutive self-triggered responses (an entity respon
 MAX_RESPONSE_CHAIN=3
 ```
 
-This is the global default. Per-channel and per-server overrides can be set with `/config-chain` (requires Manage Webhooks). The override takes precedence over this env var.
+This is the global default. Per-channel and per-server overrides can be set with `/config-chain` or `/admin config chain` (requires Manage Webhooks). The override takes precedence over this env var.
+
+## Rate Limiting
+
+Hologram includes a three-scope sliding-window rate limiter to prevent cascade incidents. Limits are checked before each entity response; entities that exceed a limit have their response dropped and the owner receives a deduplicated DM warning.
+
+### Scopes (checked in order, all must pass)
+
+1. **Per-entity** — configured via `/edit <entity> type:advanced` (field: "Per-entity rate limit"). Limits how fast a single entity can respond anywhere.
+2. **Per-owner** — configured via `/admin config rate scope:channel|server` or web UI. Limits total responses per minute from all entities owned by the same user.
+3. **Per-channel** — configured via `/admin config rate scope:channel|server` or web UI. Limits total entity responses per minute in a channel regardless of owner.
+
+All limits use a sliding 60-second window. `NULL` = no limit (inherit from narrower scope).
+
+### Mutes (kill switches)
+
+`/admin mute create` / `/admin disable channel|server` write persistent mutes to the `entity_mutes` table. Mutes are checked before fact evaluation and apply even when rate limits are not configured.
 
 ## Startup Catch-Up
 

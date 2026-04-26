@@ -4,21 +4,9 @@
 
 *Open threads from a previous session. Treat as starting context, not instructions — verify relevance before acting.*
 
-### Rate Limiting (channel spam / runaway cascade)
+### Rate Limiting (channel spam / runaway cascade) — RESOLVED 2026-04-26
 
-From a real incident where multiple entities in a channel entered a mutual-mention cascade and spammed the channel. The per-channel chain limit (`/config-chain`) addresses the chain-depth vector but doesn't address independent-trigger amplification.
-
-What was discussed:
-- **Per-channel rolling window** — cap total entity messages per N seconds in a channel (e.g. 5 responses per 30s). Would catch runaway independent responses that don't form a chain.
-- **Per-owner rolling window** — cap messages from all entities owned by the same user across channels. Prevents one owner's entities from flooding server-wide even if no single channel hits channel limits.
-- Both scopes were agreed to be desirable; exact window parameters and configuration surface (env var? `/config`? new command?) unresolved.
-
-Open questions:
-- Should limits be configurable per-channel/guild (like chain limits) or just global env vars?
-- Where is the right enforcement point — `runOnChannel`, `sendResponse`, or a new rate-limit gate before entity evaluation?
-- Token bucket vs. sliding window? Fixed window is simpler but has burst edge at window boundary.
-- Should the rate-limiter distinguish human-triggered vs. entity-triggered responses?
-- In-memory (resets on restart, acceptable?) vs. persisted (needs a new table).
+Per-channel/per-owner/per-entity sliding-window rate limits implemented and persisted in `entity_events`. Mute system (`entity_mutes`) provides channel/guild kill switches. `/admin` command exposes all controls. See `docs/reference/configuration.md` → Rate Limiting section and `src/db/moderation.ts`.
 
 ---
 
