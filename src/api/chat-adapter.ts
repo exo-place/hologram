@@ -21,6 +21,7 @@ import { broadcastSSE } from "./routes/chat";
 import { warn, debug } from "../logger";
 import { runOnChannel } from "../bot/channel-queue";
 import { checkRateLimits } from "../bot/rate-limit";
+import { filterMutedEntities } from "../bot/mute-filter";
 import { recordEntityEvent } from "../db/moderation";
 
 // ── Per-channel timing ─────────────────────────────────────────────────────
@@ -59,10 +60,16 @@ async function _handleWebMessageInner(
 
   // Load entity facts
   const entityMap = getEntitiesWithFacts(entityIds);
-  const channelEntities = entityIds.flatMap(id => {
+  const allChannelEntities = entityIds.flatMap(id => {
     const e = entityMap.get(id);
     return e ? [e] : [];
   });
+
+  if (allChannelEntities.length === 0) return;
+
+  // Filter muted entities before fact evaluation
+  const muteResult = filterMutedEntities(allChannelEntities, channelId, null);
+  const channelEntities = muteResult.active;
 
   if (channelEntities.length === 0) return;
 

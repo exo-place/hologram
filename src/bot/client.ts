@@ -23,6 +23,7 @@ import "./commands/cmd-edit";   // Register /edit command + modals
 import "./commands/cmd-debug";  // Register /debug command
 import { ensureHelpEntities } from "./commands/help";
 import { checkRateLimits, shouldWarnRateLimit, type TriggerType } from "./rate-limit";
+import { filterMutedEntities } from "./mute-filter";
 import { recordEntityEvent } from "../db/moderation";
 
 const token = process.env.DISCORD_TOKEN;
@@ -633,10 +634,19 @@ bot.events.messageCreate = async (message) => {
   }
 
   // Load all bound entities (channel + guild level)
-  const channelEntities: EntityWithFacts[] = [];
+  const allChannelEntities: EntityWithFacts[] = [];
   for (const entityId of allEntityIds) {
     const entity = getEntityWithFacts(entityId);
-    if (entity) channelEntities.push(entity);
+    if (entity) allChannelEntities.push(entity);
+  }
+
+  if (allChannelEntities.length === 0) return;
+
+  // Filter muted entities before fact evaluation (avoids wasted LLM/memory work)
+  const muteResult = filterMutedEntities(allChannelEntities, channelId, guildId ?? null);
+  const channelEntities = muteResult.active;
+  if (muteResult.muted.length > 0) {
+    debug("Mute filter applied", { muted: muteResult.muted.map(m => `${m.entity.name}(${m.scope})`), channelId, guildId });
   }
 
   if (channelEntities.length === 0) return;
