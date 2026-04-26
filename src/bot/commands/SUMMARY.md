@@ -4,6 +4,7 @@ Slash command definitions and interaction routing. All user-facing Discord comma
 
 ## Key Files
 
+- `cmd-admin.ts` — The `/admin` slash command with subcommand groups: `mute` (create/list/remove/clear), `disable`/`enable` channel/server (kill switches), `config` rate/chain (modal-based), and `audit` (mod event log). Per-subcommand permission checks (Manage Messages/Channels/Webhooks/Administrator). Exports `parseAdminOptions` (subcommand group parser) and `parseDuration` ("10m"|"1h"|"1d"|"forever" → SQLite timestamp) for testing.
 - `commands.ts` — The core slash commands: `/create`, `/view`, `/delete`, `/transfer`, `/bind`, `/unbind`, `/config`, `/config-chain`, `/trigger`, `/forget`. Also re-exports permission helpers from `cmd-permissions.ts`. Each command is registered via `registerCommand()` from `index.ts`.
 - `cmd-edit.ts` — The `/edit` command and all its modal handlers (facts, config, system prompt, advanced, permissions). Handles multiple `type:` variants using Discord modals and select menus.
 - `cmd-debug.ts` — The `/debug` command with subcommands: `status`, `prompt`, `context`, `rag`. Shows entity state, rendered prompt/context, and embedding/RAG debug info.
