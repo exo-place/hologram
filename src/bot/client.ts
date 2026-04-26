@@ -22,6 +22,7 @@ import "./commands/commands"; // Register /create, /view, /delete, /transfer, /b
 import "./commands/cmd-edit";   // Register /edit command + modals
 import "./commands/cmd-debug";  // Register /debug command
 import "./commands/cmd-admin";  // Register /admin command
+import "./commands/cmd-delete"; // Register /delete (message deletion) command
 import { ensureHelpEntities } from "./commands/help";
 import { checkRateLimits, shouldWarnRateLimit, type TriggerType } from "./rate-limit";
 import { filterMutedEntities } from "./mute-filter";

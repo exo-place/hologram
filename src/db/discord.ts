@@ -920,6 +920,84 @@ export function getWebhookMessageEntity(messageId: string): WebhookMessageInfo |
   return { entityId: row.entity_id, entityName: row.entity_name };
 }
 
+/**
+ * Recent webhook message record for /delete command.
+ */
+export interface RecentWebhookMessage {
+  messageId: string;
+  entityId: number;
+  entityName: string;
+  content: string;
+  createdAt: string;
+}
+
+/**
+ * Get the N most recent webhook messages in a channel, ordered newest-first.
+ * Used by /delete range:<N-M>.
+ */
+export function getRecentWebhookMessages(channelId: string, limit: number): RecentWebhookMessage[] {
+  const db = getDb();
+  const rows = db.prepare(`
+    SELECT wm.message_id, wm.entity_id, wm.entity_name, m.content, m.created_at
+    FROM webhook_messages wm
+    INNER JOIN messages m ON m.discord_message_id = wm.message_id
+    WHERE m.channel_id = ?
+    ORDER BY m.created_at DESC, m.id DESC
+    LIMIT ?
+  `).all(channelId, limit) as Array<{
+    message_id: string;
+    entity_id: number;
+    entity_name: string;
+    content: string;
+    created_at: string;
+  }>;
+  return rows.map(r => ({
+    messageId: r.message_id,
+    entityId: r.entity_id,
+    entityName: r.entity_name,
+    content: r.content,
+    createdAt: r.created_at,
+  }));
+}
+
+/**
+ * Search recent webhook messages in a channel by substring match.
+ * Returns up to `limit` matches ordered newest-first.
+ */
+export function searchWebhookMessages(channelId: string, query: string, limit = 50): RecentWebhookMessage[] {
+  const db = getDb();
+  const rows = db.prepare(`
+    SELECT wm.message_id, wm.entity_id, wm.entity_name, m.content, m.created_at
+    FROM webhook_messages wm
+    INNER JOIN messages m ON m.discord_message_id = wm.message_id
+    WHERE m.channel_id = ? AND m.content LIKE ? ESCAPE '\\'
+    ORDER BY m.created_at DESC, m.id DESC
+    LIMIT ?
+  `).all(channelId, `%${query.replace(/[%_\\]/g, "\\$&")}%`, limit) as Array<{
+    message_id: string;
+    entity_id: number;
+    entity_name: string;
+    content: string;
+    created_at: string;
+  }>;
+  return rows.map(r => ({
+    messageId: r.message_id,
+    entityId: r.entity_id,
+    entityName: r.entity_name,
+    content: r.content,
+    createdAt: r.created_at,
+  }));
+}
+
+/**
+ * Delete the local message record and webhook_messages entry for a message.
+ */
+export function deleteWebhookMessageRecord(messageId: string): void {
+  const db = getDb();
+  db.prepare(`DELETE FROM webhook_messages WHERE message_id = ?`).run(messageId);
+  db.prepare(`DELETE FROM messages WHERE discord_message_id = ?`).run(messageId);
+}
+
 // =============================================================================
 // Evaluation Error Tracking (for DM notifications)
 // =============================================================================

@@ -251,7 +251,8 @@ export type ModEventType =
   | "channel_enabled"
   | "guild_disabled"
   | "guild_enabled"
-  | "config_changed";
+  | "config_changed"
+  | "delete_message";
 
 export interface ModEvent {
   id: number;

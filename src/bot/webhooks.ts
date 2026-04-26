@@ -1,5 +1,5 @@
 import { getDb } from "../db";
-import { debug, error } from "../logger";
+import { debug, error, warn } from "../logger";
 import type { GeneratedFile } from "../ai/handler";
 import type { bot as botInstance } from "./client";
 
@@ -347,6 +347,51 @@ export function clearWebhookCache(channelId: string): void {
   webhookCache.delete(channelId);
   const db = getDb();
   db.prepare(`DELETE FROM webhooks WHERE channel_id = ?`).run(channelId);
+}
+
+/**
+ * Delete a webhook message from Discord.
+ * Tries the webhook DELETE endpoint first; if the webhook is stale, falls back
+ * to bot.helpers.deleteMessage (requires Manage Messages).
+ * Returns true on success, false if both attempts fail.
+ */
+export async function deleteWebhookMessageFromDiscord(
+  channelId: string,
+  messageId: string,
+): Promise<boolean> {
+  if (!bot) {
+    error("Bot not initialized for webhooks");
+    return false;
+  }
+
+  // Try the webhook DELETE endpoint (doesn't require Manage Messages)
+  const resolved = await resolveWebhookChannel(channelId);
+  if (resolved) {
+    const { webhookChannelId, threadId } = resolved;
+    const webhook = await getOrCreateWebhook(webhookChannelId);
+    if (webhook) {
+      try {
+        await bot.helpers.deleteWebhookMessage(
+          BigInt(webhook.webhookId),
+          webhook.webhookToken,
+          BigInt(messageId),
+          threadId ? { threadId: BigInt(threadId) } : undefined,
+        );
+        return true;
+      } catch (err) {
+        warn("Webhook delete failed, falling back to deleteMessage", { messageId, channelId, err });
+      }
+    }
+  }
+
+  // Fallback: bot.helpers.deleteMessage (requires Manage Messages)
+  try {
+    await bot.helpers.deleteMessage(BigInt(channelId), BigInt(messageId));
+    return true;
+  } catch (err) {
+    error("Failed to delete message", err, { messageId, channelId });
+    return false;
+  }
 }
 
 /**
