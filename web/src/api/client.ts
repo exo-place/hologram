@@ -161,6 +161,141 @@ export const discordChannels = {
 };
 
 // ============================================================================
+// Entities — trigger
+// ============================================================================
+
+export const entityTrigger = {
+  trigger: (id: number, channelId: string, verb?: string, authorName?: string) =>
+    post<{ triggered: boolean }>(`/api/entities/${id}/trigger`, { channel_id: channelId, verb, author_name: authorName }),
+};
+
+// ============================================================================
+// Auth
+// ============================================================================
+
+export interface ApiUser {
+  id: string;
+  username: string;
+  avatar: string | null;
+}
+
+export const auth = {
+  me: () => request<ApiUser>("/api/auth/me"),
+  loginUrl: () => "/api/auth/discord/login",
+  logout: () => request<void>("/api/auth/logout", { method: "POST" }),
+};
+
+// ============================================================================
+// Moderation
+// ============================================================================
+
+export interface ApiMute {
+  id: number;
+  scope_type: "entity" | "owner" | "channel" | "guild";
+  scope_id: string;
+  guild_id: string | null;
+  channel_id: string | null;
+  expires_at: string | null;
+  created_by: string;
+  reason: string | null;
+  created_at: string;
+}
+
+export const moderation = {
+  listMutes: (params?: { scope_type?: string; scope_id?: string; guild_id?: string; channel_id?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.scope_type) qs.set("scope_type", params.scope_type);
+    if (params?.scope_id) qs.set("scope_id", params.scope_id);
+    if (params?.guild_id != null) qs.set("guild_id", params.guild_id);
+    if (params?.channel_id != null) qs.set("channel_id", params.channel_id);
+    const query = qs.toString() ? `?${qs}` : "";
+    return get<ApiMute[]>(`/api/mutes${query}`);
+  },
+  createMute: (body: {
+    scope_type: string;
+    scope_id: string;
+    guild_id?: string | null;
+    channel_id?: string | null;
+    expires_at?: string | null;
+    reason?: string | null;
+  }) => post<ApiMute>("/api/mutes", body),
+  deleteMute: (id: number) => del<{ removed: boolean }>(`/api/mutes/${id}`),
+  bulkClear: (params: { guild_id?: string; scope_type?: string }) =>
+    post<{ removed: number }>("/api/mutes/bulk-clear", params),
+};
+
+// ============================================================================
+// Audit
+// ============================================================================
+
+export interface ApiModEvent {
+  id: number;
+  event_type: string;
+  actor_id: string | null;
+  target_type: string | null;
+  target_id: string | null;
+  channel_id: string | null;
+  guild_id: string | null;
+  details: string | null;
+  created_at: string;
+}
+
+export const auditLog = {
+  list: (params?: {
+    guild_id?: string;
+    channel_id?: string;
+    event_type?: string;
+    target_id?: string;
+    hours?: number;
+    limit?: number;
+  }) => {
+    const qs = new URLSearchParams();
+    if (params?.guild_id) qs.set("guild_id", params.guild_id);
+    if (params?.channel_id) qs.set("channel_id", params.channel_id);
+    if (params?.event_type) qs.set("event_type", params.event_type);
+    if (params?.target_id) qs.set("target_id", params.target_id);
+    if (params?.hours != null) qs.set("hours", String(params.hours));
+    if (params?.limit != null) qs.set("limit", String(params.limit));
+    const query = qs.toString() ? `?${qs}` : "";
+    return get<ApiModEvent[]>(`/api/audit${query}`);
+  },
+};
+
+// ============================================================================
+// Server config
+// ============================================================================
+
+export interface ApiDiscordConfig {
+  raw: {
+    discord_id: string;
+    discord_type: string;
+    config_bind: string | null;
+    config_persona: string | null;
+    config_blacklist: string | null;
+    config_chain_limit: number | null;
+    config_rate_channel_per_min: number | null;
+    config_rate_owner_per_min: number | null;
+  } | null;
+  resolved: {
+    bind: string[] | null;
+    persona: string[] | null;
+    blacklist: string[] | null;
+    chainLimit: number | null;
+    rateChannel: number | null;
+    rateOwner: number | null;
+  };
+}
+
+export const serverConfig = {
+  getGuildConfig: (guildId: string) => get<ApiDiscordConfig>(`/api/guilds/${guildId}/config`),
+  patchGuildConfig: (guildId: string, body: { config_chain_limit?: number | null; config_rate_channel_per_min?: number | null; config_rate_owner_per_min?: number | null }) =>
+    patch<{ updated: boolean }>(`/api/guilds/${guildId}/config`, body),
+  getChannelConfig: (channelId: string) => get<ApiDiscordConfig>(`/api/channels/${channelId}/config`),
+  patchChannelConfig: (channelId: string, body: { config_chain_limit?: number | null; config_rate_channel_per_min?: number | null; config_rate_owner_per_min?: number | null }) =>
+    patch<{ updated: boolean }>(`/api/channels/${channelId}/config`, body),
+};
+
+// ============================================================================
 // Debug
 // ============================================================================
 

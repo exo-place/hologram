@@ -258,6 +258,19 @@ export function initSchema(db: Database, { useVec0 = true } = {}) {
     )
   `);
 
+  // Web sessions - Discord OAuth sessions for web UI auth
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS web_sessions (
+      id TEXT PRIMARY KEY,
+      discord_user_id TEXT NOT NULL,
+      discord_username TEXT NOT NULL,
+      discord_avatar TEXT,
+      discord_access_token TEXT NOT NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      expires_at TEXT NOT NULL
+    )
+  `);
+
   // Entity events - append-only log for rate-limit sliding window and audit
   db.exec(`
     CREATE TABLE IF NOT EXISTS entity_events (

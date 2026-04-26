@@ -19,6 +19,7 @@
  * GET    /api/entities/:id/memories  -- list memories
  * POST   /api/entities/:id/memories  -- add memory
  * DELETE /api/entities/:id/memories/:mid -- remove memory
+ * POST   /api/entities/:id/trigger   -- manually trigger entity response in a web channel
  */
 
 import {
@@ -39,6 +40,7 @@ import {
   setEntitySystemTemplate,
 } from "../../db/entities";
 import { getMemoriesForEntity, addMemory, removeMemory } from "../../db/memories";
+import { handleWebTrigger } from "../chat-adapter";
 import { ok, err, parseId, parseBody, type RouteHandler } from "../helpers";
 import type {
   CreateEntityBody,
@@ -226,6 +228,17 @@ export const entityRoutes: RouteHandler = async (req, url) => {
     if (!entity) return err("Not found", 404);
     const memory = await addMemory(entityId, body.content.trim());
     return ok(memory, 201);
+  }
+
+  // POST /api/entities/:id/trigger
+  if (sub === "/trigger" && method === "POST") {
+    const entity = getEntityWithFacts(entityId);
+    if (!entity) return err("Not found", 404);
+    const body = await parseBody<{ channel_id: string; verb?: string; author_name?: string }>(req);
+    if (!body?.channel_id) return err("channel_id is required");
+    // Fire-and-forget: same pattern as channel messages
+    handleWebTrigger(body.channel_id, entityId, body.verb ?? "", body.author_name ?? "user").catch(() => {});
+    return ok({ triggered: true });
   }
 
   // DELETE /api/entities/:id/memories/:mid

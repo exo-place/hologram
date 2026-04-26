@@ -14,7 +14,7 @@ Database layer. Owns the SQLite schema (via `bun:sqlite` + `sqlite-vec`) and all
 - `attachment-cache.ts` — SHA-256-keyed persistent cache for fetched attachment bytes (`getCachedAttachment`, `setCachedAttachment`). Used by `src/ai/attachments.ts` to avoid re-fetching Discord CDN images.
 - `moderation.ts` — Rate-limit sliding-window queries and mute/audit persistence. `recordEntityEvent`, `countEntityEvents`/`countOwnerEvents`/`countChannelEvents` (sliding-window over `entity_events`), `addMute`, `removeMute`, `getMute`, `listActiveMutes`, `isMuted` (scope-aware: entity/owner/channel/guild with channel→guild→global matching), `gcOldEvents`/`gcExpiredMutes`, `recordModEvent`, `getModEvents`.
 
-## Schema (12 core tables + 3 moderation tables)
+## Schema (13 core tables + 3 moderation tables)
 
 `entities`, `facts`, `discord_entities`, `discord_config`, `messages`, `welcomed_users`, `webhook_messages`, `eval_errors`, `attachment_cache`, `entity_events` (rate-limit log), `entity_mutes` (scope-based suppression), `mod_events` (audit log) (+ `fact_embeddings`, `memory_embeddings` via sqlite-vec).
 

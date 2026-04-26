@@ -8,7 +8,7 @@
  * AI responses are delivered to connected SSE clients via broadcastSSE().
  */
 
-import { getEntitiesWithFacts, getEntityEvalDefaults, getEntityKeywords } from "../db/entities";
+import { getEntitiesWithFacts, getEntityEvalDefaults, getEntityKeywords, getEntityWithFacts } from "../db/entities";
 import { isDedicatedImageModel, parseModelSpec } from "../ai/models";
 import { getMessages, addMessage, countUnreadMessages, formatMessagesForContext } from "../db/discord";
 import { retrieveRelevantMemories } from "../db/memories";
@@ -368,4 +368,19 @@ async function fireResponse(
       recordEntityEvent(entityId, rateLimitOwnerIds.get(entityId) ?? null, channelId, guildId ?? null, "web");
     }
   }
+}
+
+/**
+ * Manually trigger a single entity's response in a web channel.
+ * Mirrors the /trigger slash command for the web pipeline.
+ */
+export async function handleWebTrigger(
+  channelId: string,
+  entityId: number,
+  verb: string,
+  authorName: string,
+): Promise<void> {
+  const entity = getEntityWithFacts(entityId);
+  if (!entity) return;
+  await handleWebMessage(channelId, [entityId], `trigger:${authorName}`, authorName, verb ? `[${verb}]` : "");
 }

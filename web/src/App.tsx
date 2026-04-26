@@ -5,6 +5,9 @@ const EntityList = lazy(() => import("./views/EntityList"));
 const EntityDetail = lazy(() => import("./views/EntityDetail"));
 const Chat = lazy(() => import("./views/Chat"));
 const Debug = lazy(() => import("./views/Debug"));
+const Login = lazy(() => import("./views/Login"));
+const Mutes = lazy(() => import("./views/Mutes"));
+const Audit = lazy(() => import("./views/Audit"));
 
 function Layout(props: { children?: any }) {
   return (
@@ -19,6 +22,12 @@ function Layout(props: { children?: any }) {
         </A>
         <A href="/debug" activeClass="nav__link--active" class="nav__link">
           Debug
+        </A>
+        <A href="/mutes" activeClass="nav__link--active" class="nav__link">
+          Mutes
+        </A>
+        <A href="/audit" activeClass="nav__link--active" class="nav__link">
+          Audit
         </A>
       </nav>
       <main class="layout__content">{props.children}</main>
@@ -35,6 +44,9 @@ export function App() {
       <Route path="/chat" component={Chat} />
       <Route path="/chat/:channelId" component={Chat} />
       <Route path="/debug" component={Debug} />
+      <Route path="/login" component={Login} />
+      <Route path="/mutes" component={Mutes} />
+      <Route path="/audit" component={Audit} />
     </Router>
   );
 }

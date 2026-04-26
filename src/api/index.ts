@@ -10,6 +10,10 @@ import { chatRoutes } from "./routes/chat";
 import { debugRoutes } from "./routes/debug";
 import { discordChannelRoutes } from "./routes/discord-channels";
 import { bindingRoutes } from "./routes/bindings";
+import { authRoutes } from "./routes/auth";
+import { moderationRoutes } from "./routes/moderation";
+import { auditRoutes } from "./routes/audit";
+import { serverConfigRoutes } from "./routes/server-config";
 import { info, error } from "../logger";
 import { type RouteHandler } from "./helpers";
 export type { RouteHandler } from "./helpers";
@@ -32,7 +36,17 @@ function addCors(res: Response): Response {
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
 }
 
-const API_HANDLERS: RouteHandler[] = [entityRoutes, chatRoutes, discordChannelRoutes, bindingRoutes, debugRoutes];
+const API_HANDLERS: RouteHandler[] = [
+  authRoutes,
+  entityRoutes,
+  chatRoutes,
+  discordChannelRoutes,
+  bindingRoutes,
+  moderationRoutes,
+  auditRoutes,
+  serverConfigRoutes,
+  debugRoutes,
+];
 
 async function handleRequest(req: Request): Promise<Response> {
   const url = new URL(req.url);
