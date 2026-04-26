@@ -106,6 +106,9 @@ export default function Chat() {
           data: null,
           created_at: new Date().toISOString(),
         });
+      } else if (type === "delete") {
+        const msgId = event.messageId as number | undefined;
+        if (msgId != null) setMessages((prev) => prev.filter((m) => m.id !== msgId));
       } else if (type === "forget") {
         const id = activeId();
         if (id) {
@@ -227,6 +230,17 @@ export default function Chat() {
     const id = activeId();
     if (!id) return;
     await channels.trigger(id);
+  }
+
+  async function deleteMessage(msgId: number) {
+    const id = activeId();
+    if (!id) return;
+    try {
+      await channels.deleteMessage(id, msgId);
+      setMessages((prev) => prev.filter((m) => m.id !== msgId));
+    } catch (err) {
+      setError(String(err));
+    }
   }
 
   function openCreate() {
@@ -472,7 +486,7 @@ export default function Chat() {
                 <p class="dim small" style="padding:16px">Loading…</p>
               </Show>
               <For each={messages()}>
-                {(msg) => <ChatMessage message={msg} />}
+                {(msg) => <ChatMessage message={msg} onDelete={deleteMessage} />}
               </For>
               <Show when={streamingContent() !== null && streamingMeta()}>
                 {() => {

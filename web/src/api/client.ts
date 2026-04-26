@@ -142,6 +142,8 @@ export const channels = {
     get<ApiMessage[]>(`/api/channels/${id}/messages?limit=${limit}`),
   sendMessage: (id: string, body: SendMessageBody) =>
     post<{ message: ApiMessage; ai_response: null }>(`/api/channels/${id}/messages`, body),
+  deleteMessage: (channelId: string, msgId: number) =>
+    del<{ deleted: boolean }>(`/api/channels/${channelId}/messages/${msgId}`),
   forget: (id: string) =>
     request<{ forget_at: string }>(`/api/channels/${id}/forget`, { method: "POST" }),
   trigger: (id: string) =>

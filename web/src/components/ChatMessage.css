@@ -55,6 +55,16 @@
   text-decoration: underline;
 }
 
+.chat-message__delete {
+  margin-left: auto;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.chat-message:hover .chat-message__delete {
+  opacity: 1;
+}
+
 .chat-message__streaming {
   animation: blink 1s step-end infinite;
 }

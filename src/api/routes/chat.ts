@@ -17,7 +17,7 @@
 
 import { randomUUID } from "crypto";
 import { getDb } from "../../db/index";
-import { addMessage, getMessages, setChannelForgetTime } from "../../db/discord";
+import { addMessage, getMessages, setChannelForgetTime, deleteMessageById } from "../../db/discord";
 import { safeParseFallback } from "../../db/entities";
 import { ok, err, parseBody, type RouteHandler } from "../helpers";
 import { info, warn } from "../../logger";
@@ -171,6 +171,19 @@ export const chatRoutes: RouteHandler = async (req, url) => {
     }).catch((e: unknown) => warn("Web chat adapter import failed", { error: String(e) }));
 
     return ok({ message, ai_response: null }, 201);
+  }
+
+  // DELETE /api/channels/:id/messages/:msgId  — delete a web chat message by ID
+  const msgDeleteMatch = sub.match(/^\/messages\/(\d+)$/);
+  if (msgDeleteMatch && method === "DELETE") {
+    const channel = getChannel(channelId);
+    if (!channel) return err("Not found", 404);
+    const msgId = parseInt(msgDeleteMatch[1]);
+    if (isNaN(msgId)) return err("Invalid message ID", 400);
+    const deleted = deleteMessageById(msgId);
+    if (!deleted) return err("Message not found", 404);
+    broadcastSSE(channelId, { type: "delete", messageId: msgId });
+    return ok({ deleted: true });
   }
 
   // POST /api/channels/:id/forget  — exclude history before now from context

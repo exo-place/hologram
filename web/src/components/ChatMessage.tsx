@@ -33,6 +33,7 @@ interface Props {
   message: ApiMessage;
   isStreaming?: boolean;
   streamContent?: string;
+  onDelete?: (messageId: number) => void;
 }
 
 function renderMarkdown(text: string): string {
@@ -325,6 +326,13 @@ export default function ChatMessage(props: Props) {
         })()}
         <Show when={props.isStreaming}>
           <span class="chat-message__streaming dim small">…</span>
+        </Show>
+        <Show when={props.onDelete && !props.isStreaming}>
+          <button
+            class="chat-message__delete btn btn--ghost btn--xs"
+            title="Delete message"
+            onClick={() => props.onDelete!(props.message.id)}
+          >×</button>
         </Show>
       </div>
       <div class="chat-message__body">{content()}</div>

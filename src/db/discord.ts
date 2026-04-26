@@ -654,6 +654,13 @@ export function deleteMessageByDiscordId(discordMessageId: string): boolean {
   return result.changes > 0;
 }
 
+/** Delete a message by its primary key (used for web channel messages). */
+export function deleteMessageById(id: number): boolean {
+  const db = getDb();
+  const result = db.prepare(`DELETE FROM messages WHERE id = ?`).run(id);
+  return result.changes > 0;
+}
+
 export function getMessages(channelId: string, limit = 50): Message[] {
   const db = getDb();
   const forgetTime = getChannelForgetTime(channelId);
