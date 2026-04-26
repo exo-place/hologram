@@ -23,7 +23,7 @@ import { preparePromptContext } from "../../ai/prompt";
 import { getEmbeddingStatus, getEmbeddingCoverage, testRagRetrieval } from "../../debug/embeddings";
 import { getChannelMetadata, getGuildMetadata } from "../client";
 import { elideText } from "./helpers";
-import { canUserView } from "./cmd-permissions";
+import { canUserView, canOwnerReadChannel, type ChannelCheckBot } from "./cmd-permissions";
 
 // =============================================================================
 // /debug - View channel state and debug info
@@ -131,16 +131,29 @@ async function handleInfoStatus(ctx: CommandContext) {
     lines.push("**Channel:** No bindings");
   }
 
-  // Check server bindings (direct query)
+  // Check server bindings (direct query), annotate any skipped by confused-deputy filter
   if (ctx.guildId) {
     const serverEntityIds = getGuildScopedEntities(ctx.guildId);
     if (serverEntityIds.length > 0) {
       const entityNames: string[] = [];
-      for (const entityId of serverEntityIds) {
+      const skippedNames: string[] = [];
+      const guildIdBig = BigInt(ctx.guildId);
+      const channelIdBig = BigInt(ctx.channelId);
+      await Promise.all(serverEntityIds.map(async (entityId) => {
         const entity = getEntity(entityId);
-        if (entity) entityNames.push(entity.name);
-      }
-      lines.push(`**Server:** ${entityNames.join(", ")}`);
+        if (!entity) return;
+        const canRead = !entity.owned_by ||
+          await canOwnerReadChannel(ctx.bot as unknown as ChannelCheckBot, entity.owned_by, guildIdBig, channelIdBig);
+        if (canRead) {
+          entityNames.push(entity.name);
+        } else {
+          skippedNames.push(entity.name);
+        }
+      }));
+      const parts: string[] = [];
+      if (entityNames.length > 0) parts.push(entityNames.join(", "));
+      if (skippedNames.length > 0) parts.push(`~~${skippedNames.join(", ")}~~ *(skipped: owner lacks channel access)*`);
+      lines.push(`**Server:** ${parts.join(", ")}`);
     } else {
       lines.push("**Server:** No bindings");
     }

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "bun:test";
-import { canOwnerReadChannel, clearOwnerChannelCache } from "./cmd-permissions";
+import { canOwnerReadChannel, clearOwnerChannelCache, type ChannelCheckBot } from "./cmd-permissions";
 
 // ─── Permission bit constants (mirrors cmd-permissions.ts) ───────────────────
 const VIEW_CHANNEL = 1n << 10n;            // bit 10
@@ -20,10 +20,10 @@ interface MockSetup {
   memberRoles?: bigint[];
   overwrites?: Array<{ id: bigint; type?: number; allow?: bigint; deny?: bigint }>;
   roles?: Array<{ id: bigint; permissions?: bigint }>;
-  throwOn?: "getMember" | "getChannel" | "getGuildRoles";
+  throwOn?: "getMember" | "getChannel" | "getRoles";
 }
 
-function makeBot(setup: MockSetup) {
+function makeBot(setup: MockSetup): ChannelCheckBot {
   return {
     helpers: {
       getMember: async (guildId: bigint, userId: bigint) => {
@@ -36,9 +36,9 @@ function makeBot(setup: MockSetup) {
         if (setup.throwOn === "getChannel") throw new Error("API error");
         return { permissionOverwrites: setup.overwrites ?? [] };
       },
-      getGuildRoles: async (guildId: bigint) => {
+      getRoles: async (guildId: bigint) => {
         void guildId;
-        if (setup.throwOn === "getGuildRoles") throw new Error("API error");
+        if (setup.throwOn === "getRoles") throw new Error("API error");
         return setup.roles ?? [
           { id: GUILD_ID, permissions: 0n },          // @everyone: no perms
           { id: ROLE_A, permissions: VIEW_CHANNEL | READ_MESSAGE_HISTORY | SEND_MESSAGES },
@@ -135,7 +135,7 @@ describe("canOwnerReadChannel", () => {
       helpers: {
         getMember: async () => { callCount++; return { roles: [ROLE_A] }; },
         getChannel: async () => ({ permissionOverwrites: [] }),
-        getGuildRoles: async () => [
+        getRoles: async () => [
           { id: GUILD_ID, permissions: 0n },
           { id: ROLE_A, permissions: VIEW_CHANNEL | READ_MESSAGE_HISTORY },
         ],
@@ -156,7 +156,7 @@ describe("canOwnerReadChannel", () => {
       helpers: {
         getMember: async () => { callCount++; return { roles: [] }; },
         getChannel: async () => ({ permissionOverwrites: [] }),
-        getGuildRoles: async () => [{ id: GUILD_ID, permissions: 0n }],
+        getRoles: async () => [{ id: GUILD_ID, permissions: 0n }],
       },
     };
 

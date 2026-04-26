@@ -26,6 +26,7 @@ import { ensureHelpEntities } from "./commands/help";
 import { checkRateLimits, shouldWarnRateLimit, type TriggerType } from "./rate-limit";
 import { filterMutedEntities } from "./mute-filter";
 import { recordEntityEvent } from "../db/moderation";
+import { canOwnerReadChannel, type ChannelCheckBot } from "./commands/cmd-permissions";
 
 const token = process.env.DISCORD_TOKEN;
 if (!token) {
@@ -141,6 +142,10 @@ export const bot = createBot({
       description: true,
       nsfwLevel: true,
     },
+    role: {
+      id: true,
+      permissions: true,
+    },
     webhook: {
       id: true,
       name: true,
@@ -152,6 +157,8 @@ export const bot = createBot({
       parentId: true,
       name: true,
       topic: true,
+      // needed by canOwnerReadChannel to check user access
+      permissionOverwrites: true,
       // toggles is always present (per Discordeno metadata)
     },
     messageReference: {
@@ -643,8 +650,40 @@ bot.events.messageCreate = async (message) => {
 
   if (allChannelEntities.length === 0) return;
 
+  // Confused-deputy check: skip entities whose owner cannot read this channel.
+  // Guild-bound entities could otherwise let owners exfiltrate content from channels
+  // they cannot access.  DM channels have no guild → skip the check entirely.
+  let deputyFiltered: EntityWithFacts[] = allChannelEntities;
+  if (guildId) {
+    const guildIdBig = BigInt(guildId);
+    const channelIdBig = BigInt(channelId);
+    const kept: EntityWithFacts[] = [];
+    const skippedOwners: string[] = [];
+    await Promise.all(allChannelEntities.map(async (entity) => {
+      if (!entity.owned_by) { kept.push(entity); return; }
+      const allowed = await canOwnerReadChannel(bot as unknown as ChannelCheckBot, entity.owned_by, guildIdBig, channelIdBig);
+      if (allowed) {
+        kept.push(entity);
+      } else {
+        skippedOwners.push(entity.name);
+        debug("Skipped entity: owner lacks channel access", {
+          entity: entity.name,
+          owner: entity.owned_by,
+          channelId,
+          guildId,
+        });
+      }
+    }));
+    deputyFiltered = kept;
+    if (skippedOwners.length > 0) {
+      debug("Confused-deputy filter", { skipped: skippedOwners, channelId, guildId });
+    }
+  }
+
+  if (deputyFiltered.length === 0) return;
+
   // Filter muted entities before fact evaluation (avoids wasted LLM/memory work)
-  const muteResult = filterMutedEntities(allChannelEntities, channelId, guildId ?? null);
+  const muteResult = filterMutedEntities(deputyFiltered, channelId, guildId ?? null);
   const channelEntities = muteResult.active;
   if (muteResult.muted.length > 0) {
     debug("Mute filter applied", { muted: muteResult.muted.map(m => `${m.entity.name}(${m.scope})`), channelId, guildId });

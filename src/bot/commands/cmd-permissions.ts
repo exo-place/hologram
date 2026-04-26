@@ -3,19 +3,29 @@ import { getPermissionDefaults } from "../../db/entities";
 import { parsePermissionDirectives, matchesUserEntry, isUserBlacklisted, isUserAllowed } from "../../logic/expr";
 import { resolveDiscordConfig } from "../../db/discord";
 import { warn } from "../../logger";
+import { calculateBits } from "@discordeno/utils";
+import type { PermissionStrings } from "@discordeno/types";
 
 // =============================================================================
 // Discord Channel Access Check (confused-deputy prevention)
 // =============================================================================
 
-/** Minimal bot interface needed for the channel access check. Avoids circular import from client.ts. */
-interface ChannelCheckBot {
+/** Minimal bot-helpers interface for the channel access check. */
+export interface ChannelCheckBot {
   helpers: {
     getMember(guildId: bigint, userId: bigint): Promise<{ roles?: bigint[] }>;
     getChannel(channelId: bigint): Promise<{
-      permissionOverwrites?: Array<{ id: bigint; type?: number; allow?: bigint | string; deny?: bigint | string }>;
+      permissionOverwrites?: Array<{
+        id: bigint;
+        type?: number;
+        allow?: PermissionStrings[] | bigint | { bitfield: bigint };
+        deny?: PermissionStrings[] | bigint | { bitfield: bigint };
+      }>;
     }>;
-    getGuildRoles(guildId: bigint): Promise<Array<{ id: bigint; permissions?: bigint | string }>>;
+    getRoles(guildId: bigint): Promise<Array<{
+      id: bigint;
+      permissions?: PermissionStrings[] | bigint | { bitfield: bigint };
+    }>>;
   };
 }
 
@@ -32,11 +42,13 @@ export function clearOwnerChannelCache(): void {
   _ownerChannelCache.clear();
 }
 
-/** Coerce a permissions value from Discordeno (bigint or string) to BigInt. */
-function toBigInt(v: bigint | string | undefined | null): bigint {
+/** Convert a PermissionStrings[], Permissions class, or raw bigint to a BigInt bitmask. */
+function permsToBigInt(v: PermissionStrings[] | { bitfield: bigint } | bigint | undefined | null): bigint {
   if (v == null) return 0n;
   if (typeof v === "bigint") return v;
-  return BigInt(v);
+  if (typeof v === "object" && !Array.isArray(v) && "bitfield" in v) return v.bitfield;
+  if (Array.isArray(v)) return BigInt(calculateBits(v as PermissionStrings[]));
+  return 0n;
 }
 
 /**
@@ -64,20 +76,20 @@ export async function canOwnerReadChannel(
     const [member, channel, roles] = await Promise.all([
       bot.helpers.getMember(guildId, ownerIdBig),
       bot.helpers.getChannel(channelId),
-      bot.helpers.getGuildRoles(guildId),
+      bot.helpers.getRoles(guildId),
     ]);
 
-    const memberRoles = member.roles ?? [];
+    const memberRoles: bigint[] = member.roles ?? [];
     const overwrites = channel.permissionOverwrites ?? [];
 
     // Base: @everyone role permissions (role whose id === guildId)
     const everyoneRole = roles.find(r => r.id === guildId);
-    let perms = toBigInt(everyoneRole?.permissions);
+    let perms = permsToBigInt(everyoneRole?.permissions);
 
     // OR in all member role permissions
     for (const roleId of memberRoles) {
       const role = roles.find(r => r.id === roleId);
-      if (role) perms |= toBigInt(role.permissions);
+      if (role) perms |= permsToBigInt(role.permissions);
     }
 
     // Administrator bypasses all channel restrictions
@@ -87,8 +99,8 @@ export async function canOwnerReadChannel(
       // Apply @everyone channel overwrite
       const everyoneOw = overwrites.find(o => o.id === guildId);
       if (everyoneOw) {
-        perms &= ~toBigInt(everyoneOw.deny);
-        perms |= toBigInt(everyoneOw.allow);
+        perms &= ~permsToBigInt(everyoneOw.deny);
+        perms |= permsToBigInt(everyoneOw.allow);
       }
 
       // Apply role overwrites (collect all denies, then all allows)
@@ -96,8 +108,8 @@ export async function canOwnerReadChannel(
       let roleDeny = 0n;
       for (const ow of overwrites) {
         if (memberRoles.some(r => r === ow.id)) {
-          roleDeny |= toBigInt(ow.deny);
-          roleAllow |= toBigInt(ow.allow);
+          roleDeny |= permsToBigInt(ow.deny);
+          roleAllow |= permsToBigInt(ow.allow);
         }
       }
       perms &= ~roleDeny;
@@ -106,8 +118,8 @@ export async function canOwnerReadChannel(
       // Apply member-specific overwrite
       const memberOw = overwrites.find(o => o.id === ownerIdBig);
       if (memberOw) {
-        perms &= ~toBigInt(memberOw.deny);
-        perms |= toBigInt(memberOw.allow);
+        perms &= ~permsToBigInt(memberOw.deny);
+        perms |= permsToBigInt(memberOw.allow);
       }
 
       result =
