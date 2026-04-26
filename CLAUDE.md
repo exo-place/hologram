@@ -197,7 +197,7 @@ Discord channels/users/servers map to entities via `discord_entities`:
 - **Server binding**: Entity responds in all channels of that server
 - **User binding**: User speaks as that entity (persona)
 
-Bind permissions are two-layer: entity-side (edit/use permission) + server-side (per-channel/guild allowlists in `discord_config`). See `src/bot/commands/commands.ts` for implementation.
+Bind permissions are three-layer: entity-side (edit/use permission) + Discord permission gate (Manage Channels for channel-bind, Manage Guild for server-bind) + server-side allowlist override (per-channel/guild in `discord_config`). When a `/config bind` allowlist exists, it replaces the Discord permission gate. See `src/bot/commands/commands.ts` for implementation.
 
 ### Access Control
 
@@ -220,7 +220,7 @@ Permission lists are stored as JSON arrays in entity config columns. Role IDs us
 | `/edit <entity> type:permissions` | Edit view, edit, use, blacklist |
 | `/delete <entity>` | Delete entity |
 | `/transfer <entity> <user>` | Transfer ownership |
-| `/bind <target> <entity>` | Bind channel/user (requires entity edit/use + location permission) |
+| `/bind <target> <entity>` | Bind channel/user (requires entity edit/use + Manage Channels for channel-bind or Manage Server for server-bind by default; `/config bind` lets admins delegate to others) |
 | `/unbind <target> <entity>` | Unbind channel/user (same permissions as bind) |
 | `/config <scope>` | Configure channel/server bind permissions (Manage Channels) |
 | `/debug [status]` | Channel state (default) |

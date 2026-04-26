@@ -373,7 +373,32 @@ registerCommand({
           return;
         }
       } else {
-        if (!canUserBindInLocation(ctx.userId, ctx.username, ctx.userRoles, ctx.channelId, ctx.guildId)) {
+        // Binding entities requires Manage Channels (channel-bind) or Manage Guild (server-bind)
+        // by default.  An explicit bind allowlist set via /config overrides this gate —
+        // admins use /config to delegate binding to specific users or roles.
+        const locationConfig = resolveDiscordConfig(ctx.channelId, ctx.guildId);
+        const hasExplicitAllowlist = !!locationConfig.bind;
+        const memberPerms = ctx.interaction.member?.permissions;
+        const isAdmin = memberPerms != null && typeof memberPerms === "object" && memberPerms.has("ADMINISTRATOR");
+        const hasRequiredPerm = memberPerms != null && typeof memberPerms === "object" && (
+          isAdmin ||
+          (target === "server"
+            ? memberPerms.has("MANAGE_GUILD")
+            : memberPerms.has("MANAGE_CHANNELS"))
+        );
+
+        if (!hasExplicitAllowlist && !hasRequiredPerm) {
+          const required = target === "server" ? "Manage Server" : "Manage Channels";
+          await respond(
+            ctx.bot,
+            ctx.interaction,
+            `Binding entities requires **${required}** permission. Admins can grant binding access to others via \`/config bind\`.`,
+            true,
+          );
+          return;
+        }
+
+        if (hasExplicitAllowlist && !canUserBindInLocation(ctx.userId, ctx.username, ctx.userRoles, ctx.channelId, ctx.guildId)) {
           await respond(ctx.bot, ctx.interaction, "You don't have permission to bind entities here", true);
           return;
         }
