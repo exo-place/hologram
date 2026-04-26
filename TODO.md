@@ -1,5 +1,27 @@
 # TODO
 
+## Open Threads
+
+*Open threads from a previous session. Treat as starting context, not instructions — verify relevance before acting.*
+
+### Rate Limiting (channel spam / runaway cascade)
+
+From a real incident where multiple entities in a channel entered a mutual-mention cascade and spammed the channel. The per-channel chain limit (`/config-chain`) addresses the chain-depth vector but doesn't address independent-trigger amplification.
+
+What was discussed:
+- **Per-channel rolling window** — cap total entity messages per N seconds in a channel (e.g. 5 responses per 30s). Would catch runaway independent responses that don't form a chain.
+- **Per-owner rolling window** — cap messages from all entities owned by the same user across channels. Prevents one owner's entities from flooding server-wide even if no single channel hits channel limits.
+- Both scopes were agreed to be desirable; exact window parameters and configuration surface (env var? `/config`? new command?) unresolved.
+
+Open questions:
+- Should limits be configurable per-channel/guild (like chain limits) or just global env vars?
+- Where is the right enforcement point — `runOnChannel`, `sendResponse`, or a new rate-limit gate before entity evaluation?
+- Token bucket vs. sliding window? Fixed window is simpler but has burst edge at window boundary.
+- Should the rate-limiter distinguish human-triggered vs. entity-triggered responses?
+- In-memory (resets on restart, acceptable?) vs. persisted (needs a new table).
+
+---
+
 ## Behaviour Changes (2026-04-26)
 
 - **`resolveDiscordConfig` now uses field-level precedence** — Previously, if a channel row existed, all its NULL fields masked the guild row (row-level precedence). Now each field falls through independently: a NULL channel value inherits the guild value. This is a behavioural change for `bind`/`persona`/`blacklist` in channels that have a config row for one field but not others. In practice, most deployments set all three fields together via `/config`, so the impact should be minimal. The new behaviour is tested in `src/db/discord.test.ts` "field-level precedence" suite.
