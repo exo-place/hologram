@@ -43,8 +43,8 @@ import { sendResponse } from "../client";
 import { debug } from "../../logger";
 import { elideText, buildDefaultValues, buildEntries, chunkContent, type ResolvedData } from "./helpers";
 export { chunkContent, elideText, buildDefaultValues, buildEntries, type ResolvedData };
-import { canUserEdit, canUserView, canUserUse, canUserBindInLocation, canUserPersonaInLocation } from "./cmd-permissions";
-export { canUserEdit, canUserView, canUserUse, canUserBindInLocation, canUserPersonaInLocation };
+import { canUserEdit, canUserView, canUserUse, canUserDelete, canUserBindInLocation, canUserPersonaInLocation } from "./cmd-permissions";
+export { canUserEdit, canUserView, canUserUse, canUserDelete, canUserBindInLocation, canUserPersonaInLocation };
 
 // =============================================================================
 // /create - Create entity

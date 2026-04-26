@@ -111,6 +111,7 @@ export interface EntityConfig {
   config_safety: string | null;
   config_queue_disabled: number;
   config_rate_per_min: number | null;
+  config_delete: string | null;
 }
 
 const CONFIG_COLUMNS = `
@@ -119,7 +120,7 @@ const CONFIG_COLUMNS = `
   config_avatar, config_memory, config_freeform,
   config_strip, config_view, config_edit, config_use, config_blacklist,
   config_thinking, config_collapse, config_keywords, config_safety,
-  config_queue_disabled, config_rate_per_min
+  config_queue_disabled, config_rate_per_min, config_delete
 `.trim();
 
 export function getEntityConfig(entityId: number): EntityConfig | null {
@@ -152,14 +153,16 @@ export function getPermissionDefaults(entityId: number): {
   editList: string[] | "@everyone" | null;
   viewList: string[] | "@everyone" | null;
   useList: string[] | "@everyone" | null;
+  deleteList: string[] | "@everyone" | null;
   blacklist: string[];
 } {
   const config = getEntityConfig(entityId);
-  if (!config) return { editList: null, viewList: null, useList: null, blacklist: [] };
+  if (!config) return { editList: null, viewList: null, useList: null, deleteList: null, blacklist: [] };
   return {
     editList: safeParseFallback<string[] | "@everyone" | null>(config.config_edit, null),
     viewList: safeParseFallback<string[] | "@everyone" | null>(config.config_view, null),
     useList: safeParseFallback<string[] | "@everyone" | null>(config.config_use, null),
+    deleteList: safeParseFallback<string[] | "@everyone" | null>(config.config_delete, null),
     blacklist: safeParseFallback<string[]>(config.config_blacklist, []),
   };
 }

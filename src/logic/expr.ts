@@ -1594,6 +1594,8 @@ export interface EntityPermissions {
   viewList: string[] | "@everyone" | null;
   /** Users/IDs/roles allowed to trigger responses, "@everyone" for public, null for no restriction */
   useList: string[] | "@everyone" | null;
+  /** User IDs allowed to delete messages, "@everyone" for public, null for owner-only */
+  deleteList: string[] | "@everyone" | null;
   /** Users/IDs blocked from all interactions (usernames or Discord IDs) */
   blacklist: string[];
 }
@@ -1603,6 +1605,7 @@ export interface PermissionDefaults {
   editList?: string[] | "@everyone" | null;
   viewList?: string[] | "@everyone" | null;
   useList?: string[] | "@everyone" | null;
+  deleteList?: string[] | "@everyone" | null;
   blacklist?: string[];
 }
 
@@ -1635,6 +1638,7 @@ export function parsePermissionDirectives(facts: string[], defaults?: Permission
     editList: defaults?.editList ?? null,
     viewList: defaults?.viewList ?? null,
     useList: defaults?.useList ?? null,
+    deleteList: defaults?.deleteList ?? null,
     blacklist: [...(defaults?.blacklist ?? [])],
   };
 }

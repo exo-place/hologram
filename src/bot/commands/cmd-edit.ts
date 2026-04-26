@@ -32,13 +32,14 @@ import { canUserEdit } from "./cmd-permissions";
 // Permissions UI Helpers (V2 Modal with Mentionable Selects)
 // =============================================================================
 
-const PERM_FIELDS = ["view", "edit", "use", "blacklist"] as const;
+const PERM_FIELDS = ["view", "edit", "use", "delete", "blacklist"] as const;
 type PermField = (typeof PERM_FIELDS)[number];
 
 const PERM_LABELS: Record<PermField, string> = {
   view: "View",
   edit: "Edit",
   use: "Trigger",
+  delete: "Delete messages",
   blacklist: "Blacklist",
 };
 
@@ -46,6 +47,7 @@ const PERM_DESCRIPTIONS: Record<PermField, string> = {
   view: "Blank means anyone can view",
   edit: "Blank means anyone can edit",
   use: "Blank means anyone can trigger",
+  delete: "Who can delete this entity's messages (blank = owner only)",
   blacklist: "Blocked from viewing, editing, and triggering",
 };
 
@@ -53,6 +55,7 @@ const PERM_CONFIG_KEYS: Record<PermField, string> = {
   view: "config_view",
   edit: "config_edit",
   use: "config_use",
+  delete: "config_delete",
   blacklist: "config_blacklist",
 };
 
@@ -66,9 +69,9 @@ function buildPermissionsLabels(entityId: number, ownerId: string): unknown[] {
   return PERM_FIELDS.map(field => {
     const value = field === "blacklist" ? defaults.blacklist : defaults[`${field}List`];
 
-    // For view/edit, null means owner-only — pre-populate with owner
+    // For view/edit/delete, null means owner-only — pre-populate with owner
     let defaultValues: Array<{ id: string; type: "user" | "role" }>;
-    if (value === null && (field === "view" || field === "edit")) {
+    if (value === null && (field === "view" || field === "edit" || field === "delete")) {
       defaultValues = [{ id: ownerId, type: "user" }];
     } else {
       defaultValues = buildDefaultValues(value as string[] | "@everyone" | null);
@@ -922,7 +925,8 @@ registerModalHandler("edit-permissions", async (bot, interaction, _values) => {
     const entries = buildEntries(values, resolved as ResolvedData | undefined);
     const configKey = PERM_CONFIG_KEYS[field];
 
-    if (field === "blacklist") {
+    if (field === "blacklist" || field === "delete") {
+      // blacklist: null = no blacklist; delete: null = owner-only (not @everyone)
       setEntityConfig(entityId, {
         [configKey]: entries.length > 0 ? JSON.stringify(entries) : null,
       });

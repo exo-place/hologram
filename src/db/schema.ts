@@ -38,7 +38,8 @@ export function initSchema(db: Database, { useVec0 = true } = {}) {
       config_keywords TEXT,
       config_safety TEXT,
       config_queue_disabled INTEGER DEFAULT 0,
-      config_rate_per_min INTEGER
+      config_rate_per_min INTEGER,
+      config_delete TEXT
     )
   `);
 

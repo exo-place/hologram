@@ -23,6 +23,7 @@ export default function ConfigEditor(props: { entityId: number }) {
   const [collapseRoles, setCollapseRoles] = createSignal<Set<string>>(new Set());
   const [safety, setSafety] = createSignal("");
   const [keywords, setKeywords] = createSignal("");
+  const [deletePerms, setDeletePerms] = createSignal("");
   const [initialised, setInitialised] = createSignal(false);
 
   // Sync once when config first loads (or when entityId changes and resets initialised)
@@ -48,6 +49,13 @@ export default function ConfigEditor(props: { entityId: number }) {
 
       setSafety(c.config_safety ?? "");
       setKeywords(c.config_keywords ?? "");
+      // config_delete is a JSON-encoded list of IDs; show as space-separated for editing
+      try {
+        const parsed = c.config_delete ? JSON.parse(c.config_delete) : null;
+        setDeletePerms(Array.isArray(parsed) ? parsed.join(" ") : (parsed === "@everyone" ? "@everyone" : ""));
+      } catch {
+        setDeletePerms("");
+      }
       setInitialised(true);
     }
   });
@@ -80,6 +88,15 @@ export default function ConfigEditor(props: { entityId: number }) {
         collapseValue = roles.length > 0 ? roles.join(" ") : null;
       }
 
+      // Encode delete permission list back to JSON
+      const deleteRaw = deletePerms().trim();
+      let configDelete: string | null = null;
+      if (deleteRaw === "@everyone") {
+        configDelete = JSON.stringify("@everyone");
+      } else if (deleteRaw) {
+        configDelete = JSON.stringify(deleteRaw.split(/\s+/).filter(Boolean));
+      }
+
       const updated = await entities.patchConfig(props.entityId, {
         config_model: model() || null,
         config_context: context() || null,
@@ -91,6 +108,7 @@ export default function ConfigEditor(props: { entityId: number }) {
         config_collapse: collapseValue,
         config_safety: safety() || null,
         config_keywords: keywords().trim() || null,
+        config_delete: configDelete,
       });
       mutate(updated);
       setSaved(true);
@@ -223,6 +241,16 @@ export default function ConfigEditor(props: { entityId: number }) {
               value={keywords()}
               onInput={(e) => setKeywords(e.currentTarget.value)}
               rows={3}
+            />
+          </div>
+
+          <div class="config-editor__field">
+            <label class="config-editor__label small">Delete permission</label>
+            <input
+              class="input input--mono config-editor__input"
+              placeholder="Space-separated Discord IDs, or @everyone (blank = owner only)"
+              value={deletePerms()}
+              onInput={(e) => setDeletePerms(e.currentTarget.value)}
             />
           </div>
 

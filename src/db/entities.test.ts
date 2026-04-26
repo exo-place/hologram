@@ -373,7 +373,7 @@ describe("getPermissionDefaults", () => {
 
   test("returns defaults for missing entity", () => {
     const perms = getPermissionDefaults(999);
-    expect(perms).toEqual({ editList: null, viewList: null, useList: null, blacklist: [] });
+    expect(perms).toEqual({ editList: null, viewList: null, useList: null, deleteList: null, blacklist: [] });
   });
 });
 

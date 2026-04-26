@@ -192,6 +192,22 @@ export function canUserView(entity: EntityWithFacts, userId: string, username: s
 }
 
 /**
+ * Check if a user can delete messages sent by an entity.
+ * Owner always can. Default (no $delete directive) = owner + Manage Webhooks only.
+ * Bot-owner-level access is checked separately in the command handler.
+ */
+export function canUserDelete(entity: EntityWithFacts, userId: string, username: string, userRoles: string[] = []): boolean {
+  if (entity.owned_by === userId) return true;
+  const facts = entity.facts.map(f => f.content);
+  const permissions = parsePermissionDirectives(facts, getPermissionDefaults(entity.id));
+  if (isUserBlacklisted(permissions, userId, username, entity.owned_by, userRoles)) return false;
+  // No $delete directive = owner-only (not @everyone default)
+  if (!permissions.deleteList) return false;
+  if (permissions.deleteList === "@everyone") return true;
+  return permissions.deleteList.some(u => matchesUserEntry(u, userId, username, userRoles));
+}
+
+/**
  * Check if a user can use an entity (persona / trigger permission).
  * Owner always can. Blacklist blocks everyone except owner.
  * Otherwise check $use directive. Default = everyone.
