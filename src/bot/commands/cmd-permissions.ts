@@ -2,6 +2,132 @@ import type { EntityWithFacts } from "../../db/entities";
 import { getPermissionDefaults } from "../../db/entities";
 import { parsePermissionDirectives, matchesUserEntry, isUserBlacklisted, isUserAllowed } from "../../logic/expr";
 import { resolveDiscordConfig } from "../../db/discord";
+import { warn } from "../../logger";
+
+// =============================================================================
+// Discord Channel Access Check (confused-deputy prevention)
+// =============================================================================
+
+/** Minimal bot interface needed for the channel access check. Avoids circular import from client.ts. */
+interface ChannelCheckBot {
+  helpers: {
+    getMember(guildId: bigint, userId: bigint): Promise<{ roles?: bigint[] }>;
+    getChannel(channelId: bigint): Promise<{
+      permissionOverwrites?: Array<{ id: bigint; type?: number; allow?: bigint | string; deny?: bigint | string }>;
+    }>;
+    getGuildRoles(guildId: bigint): Promise<Array<{ id: bigint; permissions?: bigint | string }>>;
+  };
+}
+
+const VIEW_CHANNEL = 1n << 10n;
+const READ_MESSAGE_HISTORY = 1n << 16n;
+const ADMINISTRATOR = 1n << 3n;
+
+// Cache: key = `${ownerId}:${channelId}`, value: {result, expiry}
+const _ownerChannelCache = new Map<string, { result: boolean; expiry: number }>();
+const CACHE_TTL_MS = 30_000;
+
+/** Flush the owner-channel access cache (e.g. after permission changes). */
+export function clearOwnerChannelCache(): void {
+  _ownerChannelCache.clear();
+}
+
+/** Coerce a permissions value from Discordeno (bigint or string) to BigInt. */
+function toBigInt(v: bigint | string | undefined | null): bigint {
+  if (v == null) return 0n;
+  if (typeof v === "bigint") return v;
+  return BigInt(v);
+}
+
+/**
+ * Check whether the entity owner has VIEW_CHANNEL + READ_MESSAGE_HISTORY on a Discord channel.
+ * Prevents the confused-deputy attack where a server-bound entity leaks private-channel
+ * content to an owner who cannot read that channel.
+ *
+ * Returns true for DM channels (no permission model) and on API errors (fail open).
+ * The bot owner is not exempt here — entity owners must have explicit channel access.
+ */
+export async function canOwnerReadChannel(
+  bot: ChannelCheckBot,
+  ownerDiscordId: string,
+  guildId: bigint,
+  channelId: bigint,
+): Promise<boolean> {
+  const cacheKey = `${ownerDiscordId}:${channelId}`;
+  const cached = _ownerChannelCache.get(cacheKey);
+  if (cached && cached.expiry > Date.now()) return cached.result;
+
+  let result = false;
+  try {
+    const ownerIdBig = BigInt(ownerDiscordId);
+
+    const [member, channel, roles] = await Promise.all([
+      bot.helpers.getMember(guildId, ownerIdBig),
+      bot.helpers.getChannel(channelId),
+      bot.helpers.getGuildRoles(guildId),
+    ]);
+
+    const memberRoles = member.roles ?? [];
+    const overwrites = channel.permissionOverwrites ?? [];
+
+    // Base: @everyone role permissions (role whose id === guildId)
+    const everyoneRole = roles.find(r => r.id === guildId);
+    let perms = toBigInt(everyoneRole?.permissions);
+
+    // OR in all member role permissions
+    for (const roleId of memberRoles) {
+      const role = roles.find(r => r.id === roleId);
+      if (role) perms |= toBigInt(role.permissions);
+    }
+
+    // Administrator bypasses all channel restrictions
+    if ((perms & ADMINISTRATOR) === ADMINISTRATOR) {
+      result = true;
+    } else {
+      // Apply @everyone channel overwrite
+      const everyoneOw = overwrites.find(o => o.id === guildId);
+      if (everyoneOw) {
+        perms &= ~toBigInt(everyoneOw.deny);
+        perms |= toBigInt(everyoneOw.allow);
+      }
+
+      // Apply role overwrites (collect all denies, then all allows)
+      let roleAllow = 0n;
+      let roleDeny = 0n;
+      for (const ow of overwrites) {
+        if (memberRoles.some(r => r === ow.id)) {
+          roleDeny |= toBigInt(ow.deny);
+          roleAllow |= toBigInt(ow.allow);
+        }
+      }
+      perms &= ~roleDeny;
+      perms |= roleAllow;
+
+      // Apply member-specific overwrite
+      const memberOw = overwrites.find(o => o.id === ownerIdBig);
+      if (memberOw) {
+        perms &= ~toBigInt(memberOw.deny);
+        perms |= toBigInt(memberOw.allow);
+      }
+
+      result =
+        (perms & VIEW_CHANNEL) === VIEW_CHANNEL &&
+        (perms & READ_MESSAGE_HISTORY) === READ_MESSAGE_HISTORY;
+    }
+  } catch (err) {
+    // Fail open: if the Discord API is unavailable, don't silently block the entity
+    warn("canOwnerReadChannel: API error, defaulting to allow", {
+      ownerDiscordId,
+      guildId: guildId.toString(),
+      channelId: channelId.toString(),
+      err,
+    });
+    result = true;
+  }
+
+  _ownerChannelCache.set(cacheKey, { result, expiry: Date.now() + CACHE_TTL_MS });
+  return result;
+}
 
 /**
  * Check if a user can edit an entity.
