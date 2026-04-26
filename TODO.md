@@ -10,6 +10,41 @@ Per-channel/per-owner/per-entity sliding-window rate limits implemented and pers
 
 ---
 
+### More Discord feedback — next session starting point
+
+User mentioned "more feedback from discord" as context for this session. Unknown what specific feedback — next session should ask before building anything. Could be complaints about the new moderation system, UX feedback on `/admin`, cascade incident follow-up, or unrelated.
+
+---
+
+### Discord OAuth — partially landed, not yet usable
+
+`web_sessions` table and `/api/auth/discord/*` routes exist, but the feature requires `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_REDIRECT_URI`, and `COOKIE_SECRET` env vars — none of which are set in the current deployment. The web moderation routes (`/api/mutes`, `/api/audit`, `/api/guilds/*/config`) are auth-gated (`resolveSession` check), so they're accessible to no one right now.
+
+Open questions:
+- Is Discord OAuth actually desired for the single-instance deployment? The bot owner may just want IP-restricted or token-protected access rather than full OAuth.
+- The permission check for "can this Discord user moderate this guild" is not implemented — current auth only checks "is logged in." Server-level permission enforcement via Discord API (fetching guild member + checking permission bitfield) is deferred. Right now any logged-in Discord user can call the moderation API.
+- `COOKIE_SECRET` defaults to a dev placeholder — needs to be set before production use or sessions are forgeable.
+
+---
+
+### `/edit type:advanced` — per-entity rate limit field not added
+
+The plan called for adding a "Per-entity rate limit (msg/min)" field to the existing advanced-edit modal (`src/bot/commands/cmd-edit.ts`). This was NOT done — the `config_rate_per_min` column exists in the DB and is read by `checkRateLimits`, but there's no UI to set it from Discord. Currently only settable via the web API (`PATCH /api/entities/:id/config`).
+
+---
+
+### Rate-limit DM deep link — not implemented
+
+Phase 6 plan mentioned DM warnings should include a deep link to `https://<host>/entities/:id`. The warn DM currently mentions `/edit <entity> type:advanced` for entity-scope limits and `/admin config rate` for channel/owner limits, but has no URL link. May want to add once web host is known/configured.
+
+---
+
+### `entity_events` GC — startup-only, not periodic
+
+`gcOldEvents(7)` runs once at startup (`src/index.ts`). On long-running instances, events older than 7 days accumulate between restarts. Probably fine for the single-instance deployment with regular restarts, but worth noting. A periodic timer (e.g. daily) would be more robust. Same applies to `gcExpiredMutes()`.
+
+---
+
 ## Behaviour Changes (2026-04-26)
 
 - **`resolveDiscordConfig` now uses field-level precedence** — Previously, if a channel row existed, all its NULL fields masked the guild row (row-level precedence). Now each field falls through independently: a NULL channel value inherits the guild value. This is a behavioural change for `bind`/`persona`/`blacklist` in channels that have a config row for one field but not others. In practice, most deployments set all three fields together via `/config`, so the impact should be minimal. The new behaviour is tested in `src/db/discord.test.ts` "field-level precedence" suite.
@@ -173,10 +208,7 @@ Current state: message history uses role-based `user`/`assistant` messages via `
 - [x] Phase 2: SolidJS SPA (`web/`) — entity list/detail, fact/config/template/memory editors, chat view, debug panel
 - [x] Phase 3: Chat adapter (`src/api/chat-adapter.ts`) — evaluateFacts + handleMessageStreaming + broadcastSSE
 - [x] Phase 4: Monaco template editor — hologram-dark theme, hologram-template tokenizer, lazy-loaded
-- [ ] Authentication: Discord OAuth2 / OIDC for multi-user access
-  - Map Discord user ID to existing entity ownership/permissions
-  - Session management (`web_sessions` table, signed cookies)
-  - Admin access for bot owner
+- [~] Authentication: Discord OAuth2 partially landed (`web_sessions`, `/api/auth/*`, session cookie), but env vars not configured in production and per-guild permission checks not implemented. See open thread above.
 
 ---
 
