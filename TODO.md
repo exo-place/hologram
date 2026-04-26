@@ -16,14 +16,13 @@ User mentioned "more feedback from discord" as context for this session. Unknown
 
 ---
 
-### Discord OAuth — partially landed, not yet usable
+### Discord OAuth — env-gated, moderation routes now accessible
 
-`web_sessions` table and `/api/auth/discord/*` routes exist, but the feature requires `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_REDIRECT_URI`, and `COOKIE_SECRET` env vars — none of which are set in the current deployment. The web moderation routes (`/api/mutes`, `/api/audit`, `/api/guilds/*/config`) are auth-gated (`resolveSession` check), so they're accessible to no one right now.
+Moderation routes (`/api/mutes`, `/api/audit`, `/api/guilds/*/config`, `/api/channels/*/config`) are now open when `DISCORD_CLIENT_ID` is unset (private deployment mode — `actor_id` records as `"local"`). OAuth enforcement activates automatically when the env var is set.
 
-Open questions:
-- Is Discord OAuth actually desired for the single-instance deployment? The bot owner may just want IP-restricted or token-protected access rather than full OAuth.
-- The permission check for "can this Discord user moderate this guild" is not implemented — current auth only checks "is logged in." Server-level permission enforcement via Discord API (fetching guild member + checking permission bitfield) is deferred. Right now any logged-in Discord user can call the moderation API.
-- `COOKIE_SECRET` defaults to a dev placeholder — needs to be set before production use or sessions are forgeable.
+Remaining open questions:
+- Per-guild permission checks not implemented — any logged-in Discord user can call the moderation API when OAuth is active. Enforcing Discord guild-member permissions (Manage Guild / Manage Channels bitfield check via Discord API) is deferred.
+- `COOKIE_SECRET` defaults to a dev placeholder — needs to be set in production before OAuth is actually enabled, or sessions are forgeable.
 
 ---
 
@@ -208,7 +207,7 @@ Current state: message history uses role-based `user`/`assistant` messages via `
 - [x] Phase 2: SolidJS SPA (`web/`) — entity list/detail, fact/config/template/memory editors, chat view, debug panel
 - [x] Phase 3: Chat adapter (`src/api/chat-adapter.ts`) — evaluateFacts + handleMessageStreaming + broadcastSSE
 - [x] Phase 4: Monaco template editor — hologram-dark theme, hologram-template tokenizer, lazy-loaded
-- [~] Authentication: Discord OAuth2 partially landed (`web_sessions`, `/api/auth/*`, session cookie), but env vars not configured in production and per-guild permission checks not implemented. See open thread above.
+- [~] Authentication: Discord OAuth2 landed but optional — moderation routes are open when `DISCORD_CLIENT_ID` is unset (private deployment). Per-guild permission checks not yet implemented. See open thread above.
 
 ---
 
