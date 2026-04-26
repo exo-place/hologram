@@ -494,7 +494,7 @@ describe("resolveDiscordConfig", () => {
 
   test("returns defaults when no config exists", () => {
     const result = resolveDiscordConfig("chan-1", "guild-1");
-    expect(result).toEqual({ bind: null, persona: null, blacklist: null, chainLimit: null });
+    expect(result).toEqual({ bind: null, persona: null, blacklist: null, chainLimit: null, rateChannel: null, rateOwner: null });
   });
 
   test("uses channel config when available", () => {
@@ -532,7 +532,7 @@ describe("resolveDiscordConfig", () => {
 
   test("returns defaults when both channelId and guildId are undefined", () => {
     const result = resolveDiscordConfig(undefined, undefined);
-    expect(result).toEqual({ bind: null, persona: null, blacklist: null, chainLimit: null });
+    expect(result).toEqual({ bind: null, persona: null, blacklist: null, chainLimit: null, rateChannel: null, rateOwner: null });
   });
 
   test("parses @everyone string from config", () => {

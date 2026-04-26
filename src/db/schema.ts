@@ -37,7 +37,8 @@ export function initSchema(db: Database, { useVec0 = true } = {}) {
       config_collapse TEXT,
       config_keywords TEXT,
       config_safety TEXT,
-      config_queue_disabled INTEGER DEFAULT 0
+      config_queue_disabled INTEGER DEFAULT 0,
+      config_rate_per_min INTEGER
     )
   `);
 
@@ -208,6 +209,8 @@ export function initSchema(db: Database, { useVec0 = true } = {}) {
       config_persona TEXT,
       config_blacklist TEXT,
       config_chain_limit INTEGER,
+      config_rate_channel_per_min INTEGER,
+      config_rate_owner_per_min INTEGER,
       PRIMARY KEY (discord_id, discord_type)
     )
   `);
@@ -249,6 +252,51 @@ export function initSchema(db: Database, { useVec0 = true } = {}) {
       id TEXT PRIMARY KEY,
       name TEXT,
       entity_ids TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      config_chain_limit INTEGER,
+      config_rate_channel_per_min INTEGER
+    )
+  `);
+
+  // Entity events - append-only log for rate-limit sliding window and audit
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS entity_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      entity_id INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+      owner_id TEXT,
+      channel_id TEXT NOT NULL,
+      guild_id TEXT,
+      trigger_type TEXT NOT NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Entity mutes - scope-based response suppression (owner, entity, channel, guild)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS entity_mutes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      scope_type TEXT NOT NULL CHECK (scope_type IN ('entity', 'owner', 'channel', 'guild')),
+      scope_id TEXT NOT NULL,
+      guild_id TEXT,
+      channel_id TEXT,
+      expires_at TEXT,
+      created_by TEXT NOT NULL,
+      reason TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Mod events - audit log for moderator actions and system enforcement
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS mod_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      event_type TEXT NOT NULL,
+      actor_id TEXT,
+      target_type TEXT,
+      target_id TEXT,
+      channel_id TEXT,
+      guild_id TEXT,
+      details TEXT,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )
   `);
@@ -267,4 +315,12 @@ export function initSchema(db: Database, { useVec0 = true } = {}) {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_webhooks_channel ON webhooks(channel_id)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_eval_errors_owner ON eval_errors(owner_id, notified_at)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_attachment_cache_message ON attachment_cache(message_id)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_entity_events_channel_time ON entity_events(channel_id, created_at)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_entity_events_owner_time ON entity_events(owner_id, guild_id, created_at)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_entity_events_entity_time ON entity_events(entity_id, created_at)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_entity_mutes_lookup ON entity_mutes(scope_type, scope_id, guild_id, channel_id)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_entity_mutes_expires ON entity_mutes(expires_at)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_mod_events_time ON mod_events(created_at DESC)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_mod_events_guild_time ON mod_events(guild_id, created_at DESC)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_mod_events_target ON mod_events(target_type, target_id)`);
 }

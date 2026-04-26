@@ -110,6 +110,7 @@ export interface EntityConfig {
   config_keywords: string | null;
   config_safety: string | null;
   config_queue_disabled: number;
+  config_rate_per_min: number | null;
 }
 
 const CONFIG_COLUMNS = `
@@ -118,7 +119,7 @@ const CONFIG_COLUMNS = `
   config_avatar, config_memory, config_freeform,
   config_strip, config_view, config_edit, config_use, config_blacklist,
   config_thinking, config_collapse, config_keywords, config_safety,
-  config_queue_disabled
+  config_queue_disabled, config_rate_per_min
 `.trim();
 
 export function getEntityConfig(entityId: number): EntityConfig | null {

@@ -342,6 +342,8 @@ export interface DiscordConfig {
   config_persona: string | null;
   config_blacklist: string | null;
   config_chain_limit: number | null;
+  config_rate_channel_per_min: number | null;
+  config_rate_owner_per_min: number | null;
 }
 
 export interface ResolvedDiscordConfig {
@@ -349,6 +351,8 @@ export interface ResolvedDiscordConfig {
   persona: string[] | null;
   blacklist: string[] | null;
   chainLimit: number | null;
+  rateChannel: number | null;
+  rateOwner: number | null;
 }
 
 export function getDiscordConfig(discordId: string, discordType: "channel" | "guild"): DiscordConfig | null {
@@ -361,17 +365,26 @@ export function getDiscordConfig(discordId: string, discordType: "channel" | "gu
 export function setDiscordConfig(
   discordId: string,
   discordType: "channel" | "guild",
-  config: { config_bind?: string | null; config_persona?: string | null; config_blacklist?: string | null; config_chain_limit?: number | null }
+  config: {
+    config_bind?: string | null;
+    config_persona?: string | null;
+    config_blacklist?: string | null;
+    config_chain_limit?: number | null;
+    config_rate_channel_per_min?: number | null;
+    config_rate_owner_per_min?: number | null;
+  }
 ): void {
   const db = getDb();
   db.prepare(`
-    INSERT INTO discord_config (discord_id, discord_type, config_bind, config_persona, config_blacklist, config_chain_limit)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO discord_config (discord_id, discord_type, config_bind, config_persona, config_blacklist, config_chain_limit, config_rate_channel_per_min, config_rate_owner_per_min)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(discord_id, discord_type) DO UPDATE SET
       config_bind = excluded.config_bind,
       config_persona = excluded.config_persona,
       config_blacklist = excluded.config_blacklist,
-      config_chain_limit = excluded.config_chain_limit
+      config_chain_limit = excluded.config_chain_limit,
+      config_rate_channel_per_min = excluded.config_rate_channel_per_min,
+      config_rate_owner_per_min = excluded.config_rate_owner_per_min
   `).run(
     discordId,
     discordType,
@@ -379,6 +392,8 @@ export function setDiscordConfig(
     config.config_persona ?? null,
     config.config_blacklist ?? null,
     config.config_chain_limit ?? null,
+    config.config_rate_channel_per_min ?? null,
+    config.config_rate_owner_per_min ?? null,
   );
 }
 
@@ -406,12 +421,16 @@ export function resolveDiscordConfig(channelId: string | undefined, guildId: str
   const rawPersona = channelConfig?.config_persona ?? guildConfig?.config_persona ?? null;
   const rawBlacklist = channelConfig?.config_blacklist ?? guildConfig?.config_blacklist ?? null;
   const rawChainLimit = channelConfig?.config_chain_limit ?? guildConfig?.config_chain_limit ?? null;
+  const rawRateChannel = channelConfig?.config_rate_channel_per_min ?? guildConfig?.config_rate_channel_per_min ?? null;
+  const rawRateOwner = channelConfig?.config_rate_owner_per_min ?? guildConfig?.config_rate_owner_per_min ?? null;
 
   return {
     bind: safeParseFallback<string[] | null>(rawBind, null),
     persona: safeParseFallback<string[] | null>(rawPersona, null),
     blacklist: safeParseFallback<string[] | null>(rawBlacklist, null),
     chainLimit: rawChainLimit,
+    rateChannel: rawRateChannel,
+    rateOwner: rawRateOwner,
   };
 }
 
