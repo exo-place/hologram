@@ -229,6 +229,7 @@ Permission lists are stored as JSON arrays in entity config columns. Role IDs us
 | `/debug rag [entity] [query]` | Show embedding status + RAG retrieval results |
 | `/trigger <entity> [verb]` | Manually trigger entity response; verb requires persona and sets `interaction_type` |
 | `/forget` | Exclude messages before now from context |
+| `/help [topic]` | Show help entity content (alias for `/view help` or `/view help:<topic>`) |
 
 Help is an entity: `/view help`, `/view help:commands`, `/view help:respond`
 

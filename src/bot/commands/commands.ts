@@ -202,6 +202,41 @@ registerCommand({
 });
 
 // =============================================================================
+// /help - Show help (alias for /view help or /view help:<topic>)
+// =============================================================================
+
+registerCommand({
+  name: "help",
+  description: "Show help (optionally for a specific topic)",
+  options: [
+    {
+      name: "topic",
+      description: "Help topic (e.g. commands, respond)",
+      type: ApplicationCommandOptionTypes.String,
+      required: false,
+    },
+  ],
+  async handler(ctx, options) {
+    const topic = options.topic as string | undefined;
+    const entityName = topic ? `help:${topic}` : "help";
+
+    const entity = getEntityWithFactsByName(entityName);
+    if (!entity) {
+      const msg = topic
+        ? `No help found for topic "${topic}". Try \`/help\` for the main help page.`
+        : "No help entity found. Create an entity named **help** to provide help content.";
+      await respond(ctx.bot, ctx.interaction, msg, true);
+      return;
+    }
+
+    const factsDisplay = entity.facts.length > 0
+      ? entity.facts.map(f => `• ${f.content}`).join("\n")
+      : "(no content)";
+    await respond(ctx.bot, ctx.interaction, elideText(`${formatEntityDisplay(entity.name, entity.id)}\n${factsDisplay}`), true);
+  },
+});
+
+// =============================================================================
 // /delete - Delete entity
 // =============================================================================
 
