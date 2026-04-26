@@ -738,7 +738,7 @@ registerCommand({
         style: TextStyles.Short,
         value: currentLimit !== null ? String(currentLimit) : "",
         required: false,
-        placeholder: "1–20, or empty to inherit from server/env default",
+        placeholder: "0–20, or empty to inherit from server/env default",
       },
     ];
 
@@ -778,8 +778,8 @@ registerModalHandler("config-chain", async (bot, interaction, values) => {
   }
 
   const value = parseInt(raw, 10);
-  if (isNaN(value) || value < 1 || value > 20) {
-    await respond(bot, interaction, "Chain limit must be a number between 1 and 20, or empty to clear the override", true);
+  if (isNaN(value) || value < 0 || value > 20) {
+    await respond(bot, interaction, "Chain limit must be a number between 0 and 20, or empty to clear the override. Use 0 to prevent entities from responding to each other entirely.", true);
     return;
   }
 
@@ -794,7 +794,10 @@ registerModalHandler("config-chain", async (bot, interaction, values) => {
     config_chain_limit: value,
   });
 
-  await respond(bot, interaction, `Set response chain limit to **${value}** for this ${scopeLabel}`, true);
+  const msg = value === 0
+    ? `Set response chain limit to **0** for this ${scopeLabel} — entities will not respond to each other's messages`
+    : `Set response chain limit to **${value}** for this ${scopeLabel}`;
+  await respond(bot, interaction, msg, true);
 });
 
 // =============================================================================

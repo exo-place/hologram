@@ -199,7 +199,7 @@ Set or clear the response chain limit for a channel or server. Requires **Manage
 - `This channel` - Override for the current channel
 - `This server` - Override server-wide
 
-Opens a modal with a single field: enter a number from 1–20 to cap the self-response chain, or leave blank to inherit the server/global default (`MAX_RESPONSE_CHAIN` env var, default 3).
+Opens a modal with a single field: enter a number from 0–20 to cap the self-response chain, or leave blank to inherit the server/global default (`MAX_RESPONSE_CHAIN` env var, default 3). Use **0** to prevent entities from responding to each other's messages entirely — they will only respond to human messages.
 
 The channel-level override takes precedence over the server-level override, which takes precedence over the environment variable.
 
