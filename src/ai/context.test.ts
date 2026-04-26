@@ -11,6 +11,7 @@ import {
 /** Create a minimal EvaluatedEntity for testing formatting functions */
 function makeEntity(overrides: Partial<EvaluatedEntity> & { name: string; id: number; facts: string[] }): EvaluatedEntity {
   return {
+    ownedBy: null,
     avatarUrl: null,
     streamMode: null,
     streamDelimiter: null,

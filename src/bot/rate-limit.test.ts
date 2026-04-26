@@ -25,6 +25,7 @@ function makeEntity(id: number, name = `entity-${id}`): EvaluatedEntity {
   return {
     id,
     name,
+    ownedBy: null,
     facts: [],
     avatarUrl: null,
     streamMode: null,

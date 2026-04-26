@@ -925,6 +925,7 @@ registerCommand({
     await sendResponse(ctx.channelId, ctx.guildId, lastAuthor, lastContent, true, [{
       id: entity.id,
       name: entity.name,
+      ownedBy: entity.owned_by ?? null,
       facts: result.facts,
       avatarUrl: result.avatarUrl,
       streamMode: result.streamMode,

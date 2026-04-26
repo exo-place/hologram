@@ -21,7 +21,8 @@ import { randomBytes } from "crypto";
 import nunjucks from "nunjucks";
 import { ExprError } from "../logic/expr";
 import { validateRegexPattern } from "../logic/safe-regex";
-import { getEntityByName, getEntityTemplate } from "../db/entities";
+import { getEntityByName, getEntityWithFacts, getEntityTemplate } from "../db/entities";
+import { canUserView } from "../bot/commands/cmd-permissions";
 
 // =============================================================================
 // Limits
@@ -227,6 +228,8 @@ class EntityTemplateLoader extends nunjucks.Loader {
   private internalTemplates = new Map<string, string>();
   /** Macro definition to prepend to loaded entity templates (set per render call) */
   private _macroDef: string | null = null;
+  /** Owner ID of the entity whose template is being rendered (for cross-entity view checks) */
+  private _callerOwnerId: string | null = null;
 
   getSource(name: string): { src: string; path: string; noCache: boolean } | null {
     const internal = this.internalTemplates.get(name);
@@ -235,6 +238,18 @@ class EntityTemplateLoader extends nunjucks.Loader {
     }
     const entity = getEntityByName(name);
     if (!entity) return null;
+
+    // Cross-entity view permission check for {% extends "EntityName" %} resolution.
+    // If callerOwnerId is set, the caller's owner must be able to view the referenced entity.
+    if (this._callerOwnerId !== null) {
+      const entityWithFacts = getEntityWithFacts(entity.id);
+      if (entityWithFacts && !canUserView(entityWithFacts, this._callerOwnerId, "")) {
+        // Deny access: return null so Nunjucks treats it as "template not found"
+        // which will propagate as an error caught by the caller (falls back to default template)
+        return null;
+      }
+    }
+
     const template = getEntityTemplate(entity.id);
     if (!template) return null;
     // Prepend send_as macro to entity templates that don't start with {% extends %}
@@ -248,6 +263,7 @@ class EntityTemplateLoader extends nunjucks.Loader {
   setInternal(name: string, source: string) { this.internalTemplates.set(name, source); }
   clearInternal(name: string) { this.internalTemplates.delete(name); }
   setMacroDef(def: string | null) { this._macroDef = def; }
+  setCallerOwnerId(ownerId: string | null) { this._callerOwnerId = ownerId; }
 }
 
 // =============================================================================
@@ -679,6 +695,7 @@ function buildParseEmojisFn(nonce: string): (content: unknown) => string {
 export function renderStructuredTemplate(
   source: string,
   ctx: Record<string, unknown>,
+  callerOwnerId?: string | null,
 ): ParsedTemplateOutput {
   // Two separate nonces with independent 256-bit entropy:
   //   hmsgNonce — only embedded in Nunjucks macro source code (never in the
@@ -704,6 +721,7 @@ export function renderStructuredTemplate(
   const parentName = `_render_${hmsgNonce}`;
   loader.setInternal(parentName, augmented);
   loader.setMacroDef(macroDef);
+  loader.setCallerOwnerId(callerOwnerId ?? null);
 
   // Inject template helpers with hattNonce captured in closures; don't mutate caller's ctx.
   // The hmsgNonce is intentionally NOT passed here — it must stay out of template context.
@@ -723,6 +741,7 @@ export function renderStructuredTemplate(
   } finally {
     loader.clearInternal(parentName);
     loader.setMacroDef(null);
+    loader.setCallerOwnerId(null);
   }
 }
 

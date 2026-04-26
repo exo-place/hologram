@@ -854,6 +854,7 @@ bot.events.messageCreate = async (message) => {
         respondingEntities.push({
           id: entity.id,
           name: entity.name,
+          ownedBy: entity.owned_by ?? null,
           facts: result.facts,
           avatarUrl: result.avatarUrl,
           streamMode: result.streamMode,
@@ -1018,6 +1019,7 @@ async function processEntityRetry(
   await sendResponse(channelId, guildId, username, content, false, [{
     id: entity.id,
     name: entity.name,
+    ownedBy: entity.owned_by ?? null,
     facts: result.facts,
     avatarUrl: result.avatarUrl,
     streamMode: result.streamMode,
@@ -1114,6 +1116,7 @@ async function processEntityTick(
   const evaluated: EvaluatedEntity = {
     id: entity.id,
     name: entity.name,
+    ownedBy: entity.owned_by ?? null,
     facts: result.facts,
     avatarUrl: result.avatarUrl,
     streamMode: result.streamMode,
@@ -1711,6 +1714,7 @@ export async function sendResponse(
       await sendResponse(channelId, guildId, authorName, "", true, [{
         id: targetEntity.id,
         name: targetEntity.name,
+        ownedBy: targetEntity.owned_by ?? null,
         facts: triggerResult.facts,
         avatarUrl: triggerResult.avatarUrl,
         streamMode: triggerResult.streamMode,

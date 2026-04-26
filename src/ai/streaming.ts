@@ -150,7 +150,7 @@ export async function* handleMessageStreaming(
     for (let attempt = 0; attempt <= 1; attempt++) {
       const useTools = attempt === 0 && modelSupportsTools(modelSpec);
       const result = useTools
-        ? streamText({ ...baseStreamOptions, tools: createTools(channelId, guildId, ctx.triggerEntityFn, imageOptions) })
+        ? streamText({ ...baseStreamOptions, tools: createTools(channelId, guildId, ctx.triggerEntityFn, imageOptions, entities[0]?.id, entities[0]?.ownedBy) })
         : streamText(baseStreamOptions);
 
       // Attach early .catch() to result.text to prevent unhandled promise rejection.

@@ -24,6 +24,8 @@ export interface MessageContext {
 export interface EvaluatedEntity {
   id: number;
   name: string;
+  /** Discord user ID of the entity owner — used for cross-entity permission checks. */
+  ownedBy: string | null;
   /** Facts with directives ($if, $respond, $avatar, etc.) processed and removed */
   facts: string[];
   /** Avatar URL from $avatar directive, if present */

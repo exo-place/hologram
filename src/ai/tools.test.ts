@@ -31,7 +31,7 @@ mock.module("../ai/embeddings", () => ({
 }));
 
 import { checkEntityLocked, checkFactLocked, createTools, LOCKED_SIGIL } from "./tools";
-import { createEntity, addFact } from "../db/entities";
+import { createEntity, addFact, setEntityConfig } from "../db/entities";
 import { createTestDb } from "../db/test-utils";
 
 // ---------------------------------------------------------------------------
@@ -475,5 +475,96 @@ describe("createTools — generate_image tool", () => {
     expect(result.count).toBe(1);
     expect(collected).toHaveLength(1);
     expect(collected[0]!.mediaType).toBe("image/png");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// createTools — cross-entity permission checks
+// ---------------------------------------------------------------------------
+
+describe("createTools cross-entity edit permission", () => {
+  // Use Discord-snowflake-like IDs so matchesUserEntry can match on userId
+  const OWNER_ALICE = "100000000000000001";
+  const OWNER_BOB   = "100000000000000002";
+
+  beforeEach(() => {
+    testDb = createTestDb();
+  });
+
+  test("self-edit is always allowed (callerEntityId === entityId)", async () => {
+    const entity = createEntity("Alice", OWNER_ALICE);
+    addFact(entity.id, "is a character");
+    const tools = createTools(undefined, undefined, undefined, undefined, entity.id, OWNER_ALICE);
+    const result = await callAddFact(tools, { entityId: entity.id, content: "new fact" });
+    expect(result.success).toBe(true);
+  });
+
+  test("cross-entity edit denied when owner has no edit permission on target", async () => {
+    const callerEntity = createEntity("Alice", OWNER_ALICE);
+    const targetEntity = createEntity("Bob", OWNER_BOB);
+    addFact(callerEntity.id, "is caller");
+
+    const tools = createTools(undefined, undefined, undefined, undefined, callerEntity.id, OWNER_ALICE);
+    const result = await callAddFact(tools, { entityId: targetEntity.id, content: "injected fact" });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("Not allowed");
+  });
+
+  test("cross-entity edit allowed when owner is in target's $edit list (by ID)", async () => {
+    const callerEntity = createEntity("Alice", OWNER_ALICE);
+    const targetEntity = createEntity("Bob", OWNER_BOB);
+    // Grant OWNER_ALICE edit access via config_edit
+    setEntityConfig(targetEntity.id, { config_edit: JSON.stringify([OWNER_ALICE]) });
+
+    const tools = createTools(undefined, undefined, undefined, undefined, callerEntity.id, OWNER_ALICE);
+    const result = await callAddFact(tools, { entityId: targetEntity.id, content: "allowed fact" });
+    expect(result.success).toBe(true);
+  });
+
+  test("cross-entity edit allowed when target has @everyone edit", async () => {
+    const callerEntity = createEntity("Alice", OWNER_ALICE);
+    const targetEntity = createEntity("Bob", OWNER_BOB);
+    setEntityConfig(targetEntity.id, { config_edit: JSON.stringify("@everyone") });
+
+    const tools = createTools(undefined, undefined, undefined, undefined, callerEntity.id, OWNER_ALICE);
+    const result = await callAddFact(tools, { entityId: targetEntity.id, content: "public fact" });
+    expect(result.success).toBe(true);
+  });
+
+  test("cross-entity edit allowed for target's own owner", async () => {
+    const callerEntity = createEntity("Alice", OWNER_BOB);
+    const targetEntity = createEntity("Bob", OWNER_BOB);
+
+    const tools = createTools(undefined, undefined, undefined, undefined, callerEntity.id, OWNER_BOB);
+    const result = await callAddFact(tools, { entityId: targetEntity.id, content: "owner fact" });
+    expect(result.success).toBe(true);
+  });
+
+  test("no callerOwnerId means no cross-entity check (backward compat)", async () => {
+    const targetEntity = createEntity("Bob", OWNER_BOB);
+    const tools = createTools(); // no caller owner
+    const result = await callAddFact(tools, { entityId: targetEntity.id, content: "compat fact" });
+    expect(result.success).toBe(true);
+  });
+
+  test("remove_fact cross-entity denied when no edit permission", async () => {
+    const callerEntity = createEntity("Alice", OWNER_ALICE);
+    const targetEntity = createEntity("Bob", OWNER_BOB);
+    addFact(targetEntity.id, "a protected fact");
+
+    const tools = createTools(undefined, undefined, undefined, undefined, callerEntity.id, OWNER_ALICE);
+    const result = await callRemoveFact(tools, { entityId: targetEntity.id, content: "a protected fact" });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("Not allowed");
+  });
+
+  test("save_memory cross-entity denied when no edit permission", async () => {
+    const callerEntity = createEntity("Alice", OWNER_ALICE);
+    const targetEntity = createEntity("Bob", OWNER_BOB);
+
+    const tools = createTools(undefined, undefined, undefined, undefined, callerEntity.id, OWNER_ALICE);
+    const result = await callSaveMemory(tools, { entityId: targetEntity.id, content: "stolen memory" });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("Not allowed");
   });
 });

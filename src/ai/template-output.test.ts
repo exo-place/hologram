@@ -23,6 +23,7 @@ function norm(s: string): string {
 /** Create a mock EvaluatedEntity */
 function mockEntity(overrides: Partial<EvaluatedEntity> & { id: number; name: string; facts: string[] }): EvaluatedEntity {
   return {
+    ownedBy: null,
     avatarUrl: null,
     streamMode: null,
     streamDelimiter: null,

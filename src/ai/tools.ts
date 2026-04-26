@@ -3,6 +3,7 @@ import { z } from "zod";
 import { debug, error } from "../logger";
 import {
   getFactsForEntity,
+  getEntityWithFacts,
   addFact,
   updateFactByContent,
   removeFactByContent,
@@ -14,6 +15,7 @@ import {
 } from "../db/memories";
 import { parseFact } from "../logic/expr";
 import { getImageModel } from "./models";
+import { canUserEdit } from "../bot/commands/cmd-permissions";
 
 // =============================================================================
 // Permission Checking
@@ -71,15 +73,40 @@ export function createTools(
   guildId?: string,
   triggerEntityFn?: (entityId: number, verb: string, authorName: string) => Promise<void>,
   imageOptions?: { imageModelSpec: string; onImage: (file: { data: Uint8Array; mediaType: string }) => void },
+  callerEntityId?: number,
+  callerOwnerId?: string | null,
 ): Record<string, Tool> {
+  /**
+   * Check that a tool call's entityId is either the calling entity itself, or that
+   * the calling entity's owner has edit permission on the target entity.
+   * Returns an error object if denied, null if allowed.
+   */
+  function checkCrossEntityEdit(targetEntityId: number): { success: false; error: string } | null {
+    if (callerOwnerId === undefined || callerOwnerId === null) return null; // no owner context
+    if (callerEntityId !== undefined && targetEntityId === callerEntityId) return null; // self-edit always ok
+    const target = getEntityWithFacts(targetEntityId);
+    if (!target) return null; // target doesn't exist; let the normal path handle that
+    if (!canUserEdit(target, callerOwnerId, "")) {
+      return { success: false, error: `Not allowed: owner does not have edit permission on entity ${targetEntityId}` };
+    }
+    return null;
+  }
+
   return {
     add_fact: tool({
       description: "Add a permanent defining trait to an entity. Use very sparingly - only for core personality, appearance, abilities, or key relationships. Most interactions don't need facts saved.",
       inputSchema: z.object({
-        entityId: z.number().describe("The entity ID to add the fact to"),
+        entityId: z.number().describe("The entity ID to add the fact to. Defaults to your own entity ID — only specify a different ID if the entity's owner has explicitly granted you edit access."),
         content: z.string().describe("The fact content"),
       }),
       execute: async ({ entityId, content }) => {
+        // Cross-entity edit permission check
+        const crossCheck = checkCrossEntityEdit(entityId);
+        if (crossCheck) {
+          debug("Tool: add_fact cross-entity denied", { entityId, callerOwnerId });
+          return crossCheck;
+        }
+
         // Check if entity is locked
         const lockCheck = checkEntityLocked(entityId);
         if (lockCheck.locked) {
@@ -96,11 +123,16 @@ export function createTools(
     update_fact: tool({
       description: "Update an existing permanent fact when a core defining trait changes. Facts are for personality, appearance, abilities, key relationships - not events.",
       inputSchema: z.object({
-        entityId: z.number().describe("The entity ID"),
+        entityId: z.number().describe("The entity ID. Defaults to your own entity ID."),
         oldContent: z.string().describe("The exact current fact text to match"),
         newContent: z.string().describe("The new fact content"),
       }),
       execute: async ({ entityId, oldContent, newContent }) => {
+        const crossCheck = checkCrossEntityEdit(entityId);
+        if (crossCheck) {
+          debug("Tool: update_fact cross-entity denied", { entityId, callerOwnerId });
+          return crossCheck;
+        }
         // Check if entity or specific fact is locked
         const lockCheck = checkFactLocked(entityId, oldContent);
         if (lockCheck.locked) {
@@ -117,10 +149,15 @@ export function createTools(
     remove_fact: tool({
       description: "Remove a permanent defining trait that is no longer true. Facts are core traits - if something happened, it's a memory, not a fact.",
       inputSchema: z.object({
-        entityId: z.number().describe("The entity ID"),
+        entityId: z.number().describe("The entity ID. Defaults to your own entity ID."),
         content: z.string().describe("The exact fact text to remove"),
       }),
       execute: async ({ entityId, content }) => {
+        const crossCheck = checkCrossEntityEdit(entityId);
+        if (crossCheck) {
+          debug("Tool: remove_fact cross-entity denied", { entityId, callerOwnerId });
+          return crossCheck;
+        }
         // Check if entity or specific fact is locked
         const lockCheck = checkFactLocked(entityId, content);
         if (lockCheck.locked) {
@@ -137,10 +174,15 @@ export function createTools(
     save_memory: tool({
       description: "Save a memory of something that happened. Use sparingly for significant conversations, promises, or events that shaped the entity. Most interactions don't need saving - only what matters long-term.",
       inputSchema: z.object({
-        entityId: z.number().describe("The entity ID"),
+        entityId: z.number().describe("The entity ID. Defaults to your own entity ID."),
         content: z.string().describe("The memory content - what happened or was learned"),
       }),
       execute: async ({ entityId, content }) => {
+        const crossCheck = checkCrossEntityEdit(entityId);
+        if (crossCheck) {
+          debug("Tool: save_memory cross-entity denied", { entityId, callerOwnerId });
+          return crossCheck;
+        }
         // Check if entity is locked
         const lockCheck = checkEntityLocked(entityId);
         if (lockCheck.locked) {
@@ -157,11 +199,16 @@ export function createTools(
     update_memory: tool({
       description: "Update an existing memory when details change or need correction. Memories are events and experiences, not defining traits.",
       inputSchema: z.object({
-        entityId: z.number().describe("The entity ID"),
+        entityId: z.number().describe("The entity ID. Defaults to your own entity ID."),
         oldContent: z.string().describe("The exact current memory text to match"),
         newContent: z.string().describe("The new memory content"),
       }),
       execute: async ({ entityId, oldContent, newContent }) => {
+        const crossCheck = checkCrossEntityEdit(entityId);
+        if (crossCheck) {
+          debug("Tool: update_memory cross-entity denied", { entityId, callerOwnerId });
+          return crossCheck;
+        }
         // Check if entity is locked
         const lockCheck = checkEntityLocked(entityId);
         if (lockCheck.locked) {
@@ -178,10 +225,15 @@ export function createTools(
     remove_memory: tool({
       description: "Remove a memory that is no longer relevant or was incorrect.",
       inputSchema: z.object({
-        entityId: z.number().describe("The entity ID"),
+        entityId: z.number().describe("The entity ID. Defaults to your own entity ID."),
         content: z.string().describe("The exact memory text to remove"),
       }),
       execute: async ({ entityId, content }) => {
+        const crossCheck = checkCrossEntityEdit(entityId);
+        if (crossCheck) {
+          debug("Tool: remove_memory cross-entity denied", { entityId, callerOwnerId });
+          return crossCheck;
+        }
         // Check if entity is locked
         const lockCheck = checkEntityLocked(entityId);
         if (lockCheck.locked) {

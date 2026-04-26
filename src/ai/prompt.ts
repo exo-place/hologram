@@ -2,6 +2,7 @@ import {
   getEntityWithFacts,
   type EntityWithFacts,
 } from "../db/entities";
+import { canUserView } from "../bot/commands/cmd-permissions";
 import {
   formatEntityDisplay,
   DEFAULT_CONTEXT_EXPR,
@@ -93,7 +94,8 @@ export function expandEntityRefs(
   entity: { name: string; facts: string[] },
   seenIds: Set<number>,
   exprContext?: ExprContext,
-  evalMeta?: MacroMeta
+  evalMeta?: MacroMeta,
+  callerOwnerId?: string | null,
 ): EntityWithFacts[] {
   const referencedEntities: EntityWithFacts[] = [];
 
@@ -109,6 +111,15 @@ export function expandEntityRefs(
         const refId = parseInt(entityMatch[1]);
         const refEntity = getEntityWithFacts(refId);
         if (refEntity) {
+          // Cross-entity view permission check: the calling entity's owner must be able
+          // to view the referenced entity.  Skipping the check when callerOwnerId is
+          // unknown (undefined) preserves existing behaviour for non-Discord contexts.
+          if (callerOwnerId !== undefined && callerOwnerId !== null) {
+            if (!canUserView(refEntity, callerOwnerId, "")) {
+              // Leave the macro unexpanded — visible signal of the denial
+              return match;
+            }
+          }
           if (!seenIds.has(refId)) {
             referencedEntities.push(refEntity);
             seenIds.add(refId);
@@ -516,7 +527,7 @@ export function buildPromptAndMessages(
   const templateSource = template ?? DEFAULT_TEMPLATE;
   let output: ReturnType<typeof renderStructuredTemplate>;
   try {
-    output = renderStructuredTemplate(templateSource, templateCtx);
+    output = renderStructuredTemplate(templateSource, templateCtx, respondingEntities[0]?.ownedBy);
   } catch (err) {
     const entityName = respondingEntities[0]?.name ?? "unknown";
     throw new ExprError(
@@ -597,7 +608,7 @@ export function preparePromptContext(
       modelSpec: entity.modelSpec,
       contextExpr: entity.contextExpr,
       respondingNames,
-    }));
+    }, entity.ownedBy));
   }
 
   // Add user entity if bound

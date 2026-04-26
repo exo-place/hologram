@@ -73,6 +73,7 @@ export function buildEvaluatedEntity(
   return {
     id: entity.id,
     name: entity.name,
+    ownedBy: entity.owned_by ?? null,
     facts: result.facts,
     avatarUrl: result.avatarUrl,
     streamMode: result.streamMode,

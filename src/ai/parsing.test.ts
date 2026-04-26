@@ -11,6 +11,7 @@ import type { EvaluatedEntity } from "./context";
 /** Create a minimal EvaluatedEntity for testing */
 function makeEntity(overrides: Partial<EvaluatedEntity> & { name: string; id: number }): EvaluatedEntity {
   return {
+    ownedBy: null,
     facts: [],
     avatarUrl: null,
     streamMode: null,
