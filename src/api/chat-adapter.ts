@@ -20,6 +20,8 @@ import type { EvaluatedEntity } from "../ai/context";
 import { broadcastSSE } from "./routes/chat";
 import { warn, debug } from "../logger";
 import { runOnChannel } from "../bot/channel-queue";
+import { checkRateLimits } from "../bot/rate-limit";
+import { recordEntityEvent } from "../db/moderation";
 
 // ── Per-channel timing ─────────────────────────────────────────────────────
 // Simple in-memory maps tracking last response and last message times per channel.
@@ -190,6 +192,12 @@ async function fireResponse(
   content: string,
   respondingEntities: EvaluatedEntity[],
 ): Promise<void> {
+  // Apply rate limits (web channels share the same sliding-window logic as Discord)
+  const decision = checkRateLimits(channelId, guildId, respondingEntities);
+  respondingEntities = decision.allow;
+  if (respondingEntities.length === 0) return;
+  const rateLimitOwnerIds = decision.ownerIds;
+
   // Retrieve memories for entities with memory enabled
   const entityMemories = new Map<number, Array<{ content: string }>>();
   const contextExpr = respondingEntities.find(e => e.contextExpr !== null)?.contextExpr ?? DEFAULT_CONTEXT_EXPR;
@@ -291,6 +299,7 @@ async function fireResponse(
         if (entityData) {
           const stored = addMessage(channelId, `entity:${entityData.id}`, event.name, fullContent.trim());
           broadcastSSE(channelId, { type: "message_complete", content: fullContent.trim(), message: stored });
+          recordEntityEvent(entityData.id, rateLimitOwnerIds.get(entityData.id) ?? null, channelId, guildId ?? null, "web");
         }
         entityBuffers.delete(event.name);
       } else if (event.type === "delta" || event.type === "line") {
@@ -318,6 +327,7 @@ async function fireResponse(
           );
           broadcastSSE(channelId, { type: "message_complete", content: fullContent, message: stored });
           entityBuffers.delete("_single");
+          recordEntityEvent(respondingEntities[0].id, rateLimitOwnerIds.get(respondingEntities[0].id) ?? null, channelId, guildId ?? null, "web");
         }
       }
     }
@@ -336,6 +346,7 @@ async function fireResponse(
         });
         const stored = addMessage(channelId, `entity:${er.entityId}`, er.name, er.content);
         broadcastSSE(channelId, { type: "message_complete", content: er.content, message: stored });
+        recordEntityEvent(er.entityId, rateLimitOwnerIds.get(er.entityId) ?? null, channelId, guildId ?? null, "web");
       }
     } else {
       const entityName = respondingEntities[0].name;
@@ -347,6 +358,7 @@ async function fireResponse(
       });
       const stored = addMessage(channelId, `entity:${entityId}`, entityName, result.response);
       broadcastSSE(channelId, { type: "message_complete", content: result.response, message: stored });
+      recordEntityEvent(entityId, rateLimitOwnerIds.get(entityId) ?? null, channelId, guildId ?? null, "web");
     }
   }
 }

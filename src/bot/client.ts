@@ -22,6 +22,8 @@ import "./commands/commands"; // Register /create, /view, /delete, /transfer, /b
 import "./commands/cmd-edit";   // Register /edit command + modals
 import "./commands/cmd-debug";  // Register /debug command
 import { ensureHelpEntities } from "./commands/help";
+import { checkRateLimits, shouldWarnRateLimit, type TriggerType } from "./rate-limit";
+import { recordEntityEvent } from "../db/moderation";
 
 const token = process.env.DISCORD_TOKEN;
 if (!token) {
@@ -835,7 +837,7 @@ bot.events.messageCreate = async (message) => {
     }
 
     for (const [, groupEntities] of templateGroups) {
-      await sendResponse(channelId, guildId, authorName, content, isMentioned ?? false, groupEntities);
+      await sendResponse(channelId, guildId, authorName, content, isMentioned ?? false, groupEntities, "message");
     }
   }
 
@@ -982,7 +984,7 @@ async function processEntityRetry(
     template: entity.template,
     systemTemplate: entity.system_template,
     exprContext: ctx,
-  }]);
+  }], "retry");
 }
 
 async function processEntityTick(
@@ -1080,7 +1082,7 @@ async function processEntityTick(
     exprContext: ctx,
   };
 
-  await sendResponse(channelId, guildId, "", "", false, [evaluated]);
+  await sendResponse(channelId, guildId, "", "", false, [evaluated], "tick");
 }
 
 function initTickTimers() {
@@ -1214,6 +1216,8 @@ async function handleStreamingResponse(
     isMentioned: boolean;
     entityMemories?: Map<number, Array<{ content: string }>>;
     triggerEntityFn?: (entityId: number, verb: string, authorName: string) => Promise<void>;
+    triggerType?: TriggerType;
+    rateLimitOwnerIds?: Map<number, string | null>;
   }
 ): Promise<void> {
   const allMessageIds: string[] = [];
@@ -1449,16 +1453,18 @@ async function handleStreamingResponse(
     }
   }
 
-  // Track all messages for reply detection
+  // Track all messages for reply detection and record entity events
   if (allMessageIds.length > 0) {
     if (isSingleEntity && entity) {
       trackWebhookMessages(allMessageIds, entity.id, entity.name);
+      recordEntityEvent(entity.id, ctx.rateLimitOwnerIds?.get(entity.id) ?? null, channelId, ctx.guildId ?? null, ctx.triggerType ?? "message");
     } else {
       // For multi-char, track per character
       for (const [name, msg] of entityMessages) {
         const charEntity = entities.find(e => e.name === name);
         if (charEntity) {
           trackOwnWebhookMessage(msg.messageId, charEntity.id, charEntity.name);
+          recordEntityEvent(charEntity.id, ctx.rateLimitOwnerIds?.get(charEntity.id) ?? null, channelId, ctx.guildId ?? null, ctx.triggerType ?? "message");
         }
       }
     }
@@ -1471,8 +1477,23 @@ export async function sendResponse(
   username: string,
   content: string,
   isMentioned: boolean,
-  respondingEntities?: EvaluatedEntity[]
+  respondingEntities?: EvaluatedEntity[],
+  triggerType: TriggerType = "message"
 ) {
+  // Apply rate limits before touching the LLM or typing indicator
+  let rateLimitOwnerIds: Map<number, string | null> | undefined;
+  if (respondingEntities && respondingEntities.length > 0) {
+    const decision = checkRateLimits(channelId, guildId, respondingEntities);
+    for (const denied of decision.denied) {
+      if (shouldWarnRateLimit(denied.entity.id, denied.scope) && denied.ownerId) {
+        notifyRateLimitWarn(denied.ownerId, denied.entity.name, denied.scope, denied.limit, channelId).catch(() => {});
+      }
+    }
+    respondingEntities = decision.allow;
+    rateLimitOwnerIds = decision.ownerIds;
+    if (respondingEntities.length === 0) return;
+  }
+
   // Start typing indicator
   let typingInterval: ReturnType<typeof setInterval> | null = null;
   try {
@@ -1656,7 +1677,7 @@ export async function sendResponse(
         template: targetEntity.template,
         systemTemplate: targetEntity.system_template,
         exprContext: ctx,
-      }]);
+      }], "slash_trigger");
     };
 
     // Check for streaming mode
@@ -1664,14 +1685,15 @@ export async function sendResponse(
     const useStreaming = streamMode && respondingEntities && respondingEntities.length > 0;
 
     if (useStreaming) {
-      const streamDelimiter = respondingEntities[0]?.streamDelimiter ?? undefined;
-      debug("Using streaming mode", { mode: streamMode, delimiter: streamDelimiter, entities: respondingEntities.map(e => e.name) });
+      const streamEntities = respondingEntities!;
+      const streamDelimiter = streamEntities[0]?.streamDelimiter ?? undefined;
+      debug("Using streaming mode", { mode: streamMode, delimiter: streamDelimiter, entities: streamEntities.map(e => e.name) });
 
       // Stop typing - we'll be sending messages as we stream
       stopTyping();
 
       try {
-        await handleStreamingResponse(channelId, respondingEntities, streamMode, streamDelimiter, {
+        await handleStreamingResponse(channelId, streamEntities, streamMode, streamDelimiter, {
           channelId,
           guildId,
           userId: "",
@@ -1680,6 +1702,8 @@ export async function sendResponse(
           isMentioned,
           entityMemories,
           triggerEntityFn,
+          triggerType,
+          rateLimitOwnerIds,
         });
 
         // Mark response time
@@ -1744,6 +1768,7 @@ export async function sendResponse(
           );
           if (messageIds && entity) {
             trackWebhookMessages(messageIds, entity.id, entity.name);
+            recordEntityEvent(entity.id, rateLimitOwnerIds?.get(entity.id) ?? null, channelId, guildId ?? null, triggerType);
           } else if (!messageIds) {
             await sendFallbackMessage(channelId, entityResponse.name, entityResponse.content, i === 0 ? result.files : undefined);
           }
@@ -1760,6 +1785,7 @@ export async function sendResponse(
         );
         if (messageIds) {
           trackWebhookMessages(messageIds, entity.id, entity.name);
+          recordEntityEvent(entity.id, rateLimitOwnerIds?.get(entity.id) ?? null, channelId, guildId ?? null, triggerType);
         } else {
           await sendFallbackMessage(channelId, entity.name, result.response, result.files);
         }
@@ -1956,6 +1982,28 @@ async function notifyUserOfError(
     debug("Sent error DM", { userId, entityName, isRecurring });
   } catch (err) {
     warn("Failed to send error DM", { userId, entityName, err });
+  }
+}
+
+async function notifyRateLimitWarn(
+  ownerId: string,
+  entityName: string,
+  scope: "entity" | "owner" | "channel",
+  limit: number,
+  channelId: string,
+): Promise<void> {
+  const scopeLabel = scope === "entity" ? "per-entity" : scope === "owner" ? "per-owner" : "per-channel";
+  const configHint = scope === "entity"
+    ? `Raise the limit with \`/edit ${entityName} type:advanced\` or reduce the entity's \`$respond\` directives.`
+    : `Raise the limit with \`/admin config rate\` in the affected channel.`;
+  try {
+    const dmChannel = await bot.helpers.getDmChannel(BigInt(ownerId));
+    await bot.helpers.sendMessage(dmChannel.id, {
+      content: `**Rate limit hit for ${entityName}**\nYour entity *${entityName}* hit the ${scopeLabel} rate limit (${limit}/min) in <#${channelId}>. Its response was dropped.\n${configHint}`,
+    });
+    debug("Sent rate-limit DM", { ownerId, entityName, scope, limit });
+  } catch (err) {
+    warn("Failed to send rate-limit DM", { ownerId, entityName, err });
   }
 }
 
