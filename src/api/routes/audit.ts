@@ -6,15 +6,14 @@
 
 import { ok, err } from "../helpers";
 import type { RouteHandler } from "../helpers";
-import { resolveSession } from "./auth";
+import { requireAuth } from "./auth";
 import { getModEvents, type ModEventType } from "../../db/moderation";
 
 export const auditRoutes: RouteHandler = async (req, url) => {
   if (!url.pathname.startsWith("/api/audit")) return null;
 
   if (url.pathname === "/api/audit" && req.method === "GET") {
-    const session = resolveSession(req);
-    if (!session) return err("Not authenticated", 401);
+    if (!requireAuth(req)) return err("Not authenticated", 401);
 
     const guildId = url.searchParams.get("guild_id") ?? undefined;
     const channelId = url.searchParams.get("channel_id") ?? undefined;

@@ -9,14 +9,9 @@
 
 import { ok, err, parseBody } from "../helpers";
 import type { RouteHandler } from "../helpers";
-import { resolveSession } from "./auth";
+import { requireAuth } from "./auth";
 import { getDiscordConfig, setDiscordConfig, resolveDiscordConfig } from "../../db/discord";
 import { recordModEvent } from "../../db/moderation";
-
-function requireAuth(req: Request): string | null {
-  const session = resolveSession(req);
-  return session?.discord_user_id ?? null;
-}
 
 export const serverConfigRoutes: RouteHandler = async (req, url) => {
   // GET /api/guilds/:guildId/config

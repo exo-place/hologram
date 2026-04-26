@@ -11,7 +11,7 @@
 
 import { ok, err, parseBody } from "../helpers";
 import type { RouteHandler } from "../helpers";
-import { resolveSession } from "./auth";
+import { requireAuth } from "./auth";
 import {
   addMute,
   removeMute,
@@ -20,11 +20,6 @@ import {
   type MuteScopeType,
   type AddMuteParams,
 } from "../../db/moderation";
-
-function requireAuth(req: Request): string | null {
-  const session = resolveSession(req);
-  return session?.discord_user_id ?? null;
-}
 
 export const moderationRoutes: RouteHandler = async (req, url) => {
   // GET /api/mutes

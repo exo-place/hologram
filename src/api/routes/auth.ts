@@ -85,6 +85,17 @@ export function getSessionFromCookie(req: Request): string | null {
   return match?.[1] ?? null;
 }
 
+/**
+ * Returns the authenticated user ID for a request, or null if not authenticated.
+ *
+ * If OAuth is not configured (no DISCORD_CLIENT_ID), returns "local" so that
+ * private deployments can use moderation routes without logging in.
+ */
+export function requireAuth(req: Request): string | null {
+  if (!CLIENT_ID) return "local";
+  return resolveSession(req)?.discord_user_id ?? null;
+}
+
 /** Resolve the authenticated session for a request. Returns null if not authenticated. */
 export function resolveSession(req: Request): WebSession | null {
   const id = getSessionFromCookie(req);
