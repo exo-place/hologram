@@ -10,6 +10,25 @@ Per-channel/per-owner/per-entity sliding-window rate limits implemented and pers
 
 ---
 
+### Security hardening (2026-04-26) — RESOLVED
+
+Four security gaps reported by luvoid/Hazel/n_n and one feature (/purge) implemented:
+
+1. **Confused-deputy (server-bound entities)** — `canOwnerReadChannel()` checks VIEW_CHANNEL + READ_MESSAGE_HISTORY for entity owners before responding. Server-bound entities skip channels their owner can't read. `/debug status` annotates skipped entities. (`src/bot/commands/cmd-permissions.ts`, `src/bot/client.ts`, `src/bot/commands/cmd-debug.ts`)
+
+2. **Cross-entity view leakage** — `{{entity:ID}}` macros and `{% extends "Name" %}` template inheritance now require the calling entity's owner to have view permission on the referenced entity. Denied refs leave the macro unexpanded. (`src/ai/prompt.ts`, `src/ai/template.ts`)
+
+3. **Cross-entity tool-call edits** — `add_fact`, `update_fact`, `remove_fact`, `save_memory`, `update_memory`, `remove_memory` now verify the calling entity's owner has edit permission on the target entity. Self-edits always allowed; no caller context = no check (backward compat). (`src/ai/tools.ts`)
+
+4. **`/bind` default-allow-everyone** — Now requires Manage Channels (channel-bind) or Manage Server (server-bind) by default. `/config bind` allowlists override this for delegated access. (`src/bot/commands/commands.ts`)
+
+5. **`/purge` command** — Delete bot messages by substring or range (1=most recent). Permission: Manage Webhooks or `$delete` directive. Audit-logged to `mod_events`. Web equivalent: DELETE `/api/channels/:id/messages/:msgId` + × button in chat UI. (`src/bot/commands/cmd-delete.ts`, `src/api/routes/chat.ts`)
+
+6. **`$delete` permission** — `config_delete` column, `canUserDelete()`, `/edit type:permissions` modal field, web ConfigEditor field, `deleteList` in `EntityPermissions`.
+
+Remaining:
+- Per-guild permission checks for moderation API still not implemented (any logged-in Discord user can call it when OAuth active — deferred).
+
 ### More Discord feedback — next session starting point
 
 User mentioned "more feedback from discord" as context for this session. Unknown what specific feedback — next session should ask before building anything. Could be complaints about the new moderation system, UX feedback on `/admin`, cascade incident follow-up, or unrelated.
