@@ -1,4 +1,4 @@
-import { ApplicationCommandOptionTypes, TextStyles, MessageComponentTypes, ChannelTypes } from "@discordeno/bot";
+import { ApplicationCommandOptionTypes, TextStyles, MessageComponentTypes } from "@discordeno/bot";
 import {
   registerCommand,
   registerModalHandler,
@@ -412,41 +412,32 @@ registerCommand({
           return;
         }
       } else {
-        // Binding entities requires Manage Channels (channel-bind) or Manage Guild (server-bind)
-        // by default.  An explicit bind allowlist set via /config overrides this gate —
-        // admins use /config to delegate binding to specific users or roles.
-        // Exception: thread owners may bind their own thread without Manage Channels.
+        // Channel-bind: entity edit permission (checked above) is sufficient by default.
+        // Server-bind: requires Manage Guild — server-wide binding is high-impact.
+        // /config bind allowlist/blacklist overrides the default in both cases.
         const locationConfig = resolveDiscordConfig(ctx.channelId, ctx.guildId);
         const hasExplicitAllowlist = !!locationConfig.bind;
-        const memberPerms = ctx.interaction.member?.permissions;
-        const isAdmin = memberPerms != null && typeof memberPerms === "object" && memberPerms.has("ADMINISTRATOR");
-        const channel = ctx.interaction.channel;
-        const isThread = channel?.type != null && (
-          channel.type === ChannelTypes.PublicThread ||
-          channel.type === ChannelTypes.PrivateThread ||
-          channel.type === ChannelTypes.AnnouncementThread
-        );
-        const isThreadOwner = isThread && channel?.ownerId?.toString() === ctx.userId;
-        const hasRequiredPerm = memberPerms != null && typeof memberPerms === "object" && (
-          isAdmin ||
-          (target === "server"
-            ? memberPerms.has("MANAGE_GUILD")
-            : memberPerms.has("MANAGE_CHANNELS") || isThreadOwner)
-        );
 
-        if (!hasExplicitAllowlist && !hasRequiredPerm) {
-          const required = target === "server" ? "Manage Server" : "Manage Channels";
-          await respond(
-            ctx.bot,
-            ctx.interaction,
-            `Binding entities requires **${required}** permission. Admins can grant binding access to others via \`/config bind\`.`,
-            true,
-          );
-          return;
+        if (target === "server") {
+          const memberPerms = ctx.interaction.member?.permissions;
+          const hasManageGuild = memberPerms != null && typeof memberPerms === "object" &&
+            (memberPerms.has("MANAGE_GUILD") || memberPerms.has("ADMINISTRATOR"));
+          if (!hasManageGuild) {
+            await respond(
+              ctx.bot,
+              ctx.interaction,
+              `Server-wide binding requires **Manage Server** permission.`,
+              true,
+            );
+            return;
+          }
         }
 
-        if (hasExplicitAllowlist && !canUserBindInLocation(ctx.userId, ctx.username, ctx.userRoles, ctx.channelId, ctx.guildId)) {
-          await respond(ctx.bot, ctx.interaction, "You don't have permission to bind entities here", true);
+        if (!canUserBindInLocation(ctx.userId, ctx.username, ctx.userRoles, ctx.channelId, ctx.guildId)) {
+          const msg = hasExplicitAllowlist
+            ? "You don't have permission to bind entities here"
+            : "You've been blocked from binding entities here by a server admin";
+          await respond(ctx.bot, ctx.interaction, msg, true);
           return;
         }
       }
@@ -553,21 +544,13 @@ registerCommand({
 
     const isPersonaBind = target.startsWith("me:");
 
-    // Server admins (Manage Channels) can unbind entities from their own channels/server
-    // without needing entity-level edit permission. Thread owners get the same exemption
-    // for their own thread.
+    // Server admins (Manage Channels) can unbind entities without needing entity-level
+    // edit permission — useful for cleaning up stray bindings.
     const memberPerms = ctx.interaction.member?.permissions;
-    const unbindChannel = ctx.interaction.channel;
-    const unbindIsThread = unbindChannel?.type != null && (
-      unbindChannel.type === ChannelTypes.PublicThread ||
-      unbindChannel.type === ChannelTypes.PrivateThread ||
-      unbindChannel.type === ChannelTypes.AnnouncementThread
-    );
-    const unbindIsThreadOwner = unbindIsThread && unbindChannel?.ownerId?.toString() === ctx.userId;
     const hasManageChannels =
       memberPerms != null &&
       typeof memberPerms === "object" &&
-      (memberPerms.has("MANAGE_CHANNELS") || memberPerms.has("ADMINISTRATOR") || unbindIsThreadOwner);
+      (memberPerms.has("MANAGE_CHANNELS") || memberPerms.has("ADMINISTRATOR"));
 
     // Entity-side permission check (skipped for non-persona binds if caller has Manage Channels)
     if (isPersonaBind) {
