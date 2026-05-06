@@ -248,7 +248,9 @@ registerCommand({
         if (config.config_stream_delimiters) {
           try {
             const delims = JSON.parse(config.config_stream_delimiters) as string[];
-            streamDisplay += " " + delims.map(d => `"${d}"`).join(" ");
+            streamDisplay += " " + delims.map(d =>
+            `"${d.replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/\t/g, "\\t").replace(/\r/g, "\\r")}"`
+          ).join(" ");
           } catch {
             // Corrupted delimiter data — show raw value for manual fix
             streamDisplay += " " + config.config_stream_delimiters;
