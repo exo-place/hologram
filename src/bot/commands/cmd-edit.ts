@@ -121,12 +121,13 @@ registerCommand({
       required: false,
       choices: [
         { name: "Both", value: "both" },
-        { name: "Facts only", value: "facts" },
-        { name: "Memories only", value: "memories" },
+        { name: "Facts", value: "facts" },
+        { name: "Memories", value: "memories" },
         { name: "Template", value: "template" },
         { name: "System Prompt", value: "system-template" },
-        { name: "Config", value: "config" },
         { name: "Model", value: "model" },
+        { name: "Context", value: "context" },
+        { name: "Identity", value: "identity" },
         { name: "Advanced", value: "advanced" },
         { name: "Permissions", value: "permissions" },
       ],
@@ -239,74 +240,8 @@ registerCommand({
       return;
     }
 
-    if (editType === "config") {
-      // Config editing - original 5 text fields (unchanged)
-      const config = getEntityConfig(entity.id);
-
-      let streamDisplay = "";
-      if (config?.config_stream_mode) {
-        streamDisplay = config.config_stream_mode;
-        if (config.config_stream_delimiters) {
-          try {
-            const delims = JSON.parse(config.config_stream_delimiters) as string[];
-            streamDisplay += " " + delims.map(d =>
-              `"${d.replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/\t/g, "\\t").replace(/\r/g, "\\r")}"`
-            ).join(" ");
-          } catch {
-            streamDisplay += " " + config.config_stream_delimiters;
-          }
-        }
-      }
-
-      const configFields = [
-        {
-          customId: "model",
-          label: "Model",
-          style: TextStyles.Short,
-          value: config?.config_model ?? "",
-          required: false,
-          placeholder: "provider:model (e.g. google:gemini-2.5-flash)",
-        },
-        {
-          customId: "context",
-          label: "Context",
-          style: TextStyles.Short,
-          value: config?.config_context ?? "",
-          required: false,
-          placeholder: "chars < 4000 || count < 20",
-        },
-        {
-          customId: "stream",
-          label: "Stream",
-          style: TextStyles.Short,
-          value: streamDisplay,
-          required: false,
-          placeholder: 'lines, full, full "\\n", "delimiter"',
-        },
-        {
-          customId: "avatar",
-          label: "Avatar URL",
-          style: TextStyles.Short,
-          value: config?.config_avatar ?? "",
-          required: false,
-          placeholder: "https://example.com/avatar.png",
-        },
-        {
-          customId: "memory",
-          label: "Memory scope",
-          style: TextStyles.Short,
-          value: config?.config_memory ?? "",
-          required: false,
-          placeholder: "none, channel, guild, global",
-        },
-      ];
-
-      await respondWithModal(ctx.bot, ctx.interaction, `edit-config:${entity.id}`, `Config: ${entity.name}`, configFields);
-      return;
-    }
-
     if (editType === "model") {
-      // Model picker — V2 modal with dropdown + text override
+      // Model & Generation — V2 modal with dropdown + text override + thinking/safety/collapse
       const config = getEntityConfig(entity.id);
       const currentModel = config?.config_model ?? null;
       const availableModels = await getAvailableModels();
@@ -318,6 +253,10 @@ registerCommand({
         modelOptions.unshift({ label: currentModel, value: currentModel, default: true });
         modelOptions.splice(25);
       }
+
+      const currentCollapseRoles = new Set(
+        (config?.config_collapse ?? "").split(/\s+/).filter(Boolean)
+      );
 
       const modelLabels = [
         {
@@ -342,44 +281,11 @@ registerCommand({
             type: MessageComponentTypes.TextInput,
             customId: "model_custom",
             style: TextStyles.Short,
-            // Pre-fill only when the current model isn't in the fetched list (unlisted/custom)
             value: currentModel && !modelInList ? currentModel : undefined,
             required: false,
             placeholder: "google:gemini-2.5-flash",
           },
         },
-        {
-          type: MessageComponentTypes.Label,
-          label: "RAG Context",
-          description: "Which recent messages to use as memory retrieval queries",
-          component: {
-            type: MessageComponentTypes.TextInput,
-            customId: "rag_context",
-            style: TextStyles.Short,
-            value: config?.config_rag_context || undefined,
-            required: false,
-            placeholder: "count <= 10",
-          },
-        },
-      ];
-
-      await respondWithV2Modal(ctx.bot, ctx.interaction, `edit-model:${entity.id}`, `Model: ${entity.name}`, modelLabels);
-      return;
-    }
-
-    if (editType === "advanced") {
-      // Advanced config editing — V2 modal with Label components
-      const config = getEntityConfig(entity.id);
-
-      // Pre-select current collapse roles
-      const currentCollapseRoles = new Set(
-        (config?.config_collapse ?? "").split(/\s+/).filter(Boolean)
-      );
-
-      // Pre-populate safety filter from config column
-      const safetyValue = config?.config_safety ?? "";
-
-      const advancedLabels = [
         {
           type: MessageComponentTypes.Label,
           label: "Thinking Level",
@@ -391,6 +297,19 @@ registerCommand({
             value: config?.config_thinking || undefined,
             required: false,
             placeholder: "minimal, low, medium, high",
+          },
+        },
+        {
+          type: MessageComponentTypes.Label,
+          label: "Content Filters",
+          description: "Safety filter for all categories (e.g. off, channel.is_nsfw). Per-category: use $safety in facts.",
+          component: {
+            type: MessageComponentTypes.TextInput,
+            customId: "safety",
+            style: TextStyles.Short,
+            value: config?.config_safety || undefined,
+            required: false,
+            placeholder: "off, channel.is_nsfw, false (clear), ...",
           },
         },
         {
@@ -412,17 +331,140 @@ registerCommand({
             ],
           },
         },
+      ];
+
+      await respondWithV2Modal(ctx.bot, ctx.interaction, `edit-model:${entity.id}`, `Model: ${entity.name}`, modelLabels);
+      return;
+    }
+
+    if (editType === "context" || editType === "config") {
+      // Context & Memory — replaces old edit-config
+      const config = getEntityConfig(entity.id);
+
+      let streamDisplay = "";
+      if (config?.config_stream_mode) {
+        streamDisplay = config.config_stream_mode;
+        if (config.config_stream_delimiters) {
+          try {
+            const delims = JSON.parse(config.config_stream_delimiters) as string[];
+            streamDisplay += " " + delims.map(d =>
+              `"${d.replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/\t/g, "\\t").replace(/\r/g, "\\r")}"`
+            ).join(" ");
+          } catch {
+            streamDisplay += " " + config.config_stream_delimiters;
+          }
+        }
+      }
+
+      // Deserialize strip patterns for display
+      let stripDisplay = "";
+      if (config?.config_strip) {
+        try {
+          const patterns = JSON.parse(config.config_strip) as string[];
+          stripDisplay = patterns.join("\n");
+        } catch {
+          stripDisplay = config.config_strip;
+        }
+      }
+
+      const currentMemory = config?.config_memory ?? "none";
+
+      const contextLabels = [
         {
           type: MessageComponentTypes.Label,
-          label: "Content Filters",
-          description: "Safety filter for all categories (e.g. off, channel.is_nsfw). Per-category: use $safety in facts.",
+          label: "Context",
+          description: "Limit how many past messages are included (chars < N or count < N)",
           component: {
             type: MessageComponentTypes.TextInput,
-            customId: "safety",
+            customId: "context",
             style: TextStyles.Short,
-            value: safetyValue || undefined,
+            value: config?.config_context || undefined,
             required: false,
-            placeholder: "off, channel.is_nsfw, false (clear), ...",
+            placeholder: "chars < 4000 || count < 20",
+          },
+        },
+        {
+          type: MessageComponentTypes.Label,
+          label: "RAG Context",
+          description: "Which recent messages to use as memory retrieval queries",
+          component: {
+            type: MessageComponentTypes.TextInput,
+            customId: "rag_context",
+            style: TextStyles.Short,
+            value: config?.config_rag_context || undefined,
+            required: false,
+            placeholder: "count <= 10",
+          },
+        },
+        {
+          type: MessageComponentTypes.Label,
+          label: "Memory Scope",
+          description: "Where entity memories are stored and retrieved from",
+          component: {
+            type: MessageComponentTypes.StringSelect,
+            customId: "memory",
+            minValues: 0,
+            maxValues: 1,
+            required: false,
+            placeholder: "None (default)",
+            options: [
+              { label: "None", value: "none", default: currentMemory === "none" || !currentMemory },
+              { label: "Channel", value: "channel", default: currentMemory === "channel" },
+              { label: "Guild", value: "guild", default: currentMemory === "guild" },
+              { label: "Global", value: "global", default: currentMemory === "global" },
+            ],
+          },
+        },
+        {
+          type: MessageComponentTypes.Label,
+          label: "Stream",
+          description: "Controls streaming output mode and delimiters",
+          component: {
+            type: MessageComponentTypes.TextInput,
+            customId: "stream",
+            style: TextStyles.Short,
+            value: streamDisplay || undefined,
+            required: false,
+            placeholder: 'lines, full, full "\\n", "delimiter"',
+          },
+        },
+        {
+          type: MessageComponentTypes.Label,
+          label: "Strip Patterns",
+          description: "Patterns to strip from responses (one per line, /regex/ supported)",
+          component: {
+            type: MessageComponentTypes.TextInput,
+            customId: "strip",
+            style: TextStyles.Paragraph,
+            value: stripDisplay || undefined,
+            required: false,
+            placeholder: "/^Name: /\nsome literal text",
+          },
+        },
+      ];
+
+      await respondWithV2Modal(ctx.bot, ctx.interaction, `edit-context:${entity.id}`, `Context: ${entity.name}`, contextLabels);
+      return;
+    }
+
+    if (editType === "identity") {
+      // Identity — avatar, keywords, respond, freeform
+      const config = getEntityConfig(entity.id);
+      const currentRespond = config?.config_respond ?? null;
+      const currentFreeform = config?.config_freeform ?? 0;
+
+      const identityLabels = [
+        {
+          type: MessageComponentTypes.Label,
+          label: "Avatar URL",
+          description: "Webhook avatar image URL",
+          component: {
+            type: MessageComponentTypes.TextInput,
+            customId: "avatar",
+            style: TextStyles.Short,
+            value: config?.config_avatar || undefined,
+            required: false,
+            placeholder: "https://example.com/avatar.png",
           },
         },
         {
@@ -440,6 +482,52 @@ registerCommand({
         },
         {
           type: MessageComponentTypes.Label,
+          label: "Should Respond",
+          description: "Override whether this entity responds to messages",
+          component: {
+            type: MessageComponentTypes.StringSelect,
+            customId: "respond",
+            minValues: 0,
+            maxValues: 1,
+            required: false,
+            placeholder: "Default (from facts)",
+            options: [
+              { label: "Default (from facts)", value: "", default: currentRespond === null },
+              { label: "Always", value: "true", default: currentRespond === "true" },
+              { label: "Never", value: "false", default: currentRespond === "false" },
+            ],
+          },
+        },
+        {
+          type: MessageComponentTypes.Label,
+          label: "Freeform Mode",
+          description: "Disable structured response parsing",
+          component: {
+            type: MessageComponentTypes.StringSelect,
+            customId: "freeform",
+            minValues: 0,
+            maxValues: 1,
+            required: false,
+            placeholder: "Default (disabled)",
+            options: [
+              { label: "Default (disabled)", value: "", default: !currentFreeform },
+              { label: "Enabled", value: "1", default: !!currentFreeform },
+            ],
+          },
+        },
+      ];
+
+      await respondWithV2Modal(ctx.bot, ctx.interaction, `edit-identity:${entity.id}`, `Identity: ${entity.name}`, identityLabels);
+      return;
+    }
+
+    if (editType === "advanced") {
+      // Advanced — queue and rate limit only
+      const config = getEntityConfig(entity.id);
+
+      const advancedLabels = [
+        {
+          type: MessageComponentTypes.Label,
           label: "Response Queue",
           description: "Skip the per-channel response queue (power users only — may cause context races)",
           component: {
@@ -452,6 +540,19 @@ registerCommand({
             options: [
               { label: "Disabled (skip queue)", value: "1", default: config?.config_queue_disabled === 1 },
             ],
+          },
+        },
+        {
+          type: MessageComponentTypes.Label,
+          label: "Rate Per Minute",
+          description: "Maximum responses per minute (blank = no limit)",
+          component: {
+            type: MessageComponentTypes.TextInput,
+            customId: "rate_per_min",
+            style: TextStyles.Short,
+            value: config?.config_rate_per_min != null ? String(config.config_rate_per_min) : undefined,
+            required: false,
+            placeholder: "e.g. 10 (blank to clear)",
           },
         },
       ];
@@ -758,7 +859,7 @@ registerModalHandler("edit-system-template", async (bot, interaction, values) =>
   await respond(bot, interaction, `Updated system prompt for "${entity.name}" (${templateText.length} chars)`, true);
 });
 
-registerModalHandler("edit-config", async (bot, interaction, values) => {
+registerModalHandler("edit-context", async (bot, interaction, _values) => {
   const customId = interaction.data?.customId ?? "";
   const entityId = parseInt(customId.split(":")[1]);
 
@@ -776,69 +877,80 @@ registerModalHandler("edit-config", async (bot, interaction, values) => {
     return;
   }
 
-  const model = values.model?.trim() || null;
-  const context = values.context?.trim() || null;
-  const avatar = values.avatar?.trim() || null;
-  const memory = values.memory?.trim() || null;
+  // Parse V2 components
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const components: any[] = interaction.data?.components ?? [];
+  const textValues: Record<string, string> = {};
+  const selectValues: Record<string, string[]> = {};
+  for (const comp of components) {
+    const inner = comp.component;
+    if (!inner?.customId) continue;
+    if (inner.value !== undefined) textValues[inner.customId] = inner.value;
+    else if (inner.values !== undefined) selectValues[inner.customId] = inner.values;
+  }
+
+  const context = textValues.context?.trim() || null;
+  const ragContext = textValues.rag_context?.trim() || null;
+
+  // Memory: selected option from StringSelect (none/channel/guild/global) or null to clear
+  const memorySelected = selectValues.memory?.[0] ?? "";
+  const memory = memorySelected && memorySelected !== "none" ? memorySelected : null;
 
   // Parse stream config: "lines", "full", 'full "\n"', '"delimiter"'
-  const streamRaw = values.stream?.trim() || "";
+  const streamRaw = textValues.stream?.trim() || "";
   let streamMode: string | null = null;
   let streamDelimiters: string | null = null;
 
   if (streamRaw) {
-    // Extract quoted delimiters
     const delimRegex = /"([^"]+)"/g;
     const delims: string[] = [];
     let match;
     while ((match = delimRegex.exec(streamRaw)) !== null) {
-      // Process escape sequences
       delims.push(match[1].replace(/\\n/g, "\n").replace(/\\t/g, "\t").replace(/\\\\/g, "\\"));
     }
-
-    // Extract mode (text before first quote, or the whole string if no quotes)
     const modeStr = streamRaw.replace(/"[^"]*"/g, "").trim().toLowerCase();
-
     if (modeStr === "full" || modeStr === "lines" || modeStr === "") {
-      streamMode = modeStr || (delims.length > 0 ? "lines" : "lines");
-      if (modeStr === "") streamMode = "lines";
+      streamMode = modeStr === "" ? "lines" : modeStr;
     } else {
       streamMode = modeStr;
     }
-
     if (delims.length > 0) {
       streamDelimiters = JSON.stringify(delims);
     }
   }
 
-  // Validate memory scope
-  if (memory && !["none", "channel", "guild", "global"].includes(memory)) {
-    await respond(bot, interaction, `Invalid memory scope: "${memory}". Use: none, channel, guild, global`, true);
-    return;
+  // Strip patterns: newline-separated → JSON array; blank → null (clear)
+  const stripRaw = textValues.strip?.trim() || "";
+  let stripValue: string | null = null;
+  if (stripRaw) {
+    const patterns = stripRaw.split("\n").map(p => p.trim()).filter(Boolean);
+    stripValue = patterns.length > 0 ? JSON.stringify(patterns) : null;
   }
 
   setEntityConfig(entityId, {
-    config_model: model,
     config_context: context,
+    config_rag_context: ragContext,
+    config_memory: memory,
     config_stream_mode: streamMode,
     config_stream_delimiters: streamDelimiters,
-    config_avatar: avatar,
-    config_memory: memory,
+    config_strip: stripValue,
   });
 
   const changes: string[] = [];
-  if (model) changes.push(`model: ${model}`);
   if (context) changes.push(`context: ${context}`);
-  if (streamRaw) changes.push(`stream: ${streamRaw}`);
-  if (avatar) changes.push("avatar: set");
+  if (ragContext) changes.push(`rag context: ${ragContext}`);
   if (memory) changes.push(`memory: ${memory}`);
+  else changes.push("memory: none");
+  if (streamRaw) changes.push(`stream: ${streamRaw}`);
+  if (stripValue) changes.push(`strip: ${JSON.parse(stripValue).length} pattern(s)`);
+  else if (stripRaw === "") changes.push("strip: cleared");
   if (changes.length === 0) changes.push("all cleared");
 
-  await respond(bot, interaction, `Updated config for "${entity.name}": ${changes.join(", ")}`, true);
+  await respond(bot, interaction, `Updated context config for "${entity.name}": ${changes.join(", ")}`, true);
 });
 
 // =============================================================================
-// Model Picker Modal Handler
+// Model & Generation Modal Handler
 // =============================================================================
 
 registerModalHandler("edit-model", async (bot, interaction, _values) => {
@@ -855,6 +967,7 @@ registerModalHandler("edit-model", async (bot, interaction, _values) => {
     return;
   }
 
+  // Parse V2 components
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const components: any[] = interaction.data?.components ?? [];
   const textValues: Record<string, string> = {};
@@ -869,15 +982,123 @@ registerModalHandler("edit-model", async (bot, interaction, _values) => {
   const modelCustom = textValues.model_custom?.trim() || null;
   const modelSelect = (selectValues.model_select?.[0] ?? "").trim() || null;
   const model = modelCustom || modelSelect || null;
-  const ragContext = textValues.rag_context?.trim() || null;
 
-  setEntityConfig(entityId, { config_model: model, config_rag_context: ragContext });
+  const thinking = textValues.thinking?.trim().toLowerCase() || null;
+  if (thinking && !["minimal", "low", "medium", "high"].includes(thinking)) {
+    await respond(bot, interaction, `Invalid thinking level: "${thinking}". Use: minimal, low, medium, high`, true);
+    return;
+  }
+
+  const safetyRaw = textValues.safety?.trim() || null;
+
+  const collapseSelected = selectValues.collapse ?? [];
+  const collapseRaw = collapseSelected.length === 0
+    ? null
+    : collapseSelected.includes("none")
+      ? "none"
+      : collapseSelected.join(" ");
+
+  setEntityConfig(entityId, {
+    config_model: model,
+    config_thinking: thinking,
+    config_safety: safetyRaw,
+    config_collapse: collapseRaw,
+  });
 
   const changes: string[] = [];
   if (model) changes.push(`model: ${model}`);
   else changes.push("model: cleared");
-  if (ragContext !== null) changes.push(`rag context: ${ragContext}`);
+  if (thinking) changes.push(`thinking: ${thinking}`);
+  if (safetyRaw !== null) changes.push(`safety: ${safetyRaw}`);
+  if (collapseRaw !== null) changes.push(`collapse: ${collapseRaw}`);
   await respond(bot, interaction, `Updated model config for "${entity.name}": ${changes.join(", ")}`, true);
+});
+
+// =============================================================================
+// Identity Modal Handler
+// =============================================================================
+
+registerModalHandler("edit-identity", async (bot, interaction, _values) => {
+  const customId = interaction.data?.customId ?? "";
+  const entityId = parseInt(customId.split(":")[1]);
+
+  const entity = getEntityWithFacts(entityId);
+  if (!entity) {
+    await respond(bot, interaction, "Entity not found", true);
+    return;
+  }
+
+  // Check edit permission
+  const userId = interaction.user?.id?.toString() ?? "";
+  const username = interaction.user?.username ?? "";
+  if (!canUserEdit(entity, userId, username)) {
+    await respond(bot, interaction, "You don't have permission to edit this entity", true);
+    return;
+  }
+
+  // Parse V2 components
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const components: any[] = interaction.data?.components ?? [];
+  const textValues: Record<string, string> = {};
+  const selectValues: Record<string, string[]> = {};
+  for (const comp of components) {
+    const inner = comp.component;
+    if (!inner?.customId) continue;
+    if (inner.value !== undefined) textValues[inner.customId] = inner.value;
+    else if (inner.values !== undefined) selectValues[inner.customId] = inner.values;
+  }
+
+  const avatar = textValues.avatar?.trim() || null;
+
+  // Validate and normalize keywords (reject invalid regex patterns)
+  const keywordsRaw = textValues.keywords?.trim() || null;
+  let keywordsNormalized: string | null = null;
+  if (keywordsRaw !== null) {
+    const lines = keywordsRaw.split("\n").map(k => k.trim()).filter(Boolean);
+    const invalidPatterns: string[] = [];
+    for (const kw of lines) {
+      const regexMatch = kw.match(/^\/(.+)\/([gimsuy]*)$/);
+      if (regexMatch) {
+        try {
+          checkKeywordMatch([kw], "");
+        } catch {
+          invalidPatterns.push(kw);
+        }
+      }
+    }
+    if (invalidPatterns.length > 0) {
+      await respond(bot, interaction, `Invalid regex pattern(s): ${invalidPatterns.map(p => `\`${p}\``).join(", ")}`, true);
+      return;
+    }
+    keywordsNormalized = lines.length > 0 ? lines.join("\n") : null;
+  }
+
+  const respondSelected = selectValues.respond?.[0] ?? "";
+  const configRespond: string | null =
+    respondSelected === "true" ? "true" :
+    respondSelected === "false" ? "false" :
+    null;
+
+  const freeformSelected = selectValues.freeform?.[0] ?? "";
+  const configFreeform: number = freeformSelected === "1" ? 1 : 0;
+
+  setEntityConfig(entityId, {
+    config_avatar: avatar,
+    config_keywords: keywordsNormalized,
+    config_respond: configRespond,
+    config_freeform: configFreeform,
+  });
+
+  const changes: string[] = [];
+  if (avatar) changes.push("avatar: set");
+  else changes.push("avatar: cleared");
+  if (keywordsNormalized !== null) changes.push(`keywords: ${keywordsNormalized.split("\n").length} set`);
+  else if (keywordsRaw !== null) changes.push("keywords: cleared");
+  if (configRespond !== null) changes.push(`respond: ${configRespond}`);
+  else changes.push("respond: default");
+  changes.push(`freeform: ${configFreeform ? "enabled" : "disabled"}`);
+
+  await respond(bot, interaction, `Updated identity config for "${entity.name}": ${changes.join(", ")}`, true);
 });
 
 // =============================================================================
@@ -917,68 +1138,22 @@ registerModalHandler("edit-advanced", async (bot, interaction, _textValues) => {
     }
   }
 
-  const thinking = textValues.thinking?.trim().toLowerCase() || null;
-
-  // Validate thinking level
-  if (thinking && !["minimal", "low", "medium", "high"].includes(thinking)) {
-    await respond(bot, interaction, `Invalid thinking level: "${thinking}". Use: minimal, low, medium, high`, true);
-    return;
-  }
-
-  // Collapse: selected options from StringSelect (empty = no override / use default)
-  const collapseSelected = selectValues.collapse ?? [];
-  // "none" takes precedence; otherwise join selected roles; empty = clear config (null = use default = all)
-  const collapseRaw = collapseSelected.length === 0
-    ? null
-    : collapseSelected.includes("none")
-      ? "none"
-      : collapseSelected.join(" ");
-
-  // Safety: stored in config_safety column (empty string = clear / use provider default)
-  const safetyRaw = textValues.safety?.trim() || null;
-
-  // Validate and normalize keywords (reject invalid regex patterns)
-  const keywordsRaw = textValues.keywords?.trim() || null;
-  let keywordsNormalized: string | null = null;
-  if (keywordsRaw !== null) {
-    const lines = keywordsRaw.split("\n").map(k => k.trim()).filter(Boolean);
-    const invalidPatterns: string[] = [];
-    for (const kw of lines) {
-      const regexMatch = kw.match(/^\/(.+)\/([gimsuy]*)$/);
-      if (regexMatch) {
-        try {
-          checkKeywordMatch([kw], "");
-        } catch {
-          invalidPatterns.push(kw);
-        }
-      }
-    }
-    if (invalidPatterns.length > 0) {
-      await respond(bot, interaction, `Invalid regex pattern(s): ${invalidPatterns.map(p => `\`${p}\``).join(", ")}`, true);
-      return;
-    }
-    keywordsNormalized = lines.length > 0 ? lines.join("\n") : null;
-  }
-
   const queueDisabledSelected = selectValues.queue_disabled ?? [];
   const queueDisabled = queueDisabledSelected.includes("1") ? 1 : 0;
 
+  const ratePerMinRaw = textValues.rate_per_min?.trim() || "";
+  const ratePerMin: number | null = ratePerMinRaw ? (parseInt(ratePerMinRaw) || null) : null;
+
   setEntityConfig(entityId, {
-    config_thinking: thinking,
-    config_collapse: collapseRaw,
-    config_keywords: keywordsNormalized,
-    config_safety: safetyRaw,
     config_queue_disabled: queueDisabled,
+    config_rate_per_min: ratePerMin,
   });
 
   const changes: string[] = [];
-  if (thinking) changes.push(`thinking: ${thinking}`);
-  if (collapseRaw) changes.push(`collapse: ${collapseRaw}`);
-  if (safetyRaw !== null) changes.push(`safety: ${safetyRaw}`);
-  if (keywordsNormalized !== null) changes.push(`keywords: ${keywordsNormalized.split("\n").length} set`);
-  else if (keywordsRaw !== null) changes.push("keywords: cleared");
   if (queueDisabled === 1) changes.push("queue: disabled");
-  if (changes.length === 0) changes.push("all cleared");
+  else changes.push("queue: enabled");
+  if (ratePerMin !== null) changes.push(`rate: ${ratePerMin}/min`);
+  else changes.push("rate: unlimited");
 
   await respond(bot, interaction, `Updated advanced config for "${entity.name}": ${changes.join(", ")}`, true);
 });
