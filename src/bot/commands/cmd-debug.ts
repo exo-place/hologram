@@ -9,6 +9,7 @@ import {
   getEntity,
   getEntityWithFacts,
   getEntityWithFactsByName,
+  getEntityConfig,
 } from "../../db/entities";
 import {
   getChannelScopedEntities,
@@ -22,7 +23,8 @@ import {
 import { createBaseContext } from "../../logic/expr";
 import { buildEvaluatedEntity } from "../../debug/evaluation";
 import { preparePromptContext } from "../../ai/prompt";
-import { getEmbeddingStatus, getEmbeddingCoverage, testRagRetrieval } from "../../debug/embeddings";
+import { getEmbeddingCoverage, testRagRetrieval } from "../../debug/embeddings";
+import { MIN_SIMILARITY_THRESHOLD } from "../../db/memories";
 import { getChannelMetadata, getGuildMetadata } from "../client";
 import { elideText } from "./helpers";
 import { canUserView, canOwnerReadChannel, type ChannelCheckBot } from "./cmd-permissions";
@@ -349,32 +351,33 @@ async function handleInfoRag(ctx: CommandContext, options: Record<string, unknow
 
   const lines: string[] = [];
 
-  // Embedding status
-  const status = getEmbeddingStatus();
-  lines.push(`**Embedding Model:** ${status.modelName}`);
-  lines.push(`**Loaded:** ${status.loaded ? "yes" : "no"}`);
-  lines.push(`**Dimensions:** ${status.dimensions}`);
-  lines.push(`**Cache:** ${status.cache.size}/${status.cache.max} (TTL: ${Math.round(status.cache.ttl / 1000)}s)`);
-
-  // Coverage
+  // Memory coverage (facts are not embedded — omit fact coverage)
   const coverage = getEmbeddingCoverage(targetEntity.id);
-  lines.push("");
-  lines.push(`**${targetEntity.name} [${targetEntity.id}] Coverage:**`);
-  lines.push(`Facts: ${coverage.facts.withEmbedding}/${coverage.facts.total} embedded`);
+  const config = getEntityConfig(targetEntity.id);
+  const memoryScope = (config?.config_memory ?? "none") as string;
+  lines.push(`**${targetEntity.name}** — memory scope: \`${memoryScope}\``);
   lines.push(`Memories: ${coverage.memories.withEmbedding}/${coverage.memories.total} embedded`);
 
   // RAG retrieval if query provided
   if (query) {
-    lines.push("");
-    lines.push(`**RAG Results for:** "${query}"`);
-    const results = await testRagRetrieval(targetEntity.id, query, "global", ctx.channelId, ctx.guildId);
-    if (results.length === 0) {
-      lines.push("No results found.");
+    if (memoryScope === "none") {
+      lines.push(`\n*Memory is disabled for this entity — no retrieval will occur.*`);
     } else {
-      for (const r of results.slice(0, 10)) {
-        const sim = (r.similarity * 100).toFixed(1);
-        const preview = r.content.length > 80 ? r.content.slice(0, 80) + "..." : r.content;
-        lines.push(`\`${sim}%\` [${r.type}:${r.id}] ${preview}`);
+      lines.push(`\n**RAG Results for:** "${query}" (scope: ${memoryScope}, threshold: ${MIN_SIMILARITY_THRESHOLD})`);
+      const results = await testRagRetrieval(
+        targetEntity.id, query,
+        memoryScope as "channel" | "guild" | "global",
+        ctx.channelId, ctx.guildId,
+      );
+      if (results.length === 0) {
+        lines.push("No memories found.");
+      } else {
+        for (const r of results.slice(0, 15)) {
+          const sim = (r.similarity * 100).toFixed(1);
+          const passes = r.similarity >= MIN_SIMILARITY_THRESHOLD;
+          const preview = r.content.length > 100 ? r.content.slice(0, 100) + "…" : r.content;
+          lines.push(`${passes ? "✓" : "✗"} \`${sim}%\` ${preview}`);
+        }
       }
     }
   }
