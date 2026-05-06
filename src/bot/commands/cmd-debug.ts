@@ -21,7 +21,8 @@ import {
   getRecentSystemNotes,
   getMessages,
 } from "../../db/discord";
-import { createBaseContext } from "../../logic/expr";
+import { createBaseContext, compileContextExpr } from "../../logic/expr";
+import { DEFAULT_CONTEXT_EXPR } from "../../ai/context";
 import { buildEvaluatedEntity } from "../../debug/evaluation";
 import { preparePromptContext } from "../../ai/prompt";
 import { getEmbeddingCoverage, testRagRetrieval } from "../../debug/embeddings";
@@ -372,9 +373,26 @@ async function handleInfoRag(ctx: CommandContext, options: Record<string, unknow
       queryTexts = [query];
       queryLabel = `"${query}"`;
     } else {
-      const recent = getMessages(ctx.channelId, 20);
-      queryTexts = recent.map(m => m.content).filter(Boolean);
-      queryLabel = `recent context (${queryTexts.length} messages)`;
+      // Replicate the exact context window the entity sees (same logic as the pipeline)
+      const contextExpr = config?.config_context ?? DEFAULT_CONTEXT_EXPR;
+      const contextFilter = compileContextExpr(contextExpr);
+      const rawMessages = getMessages(ctx.channelId, 100);
+      const now = Date.now();
+      queryTexts = [];
+      let totalChars = 0;
+      for (const m of rawMessages) {
+        const len = `${m.author_name}: ${m.content}`.length + 1;
+        const msgAge = now - new Date(m.created_at).getTime();
+        const shouldInclude = contextFilter({
+          chars: totalChars + len, count: queryTexts.length,
+          age: msgAge, age_h: msgAge / 3_600_000,
+          age_m: msgAge / 60_000, age_s: msgAge / 1000,
+        });
+        if (!shouldInclude && queryTexts.length > 0) break;
+        if (m.content) queryTexts.push(m.content);
+        totalChars += len;
+      }
+      queryLabel = `context window (${queryTexts.length} messages)`;
     }
 
     lines.push(`\n**RAG** (scope: ${memoryScope}, threshold: ${MIN_SIMILARITY_THRESHOLD}) — ${queryLabel}`);
