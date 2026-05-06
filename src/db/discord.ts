@@ -1093,113 +1093,28 @@ export function deleteWebhookMessageRecord(messageId: string): void {
 /**
  * Unified record for /purge operations: represents either a webhook message
  * or a system note (/sendnote entry).
- *
- * Consecutive Discord messages from the same entity (e.g. streaming lines or
- * 2000-char chunk splits) are collapsed into one logical entry so that /purge
- * operates on full responses rather than individual Discord messages.
  */
 export interface RecentChannelMessage {
-  /** DB primary key of the oldest chunk in this logical message */
+  /** DB primary key (messages.id) */
   dbId: number;
-  /** Primary Discord message ID (oldest chunk) — null for system notes */
+  /** Discord message ID — null for system notes */
   messageId: string | null;
-  /** All Discord message IDs for this logical message (oldest → newest) */
-  messageIds: string[];
   /** Entity ID — null for system notes */
   entityId: number | null;
   /** Entity name — "(system note)" for system notes */
   entityName: string;
-  /** Full content: all chunks joined in order */
   content: string;
   createdAt: string;
   /** True when this is a system note (discord_message_id IS NULL + data.is_note = true) */
   isSystemNote: boolean;
 }
 
-type PurgeRawRow = {
-  db_id: number;
-  message_id: string | null;
-  entity_id: number | null;
-  entity_name: string | null;
-  content: string;
-  created_at: string;
-  is_system_note: number;
-};
-
-/**
- * Group raw rows (newest-first) into logical messages.
- * Consecutive rows from the same entity are collapsed into one entry so that
- * streaming lines and 2000-char chunk splits are purged as a unit.
- * Returns at most `limit` logical messages.
- */
-function groupPurgeRows(rows: PurgeRawRow[], limit: number): RecentChannelMessage[] {
-  const groups: RecentChannelMessage[] = [];
-  // Accumulator for the current logical message (built in DESC order).
-  let groupDbId: number | null = null;
-  let groupEntityId: number | null = null;
-  let groupEntityName: string | null = null;
-  let groupCreatedAt: string | null = null;
-  let groupIsNote = false;
-  let groupMsgIds: string[] = [];
-  let groupContents: string[] = [];
-
-  const flush = () => {
-    if (groupDbId === null) return;
-    // Rows were accumulated newest-first; reverse to restore natural order.
-    const messageIds = groupMsgIds.slice().reverse();
-    const content = groupContents.slice().reverse().join("\n");
-    groups.push({
-      dbId: groupDbId,
-      messageId: messageIds[0] ?? null,
-      messageIds,
-      entityId: groupEntityId,
-      entityName: groupEntityName ?? "(system note)",
-      content,
-      createdAt: groupCreatedAt!,
-      isSystemNote: groupIsNote,
-    });
-  };
-
-  for (const row of rows) {
-    const isNote = row.is_system_note === 1;
-    const sameEntity =
-      !isNote &&
-      !groupIsNote &&
-      row.entity_id !== null &&
-      row.entity_id === groupEntityId;
-
-    if (sameEntity) {
-      if (row.message_id) groupMsgIds.push(row.message_id);
-      groupContents.push(row.content);
-      // Keep the oldest dbId (last row in DESC order) as the group representative.
-      groupDbId = row.db_id;
-      groupCreatedAt = row.created_at;
-    } else {
-      flush();
-      if (groups.length >= limit) break;
-      groupDbId = row.db_id;
-      groupEntityId = row.entity_id;
-      groupEntityName = row.entity_name;
-      groupCreatedAt = row.created_at;
-      groupIsNote = isNote;
-      groupMsgIds = row.message_id ? [row.message_id] : [];
-      groupContents = [row.content];
-    }
-  }
-  if (groups.length < limit) flush();
-
-  return groups;
-}
-
 /**
  * Get the N most recent purgeable messages in a channel (webhook messages + system notes),
- * ordered newest-first. Consecutive same-entity Discord messages are grouped into one
- * logical entry (handles streaming lines and long-message chunk splits).
+ * ordered newest-first.
  */
 export function getRecentChannelMessages(channelId: string, limit: number): RecentChannelMessage[] {
   const db = getDb();
-  // Fetch extra rows to account for multi-chunk responses (each chunk is one row).
-  const fetchLimit = limit * 20;
   const rows = db.prepare(`
     SELECT
       m.id as db_id,
@@ -1217,20 +1132,31 @@ export function getRecentChannelMessages(channelId: string, limit: number): Rece
     )
     ORDER BY m.created_at DESC, m.id DESC
     LIMIT ?
-  `).all(channelId, fetchLimit) as PurgeRawRow[];
-  return groupPurgeRows(rows, limit);
+  `).all(channelId, limit) as Array<{
+    db_id: number;
+    message_id: string | null;
+    entity_id: number | null;
+    entity_name: string | null;
+    content: string;
+    created_at: string;
+    is_system_note: number;
+  }>;
+  return rows.map(r => ({
+    dbId: r.db_id,
+    messageId: r.message_id,
+    entityId: r.entity_id,
+    entityName: r.entity_name ?? "(system note)",
+    content: r.content,
+    createdAt: r.created_at,
+    isSystemNote: r.is_system_note === 1,
+  }));
 }
 
 /**
  * Search purgeable messages in a channel by substring match (webhook messages + system notes).
- * Groups consecutive same-entity rows so that a match on any chunk of a response returns
- * the whole logical message.
  */
 export function searchChannelMessages(channelId: string, query: string, limit = 50): RecentChannelMessage[] {
   const db = getDb();
-  // Fetch recent purgeable rows without a content filter so we can group first,
-  // then match against the full grouped content.
-  const fetchLimit = limit * 20;
   const rows = db.prepare(`
     SELECT
       m.id as db_id,
@@ -1242,18 +1168,30 @@ export function searchChannelMessages(channelId: string, query: string, limit = 
       CASE WHEN m.discord_message_id IS NULL AND json_extract(m.data, '$.is_note') = 1 THEN 1 ELSE 0 END as is_system_note
     FROM messages m
     LEFT JOIN webhook_messages wm ON wm.message_id = m.discord_message_id
-    WHERE m.channel_id = ? AND (
+    WHERE m.channel_id = ? AND m.content LIKE ? ESCAPE '\\' AND (
       wm.message_id IS NOT NULL
       OR (m.discord_message_id IS NULL AND json_extract(m.data, '$.is_note') = 1)
     )
     ORDER BY m.created_at DESC, m.id DESC
     LIMIT ?
-  `).all(channelId, fetchLimit) as PurgeRawRow[];
-
-  const lowerQuery = query.toLowerCase();
-  const allGroups = groupPurgeRows(rows, fetchLimit);
-  const matches = allGroups.filter(g => g.content.toLowerCase().includes(lowerQuery));
-  return matches.slice(0, limit);
+  `).all(channelId, `%${query.replace(/[%_\\]/g, "\\$&")}%`, limit) as Array<{
+    db_id: number;
+    message_id: string | null;
+    entity_id: number | null;
+    entity_name: string | null;
+    content: string;
+    created_at: string;
+    is_system_note: number;
+  }>;
+  return rows.map(r => ({
+    dbId: r.db_id,
+    messageId: r.message_id,
+    entityId: r.entity_id,
+    entityName: r.entity_name ?? "(system note)",
+    content: r.content,
+    createdAt: r.created_at,
+    isSystemNote: r.is_system_note === 1,
+  }));
 }
 
 // =============================================================================

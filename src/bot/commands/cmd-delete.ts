@@ -92,10 +92,9 @@ async function canDelete(
 }
 
 /**
- * Delete a logical channel message: skips Discord API for system notes,
- * calls Discord API for all Discord message IDs in the group (handles
- * streaming-lines and chunk-split responses that span multiple messages).
- * Returns true if at least one deletion succeeded (or it was a system note).
+ * Delete a single channel message: skips Discord API for system notes,
+ * calls Discord API for webhook messages.
+ * Returns true on success.
  */
 async function deleteChannelMessage(
   msg: RecentChannelMessage,
@@ -105,16 +104,13 @@ async function deleteChannelMessage(
     // DB-only deletion — no Discord message to remove
     return deleteSystemNote(msg.dbId);
   }
-  if (msg.messageIds.length === 0) return false;
-  let anyOk = false;
-  for (const id of msg.messageIds) {
-    const ok = await deleteWebhookMessageFromDiscord(channelId, id);
-    if (ok) {
-      deleteWebhookMessageRecord(id);
-      anyOk = true;
-    }
+  // Webhook message — delete from Discord first, then DB
+  if (!msg.messageId) return false;
+  const ok = await deleteWebhookMessageFromDiscord(channelId, msg.messageId);
+  if (ok) {
+    deleteWebhookMessageRecord(msg.messageId);
   }
-  return anyOk;
+  return ok;
 }
 
 async function handleQuery(
@@ -160,15 +156,14 @@ async function handleQuery(
         event_type: "delete_message",
         actor_id: ctx.userId,
         target_type: "message",
-        target_id: msg.messageId ?? msg.messageIds[0] ?? "",
+        target_id: msg.messageId!,
         channel_id: ctx.channelId,
         guild_id: ctx.guildId ?? null,
-        details: { entityId: msg.entityId, mode: "substring", messageCount: msg.messageIds.length },
+        details: { entityId: msg.entityId, mode: "substring" },
       });
     }
-    debug("Deleted message via /purge query", { messageIds: msg.messageIds, isSystemNote: msg.isSystemNote, entity: msg.entityName, actor: ctx.userId });
-    const parts = msg.messageIds.length > 1 ? ` (${msg.messageIds.length} parts)` : "";
-    const label = msg.isSystemNote ? "system note" : `message from **${msg.entityName}**${parts}`;
+    debug("Deleted message via /purge query", { messageId: msg.messageId, isSystemNote: msg.isSystemNote, entity: msg.entityName, actor: ctx.userId });
+    const label = msg.isSystemNote ? "system note" : `message from **${msg.entityName}**`;
     await respond(ctx.bot, ctx.interaction, `Deleted ${label}`, true);
   } else {
     await respond(ctx.bot, ctx.interaction, "Failed to delete message (webhook may have changed, or missing Manage Messages permission)", true);
@@ -211,10 +206,10 @@ async function handleRange(
           event_type: "delete_message",
           actor_id: ctx.userId,
           target_type: "message",
-          target_id: msg.messageId ?? msg.messageIds[0] ?? "",
+          target_id: msg.messageId!,
           channel_id: ctx.channelId,
           guild_id: ctx.guildId ?? null,
-          details: { entityId: msg.entityId, mode: "range", range: rangeStr, messageCount: msg.messageIds.length },
+          details: { entityId: msg.entityId, mode: "range", range: rangeStr },
         });
       }
       deleted++;
