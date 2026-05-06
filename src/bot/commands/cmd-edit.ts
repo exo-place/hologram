@@ -126,6 +126,7 @@ registerCommand({
         { name: "Template", value: "template" },
         { name: "System Prompt", value: "system-template" },
         { name: "Config", value: "config" },
+        { name: "Model", value: "model" },
         { name: "Advanced", value: "advanced" },
         { name: "Permissions", value: "permissions" },
       ],
@@ -239,10 +240,9 @@ registerCommand({
     }
 
     if (editType === "config") {
-      // Config editing - 5 text fields for entity settings
+      // Config editing - original 5 text fields (unchanged)
       const config = getEntityConfig(entity.id);
 
-      // Format stream config for display
       let streamDisplay = "";
       if (config?.config_stream_mode) {
         streamDisplay = config.config_stream_mode;
@@ -250,48 +250,93 @@ registerCommand({
           try {
             const delims = JSON.parse(config.config_stream_delimiters) as string[];
             streamDisplay += " " + delims.map(d =>
-            `"${d.replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/\t/g, "\\t").replace(/\r/g, "\\r")}"`
-          ).join(" ");
+              `"${d.replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/\t/g, "\\t").replace(/\r/g, "\\r")}"`
+            ).join(" ");
           } catch {
-            // Corrupted delimiter data — show raw value for manual fix
             streamDisplay += " " + config.config_stream_delimiters;
           }
         }
       }
 
-      const availableModels = await getAvailableModels();
+      const configFields = [
+        {
+          customId: "model",
+          label: "Model",
+          style: TextStyles.Short,
+          value: config?.config_model ?? "",
+          required: false,
+          placeholder: "provider:model (e.g. google:gemini-2.5-flash)",
+        },
+        {
+          customId: "context",
+          label: "Context",
+          style: TextStyles.Short,
+          value: config?.config_context ?? "",
+          required: false,
+          placeholder: "chars < 4000 || count < 20",
+        },
+        {
+          customId: "stream",
+          label: "Stream",
+          style: TextStyles.Short,
+          value: streamDisplay,
+          required: false,
+          placeholder: 'lines, full, full "\\n", "delimiter"',
+        },
+        {
+          customId: "avatar",
+          label: "Avatar URL",
+          style: TextStyles.Short,
+          value: config?.config_avatar ?? "",
+          required: false,
+          placeholder: "https://example.com/avatar.png",
+        },
+        {
+          customId: "memory",
+          label: "Memory scope",
+          style: TextStyles.Short,
+          value: config?.config_memory ?? "",
+          required: false,
+          placeholder: "none, channel, guild, global",
+        },
+      ];
+
+      await respondWithModal(ctx.bot, ctx.interaction, `edit-config:${entity.id}`, `Config: ${entity.name}`, configFields);
+      return;
+    }
+
+    if (editType === "model") {
+      // Model picker — V2 modal with dropdown + text override
+      const config = getEntityConfig(entity.id);
       const currentModel = config?.config_model ?? null;
-      // Top 23 to leave room for a "current model" option and "custom" hint
-      const modelOptions = availableModels.slice(0, 23).map(m => ({
-        label: m,
-        value: m,
-        default: m === currentModel,
+      const availableModels = await getAvailableModels();
+      const modelOptions = availableModels.slice(0, 24).map(m => ({
+        label: m, value: m, default: m === currentModel,
       }));
-      // If current model isn't in the fetched list, prepend it
       if (currentModel && !modelOptions.some(o => o.value === currentModel)) {
         modelOptions.unshift({ label: currentModel, value: currentModel, default: true });
-        modelOptions.splice(25); // enforce cap
+        modelOptions.splice(25);
       }
 
-      const configLabels = [
+      const modelLabels = [
         {
           type: MessageComponentTypes.Label,
           label: "Model",
-          description: "Select a model, or type a custom spec below",
+          description: "Pick from available models",
           component: {
             type: MessageComponentTypes.StringSelect,
             customId: "model_select",
             minValues: 0,
             maxValues: 1,
             required: false,
-            placeholder: modelOptions.length > 0 ? "Select a model…" : "No models fetched — use custom field below",
+            placeholder: modelOptions.length > 0 ? "Select a model…" : "No models fetched — use field below",
             options: modelOptions.length > 0 ? modelOptions : [{ label: "—", value: "" }],
           },
         },
         {
           type: MessageComponentTypes.Label,
           label: "Custom model (overrides selection)",
-          description: "provider:model — overrides the dropdown if set",
+          description: "provider:model — takes priority over the dropdown",
           component: {
             type: MessageComponentTypes.TextInput,
             customId: "model_custom",
@@ -300,48 +345,9 @@ registerCommand({
             placeholder: "google:gemini-2.5-flash",
           },
         },
-        {
-          type: MessageComponentTypes.Label,
-          label: "Context",
-          description: "Expression controlling how many messages go into context",
-          component: {
-            type: MessageComponentTypes.TextInput,
-            customId: "context",
-            style: TextStyles.Short,
-            value: config?.config_context || undefined,
-            required: false,
-            placeholder: "chars < 4000 || count < 20",
-          },
-        },
-        {
-          type: MessageComponentTypes.Label,
-          label: "Stream",
-          description: "Streaming mode",
-          component: {
-            type: MessageComponentTypes.TextInput,
-            customId: "stream",
-            style: TextStyles.Short,
-            value: streamDisplay || undefined,
-            required: false,
-            placeholder: 'lines, full, full "\\n", "delimiter"',
-          },
-        },
-        {
-          type: MessageComponentTypes.Label,
-          label: "Memory scope",
-          description: "Memory retrieval scope",
-          component: {
-            type: MessageComponentTypes.TextInput,
-            customId: "memory",
-            style: TextStyles.Short,
-            value: config?.config_memory || undefined,
-            required: false,
-            placeholder: "none, channel, guild, global",
-          },
-        },
       ];
 
-      await respondWithV2Modal(ctx.bot, ctx.interaction, `edit-config:${entity.id}`, `Config: ${entity.name}`, configLabels);
+      await respondWithV2Modal(ctx.bot, ctx.interaction, `edit-model:${entity.id}`, `Model: ${entity.name}`, modelLabels);
       return;
     }
 
@@ -736,7 +742,7 @@ registerModalHandler("edit-system-template", async (bot, interaction, values) =>
   await respond(bot, interaction, `Updated system prompt for "${entity.name}" (${templateText.length} chars)`, true);
 });
 
-registerModalHandler("edit-config", async (bot, interaction, _textValues) => {
+registerModalHandler("edit-config", async (bot, interaction, values) => {
   const customId = interaction.data?.customId ?? "";
   const entityId = parseInt(customId.split(":")[1]);
 
@@ -754,27 +760,13 @@ registerModalHandler("edit-config", async (bot, interaction, _textValues) => {
     return;
   }
 
-  // Parse V2 Label components
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const components: any[] = interaction.data?.components ?? [];
-  const textValues: Record<string, string> = {};
-  const selectValues: Record<string, string[]> = {};
-  for (const comp of components) {
-    const inner = comp.component;
-    if (!inner?.customId) continue;
-    if (inner.value !== undefined) textValues[inner.customId] = inner.value;
-    else if (inner.values !== undefined) selectValues[inner.customId] = inner.values;
-  }
-
-  const modelCustom = textValues.model_custom?.trim() || null;
-  const modelSelect = (selectValues.model_select?.[0] ?? "").trim() || null;
-  const model = modelCustom || modelSelect || null;
-  const context = textValues.context?.trim() || null;
-  const avatar = textValues.avatar?.trim() || null;
-  const memory = textValues.memory?.trim() || null;
+  const model = values.model?.trim() || null;
+  const context = values.context?.trim() || null;
+  const avatar = values.avatar?.trim() || null;
+  const memory = values.memory?.trim() || null;
 
   // Parse stream config: "lines", "full", 'full "\n"', '"delimiter"'
-  const streamRaw = textValues.stream?.trim() || "";
+  const streamRaw = values.stream?.trim() || "";
   let streamMode: string | null = null;
   let streamDelimiters: string | null = null;
 
@@ -827,6 +819,45 @@ registerModalHandler("edit-config", async (bot, interaction, _textValues) => {
   if (changes.length === 0) changes.push("all cleared");
 
   await respond(bot, interaction, `Updated config for "${entity.name}": ${changes.join(", ")}`, true);
+});
+
+// =============================================================================
+// Model Picker Modal Handler
+// =============================================================================
+
+registerModalHandler("edit-model", async (bot, interaction, _values) => {
+  const customId = interaction.data?.customId ?? "";
+  const entityId = parseInt(customId.split(":")[1]);
+
+  const entity = getEntityWithFacts(entityId);
+  if (!entity) { await respond(bot, interaction, "Entity not found", true); return; }
+
+  const userId = interaction.user?.id?.toString() ?? "";
+  const username = interaction.user?.username ?? "";
+  if (!canUserEdit(entity, userId, username)) {
+    await respond(bot, interaction, "You don't have permission to edit this entity", true);
+    return;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const components: any[] = interaction.data?.components ?? [];
+  const textValues: Record<string, string> = {};
+  const selectValues: Record<string, string[]> = {};
+  for (const comp of components) {
+    const inner = comp.component;
+    if (!inner?.customId) continue;
+    if (inner.value !== undefined) textValues[inner.customId] = inner.value;
+    else if (inner.values !== undefined) selectValues[inner.customId] = inner.values;
+  }
+
+  const modelCustom = textValues.model_custom?.trim() || null;
+  const modelSelect = (selectValues.model_select?.[0] ?? "").trim() || null;
+  const model = modelCustom || modelSelect || null;
+
+  setEntityConfig(entityId, { config_model: model });
+  await respond(bot, interaction, model
+    ? `Updated model for "${entity.name}": ${model}`
+    : `Cleared model for "${entity.name}" (using default)`, true);
 });
 
 // =============================================================================
