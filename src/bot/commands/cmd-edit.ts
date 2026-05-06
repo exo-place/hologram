@@ -345,6 +345,19 @@ registerCommand({
             placeholder: "google:gemini-2.5-flash",
           },
         },
+        {
+          type: MessageComponentTypes.Label,
+          label: "RAG Context",
+          description: "Which recent messages to use as memory retrieval queries",
+          component: {
+            type: MessageComponentTypes.TextInput,
+            customId: "rag_context",
+            style: TextStyles.Short,
+            value: config?.config_rag_context || undefined,
+            required: false,
+            placeholder: "count <= 10",
+          },
+        },
       ];
 
       await respondWithV2Modal(ctx.bot, ctx.interaction, `edit-model:${entity.id}`, `Model: ${entity.name}`, modelLabels);
@@ -853,11 +866,15 @@ registerModalHandler("edit-model", async (bot, interaction, _values) => {
   const modelCustom = textValues.model_custom?.trim() || null;
   const modelSelect = (selectValues.model_select?.[0] ?? "").trim() || null;
   const model = modelCustom || modelSelect || null;
+  const ragContext = textValues.rag_context?.trim() || null;
 
-  setEntityConfig(entityId, { config_model: model });
-  await respond(bot, interaction, model
-    ? `Updated model for "${entity.name}": ${model}`
-    : `Cleared model for "${entity.name}" (using default)`, true);
+  setEntityConfig(entityId, { config_model: model, config_rag_context: ragContext });
+
+  const changes: string[] = [];
+  if (model) changes.push(`model: ${model}`);
+  else changes.push("model: cleared");
+  if (ragContext !== null) changes.push(`rag context: ${ragContext}`);
+  await respond(bot, interaction, `Updated model config for "${entity.name}": ${changes.join(", ")}`, true);
 });
 
 // =============================================================================
