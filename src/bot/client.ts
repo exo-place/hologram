@@ -559,6 +559,7 @@ bot.events.messageCreate = async (message) => {
   // Track response chain depth to prevent infinite self-response loops
   const isWebhookMessage = !!message.webhookId;
   const isHologram = isWebhookMessage && isOurWebhookUserId(message.webhookId!.toString());
+  let hologramChainLimitReached = false;
   if (isHologram) {
     // This is our own webhook - increment chain depth
     const depth = (responseChainDepth.get(channelId) ?? 0) + 1;
@@ -566,7 +567,7 @@ bot.events.messageCreate = async (message) => {
     const chainLimit = resolveChainLimit(channelId, guildId) ?? MAX_RESPONSE_CHAIN_DEFAULT;
     if (depth > chainLimit) {
       debug("Response chain limit reached", { channel: channelId, depth, max: chainLimit });
-      return;
+      hologramChainLimitReached = true;
     }
   } else if (!isBot && !isWebhookMessage) {
     // A genuine human message breaks any active self-response chain
@@ -603,6 +604,9 @@ bot.events.messageCreate = async (message) => {
   // Store message in history (before response decision so context builds up)
   const stored = addMessage(channelId, authorId, authorName, content, message.id.toString(), msgData);
   if (stored) broadcastSSE(channelId, { type: "message", message: stored });
+
+  // Chain limit: store the message (so it appears in context and /purge) but don't respond
+  if (hologramChainLimitReached) return;
 
   // Cache channel name for the web UI (fire-and-forget; getChannelMetadata has its own cache)
   if (!guildId) {
