@@ -1002,7 +1002,7 @@ registerCommand({
       streamDelimiter: result.streamDelimiter,
       memoryScope: result.memoryScope,
       contextExpr: result.contextExpr,
-      ragContextExpr: evalDefaults2.ragContextExpr ?? null,
+      ragContextExpr: result.ragContextExpr ?? evalDefaults2.ragContextExpr ?? null,
       isFreeform: result.isFreeform,
       modelSpec: result.modelSpec,
       stripPatterns: result.stripPatterns,
