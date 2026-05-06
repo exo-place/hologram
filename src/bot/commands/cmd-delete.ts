@@ -94,7 +94,8 @@ async function canDelete(
 /**
  * Delete a single channel message: skips Discord API for system notes,
  * calls Discord API for webhook messages.
- * Returns true on success.
+ * DB is deleted unconditionally (source of truth); Discord deletion is best-effort.
+ * Returns true if the Discord message was also removed, false if only DB was cleaned up.
  */
 async function deleteChannelMessage(
   msg: RecentChannelMessage,
@@ -104,13 +105,11 @@ async function deleteChannelMessage(
     // DB-only deletion — no Discord message to remove
     return deleteSystemNote(msg.dbId);
   }
-  // Webhook message — delete from Discord first, then DB
   if (!msg.messageId) return false;
-  const ok = await deleteWebhookMessageFromDiscord(channelId, msg.messageId);
-  if (ok) {
-    deleteWebhookMessageRecord(msg.messageId);
-  }
-  return ok;
+  // Remove from DB first — message leaves context regardless of Discord API outcome
+  deleteWebhookMessageRecord(msg.messageId);
+  // Best-effort: remove from Discord so visible state matches DB
+  return deleteWebhookMessageFromDiscord(channelId, msg.messageId);
 }
 
 async function handleQuery(
@@ -166,7 +165,7 @@ async function handleQuery(
     const label = msg.isSystemNote ? "system note" : `message from **${msg.entityName}**`;
     await respond(ctx.bot, ctx.interaction, `Deleted ${label}`, true);
   } else {
-    await respond(ctx.bot, ctx.interaction, "Failed to delete message (webhook may have changed, or missing Manage Messages permission)", true);
+    await respond(ctx.bot, ctx.interaction, "Removed from context, but couldn't delete the Discord message (webhook stale or missing Manage Messages)", true);
   }
 }
 
