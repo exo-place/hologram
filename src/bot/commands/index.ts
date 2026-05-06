@@ -4,7 +4,8 @@ import {
   InteractionResponseTypes,
   MessageComponentTypes,
 } from "@discordeno/bot";
-import type { CreateApplicationCommand, TextInputComponent, TextStyles } from "@discordeno/bot";
+import type { CreateApplicationCommand, TextInputComponent } from "@discordeno/bot";
+import { TextStyles } from "@discordeno/bot";
 
 import type { bot } from "../client";
 type Bot = typeof bot;
@@ -290,6 +291,21 @@ export async function respondWithModal(
     placeholder?: string;
   }>
 ) {
+  // Validate known Discord modal constraints before sending to get clear errors
+  // instead of opaque 400s from the API.
+  if (components.length > 5)
+    throw new Error(`Modal "${customId}" has ${components.length} components (max 5)`);
+  for (const c of components) {
+    if (c.label.length > 45)
+      throw new Error(`Modal "${customId}" field "${c.customId}" label too long (${c.label.length} > 45)`);
+    if (c.placeholder && c.placeholder.length > 100)
+      throw new Error(`Modal "${customId}" field "${c.customId}" placeholder too long (${c.placeholder.length} > 100)`);
+    if (c.value && c.value.length > 4000)
+      throw new Error(`Modal "${customId}" field "${c.customId}" value too long (${c.value.length} > 4000)`);
+    if (c.style === TextStyles.Short && c.value && /[\n\r]/.test(c.value))
+      throw new Error(`Modal "${customId}" field "${c.customId}" Short value contains newline`);
+  }
+
   // Discord modal titles are limited to 45 characters
   const truncatedTitle = title.length > 45 ? title.slice(0, 42) + "..." : title;
 
