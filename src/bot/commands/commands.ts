@@ -978,8 +978,9 @@ registerCommand({
     });
 
     let result;
+    const evalDefaults2 = getEntityEvalDefaults(entity.id);
     try {
-      result = evaluateFacts(facts, ctx2, getEntityEvalDefaults(entity.id));
+      result = evaluateFacts(facts, ctx2, evalDefaults2);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       await respond(ctx.bot, ctx.interaction, `Fact evaluation error: ${errorMsg}`, true);
@@ -1001,6 +1002,7 @@ registerCommand({
       streamDelimiter: result.streamDelimiter,
       memoryScope: result.memoryScope,
       contextExpr: result.contextExpr,
+      ragContextExpr: evalDefaults2.ragContextExpr ?? null,
       isFreeform: result.isFreeform,
       modelSpec: result.modelSpec,
       stripPatterns: result.stripPatterns,

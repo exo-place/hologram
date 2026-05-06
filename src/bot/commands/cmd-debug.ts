@@ -22,7 +22,7 @@ import {
   getMessages,
 } from "../../db/discord";
 import { createBaseContext, compileContextExpr } from "../../logic/expr";
-import { DEFAULT_CONTEXT_EXPR } from "../../ai/context";
+import { DEFAULT_RAG_CONTEXT_EXPR } from "../../ai/context";
 import { buildEvaluatedEntity } from "../../debug/evaluation";
 import { preparePromptContext } from "../../ai/prompt";
 import { getEmbeddingCoverage, testRagRetrieval } from "../../debug/embeddings";
@@ -373,9 +373,9 @@ async function handleInfoRag(ctx: CommandContext, options: Record<string, unknow
       queryTexts = [query];
       queryLabel = `"${query}"`;
     } else {
-      // Replicate the exact context window the entity sees (same logic as the pipeline)
-      const contextExpr = config?.config_context ?? DEFAULT_CONTEXT_EXPR;
-      const contextFilter = compileContextExpr(contextExpr);
+      // Replicate the exact RAG context window (same logic as the pipeline)
+      const ragContextExpr = config?.config_rag_context ?? DEFAULT_RAG_CONTEXT_EXPR;
+      const contextFilter = compileContextExpr(ragContextExpr);
       const rawMessages = getMessages(ctx.channelId, 100);
       const now = Date.now();
       queryTexts = [];

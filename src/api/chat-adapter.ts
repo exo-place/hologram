@@ -161,6 +161,7 @@ async function _handleWebMessageInner(
         streamDelimiter: result.streamDelimiter,
         memoryScope: result.memoryScope,
         contextExpr: result.contextExpr,
+        ragContextExpr: evalDefaults.ragContextExpr ?? null,
         isFreeform: result.isFreeform,
         modelSpec: resolvedModelSpec,
         imageModelSpec,

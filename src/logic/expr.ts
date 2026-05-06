@@ -1399,6 +1399,7 @@ export interface EvaluatedFacts {
 /** Defaults from entity config columns (optional, seeded before fact evaluation) */
 export interface EvaluatedFactsDefaults {
   contextExpr?: string | null;
+  ragContextExpr?: string | null;
   modelSpec?: string | null;
   avatarUrl?: string | null;
   streamMode?: "lines" | "full" | null;

@@ -17,6 +17,7 @@ function makeEntity(overrides: Partial<EvaluatedEntity> & { name: string; id: nu
     streamDelimiter: null,
     memoryScope: "none",
     contextExpr: null,
+    ragContextExpr: null,
     isFreeform: false,
     modelSpec: null,
     stripPatterns: null,

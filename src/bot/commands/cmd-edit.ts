@@ -378,6 +378,19 @@ registerCommand({
         },
         {
           type: MessageComponentTypes.Label,
+          label: "RAG Context",
+          description: "Which recent messages to use as memory retrieval queries. Default: count <= 10",
+          component: {
+            type: MessageComponentTypes.TextInput,
+            customId: "rag_context",
+            style: TextStyles.Short,
+            value: config?.config_rag_context || undefined,
+            required: false,
+            placeholder: "count <= 10",
+          },
+        },
+        {
+          type: MessageComponentTypes.Label,
           label: "Response Queue",
           description: "Skip the per-channel response queue (power users only — may cause context races)",
           component: {
@@ -858,12 +871,15 @@ registerModalHandler("edit-advanced", async (bot, interaction, _textValues) => {
   const queueDisabledSelected = selectValues.queue_disabled ?? [];
   const queueDisabled = queueDisabledSelected.includes("1") ? 1 : 0;
 
+  const ragContext = textValues.rag_context?.trim() || null;
+
   setEntityConfig(entityId, {
     config_thinking: thinking,
     config_collapse: collapseRaw,
     config_keywords: keywordsNormalized,
     config_safety: safetyRaw,
     config_queue_disabled: queueDisabled,
+    config_rag_context: ragContext,
   });
 
   const changes: string[] = [];
@@ -873,6 +889,7 @@ registerModalHandler("edit-advanced", async (bot, interaction, _textValues) => {
   if (keywordsNormalized !== null) changes.push(`keywords: ${keywordsNormalized.split("\n").length} set`);
   else if (keywordsRaw !== null) changes.push("keywords: cleared");
   if (queueDisabled === 1) changes.push("queue: disabled");
+  if (ragContext !== null) changes.push(`rag context: ${ragContext}`);
   if (changes.length === 0) changes.push("all cleared");
 
   await respond(bot, interaction, `Updated advanced config for "${entity.name}": ${changes.join(", ")}`, true);

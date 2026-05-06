@@ -13,7 +13,7 @@ import { retrieveRelevantMemories, type MemoryScope } from "../db/memories";
 import { resolveDiscordEntity, resolveDiscordEntities, isNewUser, markUserWelcomed, addMessage, updateMessageByDiscordId, mergeMessageData, deleteMessageByDiscordId, trackWebhookMessage, getWebhookMessageEntity, getMessages, getFilteredMessages, formatMessagesForContext, recordEvalError, isOurWebhookUserId, countUnreadMessages, getLastMessageSnowflake, getAllBoundChannelIds, getChannelScopedEntities, storeChannelMeta, resolveChainLimit, type MessageData } from "../db/discord";
 import { getEntity, getEntityWithFacts, getSystemEntity, getFactsForEntity, getEntityEvalDefaults, getEntityKeywords, getEntityConfig, getPermissionDefaults, type EntityWithFacts } from "../db/entities";
 import { evaluateFacts, getTickInterval, createBaseContext, parsePermissionDirectives, isUserBlacklisted, isUserAllowed, compileContextExpr, ExprError } from "../logic/expr";
-import { DEFAULT_CONTEXT_EXPR } from "../ai/context";
+import { DEFAULT_CONTEXT_EXPR, DEFAULT_RAG_CONTEXT_EXPR } from "../ai/context";
 import { executeWebhook, editWebhookMessage, setBot } from "./webhooks";
 import { runOnChannel } from "./channel-queue";
 import { broadcastSSE } from "../api/routes/chat";
@@ -866,6 +866,7 @@ bot.events.messageCreate = async (message) => {
           streamDelimiter: result.streamDelimiter,
           memoryScope: result.memoryScope,
           contextExpr: result.contextExpr,
+          ragContextExpr: evalDefaults.ragContextExpr ?? null,
           isFreeform: result.isFreeform,
           modelSpec: resolvedModelSpec,
           imageModelSpec,
@@ -1031,6 +1032,7 @@ async function processEntityRetry(
     streamDelimiter: result.streamDelimiter,
     memoryScope: result.memoryScope,
     contextExpr: result.contextExpr,
+    ragContextExpr: evalDefaults.ragContextExpr ?? null,
     isFreeform: result.isFreeform,
     modelSpec: resolvedModelSpecRetry,
     imageModelSpec: imageModelSpecRetry,
@@ -1128,6 +1130,7 @@ async function processEntityTick(
     streamDelimiter: result.streamDelimiter,
     memoryScope: result.memoryScope,
     contextExpr: result.contextExpr,
+    ragContextExpr: tickEvalDefaults.ragContextExpr ?? null,
     isFreeform: result.isFreeform,
     modelSpec: resolvedModelSpecTick,
     imageModelSpec: imageModelSpecTick,
@@ -1579,9 +1582,9 @@ export async function sendResponse(
     // Retrieve memories for entities that have memory enabled
     const entityMemories = new Map<number, Array<{ content: string }>>();
     if (respondingEntities) {
-      // Get context-filtered messages for memory search (same messages the entity sees)
-      const contextExpr = respondingEntities.find(e => e.contextExpr !== null)?.contextExpr ?? DEFAULT_CONTEXT_EXPR;
-      const contextFilter = compileContextExpr(contextExpr);
+      // Get recent messages for memory retrieval queries
+      const ragContextExpr = respondingEntities.find(e => e.ragContextExpr !== null)?.ragContextExpr ?? DEFAULT_RAG_CONTEXT_EXPR;
+      const ragContextFilter = compileContextExpr(ragContextExpr);
       const rawMessages = getMessages(channelId, 100);
       const now = Date.now();
       const contextMessages: string[] = [];
@@ -1591,7 +1594,7 @@ export async function sendResponse(
         const formatted = `${m.author_name}: ${m.content}`;
         const len = formatted.length + 1;
         const msgAge = now - new Date(m.created_at).getTime();
-        const shouldInclude = contextFilter({
+        const shouldInclude = ragContextFilter({
           chars: totalChars + len,
           count: contextMessages.length,
           age: msgAge,
@@ -1726,6 +1729,7 @@ export async function sendResponse(
         streamDelimiter: triggerResult.streamDelimiter,
         memoryScope: triggerResult.memoryScope,
         contextExpr: triggerResult.contextExpr,
+        ragContextExpr: triggerEvalDefaults.ragContextExpr ?? null,
         isFreeform: triggerResult.isFreeform,
         modelSpec: resolvedModelSpecTrigger,
         imageModelSpec: imageModelSpecTrigger,

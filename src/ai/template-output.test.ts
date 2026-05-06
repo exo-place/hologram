@@ -41,6 +41,7 @@ function mockEntity(overrides: Partial<EvaluatedEntity> & { id: number; name: st
     streamDelimiter: null,
     memoryScope: "none",
     contextExpr: null,
+    ragContextExpr: null,
     isFreeform: false,
     modelSpec: null,
     stripPatterns: null,

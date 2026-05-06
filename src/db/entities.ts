@@ -93,6 +93,7 @@ export function searchEntitiesOwnedBy(query: string, userId: string, limit = 20)
 
 export interface EntityConfig {
   config_context: string | null;
+  config_rag_context: string | null;
   config_model: string | null;
   config_respond: string | null;
   config_stream_mode: string | null;
@@ -115,7 +116,7 @@ export interface EntityConfig {
 }
 
 const CONFIG_COLUMNS = `
-  config_context, config_model, config_respond,
+  config_context, config_rag_context, config_model, config_respond,
   config_stream_mode, config_stream_delimiters,
   config_avatar, config_memory, config_freeform,
   config_strip, config_view, config_edit, config_use, config_blacklist,
@@ -173,6 +174,7 @@ export function getEntityEvalDefaults(entityId: number): EvaluatedFactsDefaults 
   if (!config) return {};
   return {
     contextExpr: config.config_context,
+    ragContextExpr: config.config_rag_context,
     modelSpec: config.config_model,
     avatarUrl: config.config_avatar,
     streamMode: config.config_stream_mode as "lines" | "full" | null,

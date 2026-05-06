@@ -38,6 +38,8 @@ export interface EvaluatedEntity {
   memoryScope: "none" | "channel" | "guild" | "global";
   /** Context expression from $context directive (e.g. "chars < 16000"), if present */
   contextExpr: string | null;
+  /** RAG context expression — controls which recent messages are used as retrieval queries */
+  ragContextExpr: string | null;
   /** Freeform multi-char responses (no XML parsing) from $freeform directive */
   isFreeform: boolean;
   /** Model spec from $model directive (e.g. "google:gemini-2.0-flash") */
@@ -75,6 +77,9 @@ export function applyStripPatterns(text: string, patterns: string[]): string {
 
 /** Default context expression when no $context directive is present */
 export const DEFAULT_CONTEXT_EXPR = "chars < 4000 || count < 20";
+
+/** Default RAG context expression — how many recent messages to use as retrieval queries */
+export const DEFAULT_RAG_CONTEXT_EXPR = "count <= 10";
 
 /** Hard cap on context size (~250k tokens) */
 export const MAX_CONTEXT_CHAR_LIMIT = 1_000_000;

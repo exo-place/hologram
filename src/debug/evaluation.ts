@@ -80,6 +80,7 @@ export function buildEvaluatedEntity(
     streamDelimiter: result.streamDelimiter,
     memoryScope: result.memoryScope,
     contextExpr: result.contextExpr,
+    ragContextExpr: defaults.ragContextExpr ?? null,
     isFreeform: result.isFreeform,
     modelSpec: result.modelSpec,
     stripPatterns: result.stripPatterns,

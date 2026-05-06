@@ -21,6 +21,7 @@ export function initSchema(db: Database, { useVec0 = true } = {}) {
       template TEXT,
       system_template TEXT,
       config_context TEXT,
+      config_rag_context TEXT,
       config_model TEXT,
       config_respond TEXT,
       config_stream_mode TEXT,

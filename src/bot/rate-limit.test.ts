@@ -32,6 +32,7 @@ function makeEntity(id: number, name = `entity-${id}`): EvaluatedEntity {
     streamDelimiter: null,
     memoryScope: "none",
     contextExpr: null,
+    ragContextExpr: null,
     isFreeform: false,
     modelSpec: null,
     stripPatterns: null,
