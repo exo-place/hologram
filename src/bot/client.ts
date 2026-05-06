@@ -85,6 +85,7 @@ export const bot = createBot({
       user: true,
       token: true,
       member: true,
+      channel: true,
     },
     component: {
       // v1 (ActionRow, Button, Select, TextInput)
@@ -158,6 +159,7 @@ export const bot = createBot({
       parentId: true,
       name: true,
       topic: true,
+      ownerId: true,
       // needed by canOwnerReadChannel to check user access
       permissionOverwrites: true,
       // toggles is always present (per Discordeno metadata)
