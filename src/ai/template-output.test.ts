@@ -20,6 +20,18 @@ function norm(s: string): string {
   return s.replace(/\r\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
+describe("norm helper", () => {
+  test("converts CRLF to LF", () => {
+    expect(norm("foo\r\nbar")).toBe("foo\nbar");
+  });
+  test("collapses 3+ newlines to 2", () => {
+    expect(norm("a\n\n\nb")).toBe("a\n\nb");
+  });
+  test("trims surrounding whitespace", () => {
+    expect(norm("  hi  ")).toBe("hi");
+  });
+});
+
 /** Create a mock EvaluatedEntity */
 function mockEntity(overrides: Partial<EvaluatedEntity> & { id: number; name: string; facts: string[] }): EvaluatedEntity {
   return {
