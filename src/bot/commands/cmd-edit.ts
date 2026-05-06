@@ -290,6 +290,18 @@ registerCommand({
         },
         {
           type: MessageComponentTypes.Label,
+          label: "Custom model (overrides selection)",
+          description: "provider:model — overrides the dropdown if set",
+          component: {
+            type: MessageComponentTypes.TextInput,
+            customId: "model_custom",
+            style: TextStyles.Short,
+            required: false,
+            placeholder: "google:gemini-2.5-flash",
+          },
+        },
+        {
+          type: MessageComponentTypes.Label,
           label: "Context",
           description: "Expression controlling how many messages go into context",
           component: {
@@ -325,19 +337,6 @@ registerCommand({
             value: config?.config_memory || undefined,
             required: false,
             placeholder: "none, channel, guild, global",
-          },
-        },
-        {
-          type: MessageComponentTypes.Label,
-          label: "Avatar URL",
-          description: "Webhook avatar (or use $avatar in facts)",
-          component: {
-            type: MessageComponentTypes.TextInput,
-            customId: "avatar",
-            style: TextStyles.Short,
-            value: config?.config_avatar || undefined,
-            required: false,
-            placeholder: "https://example.com/avatar.png",
           },
         },
       ];
@@ -767,7 +766,9 @@ registerModalHandler("edit-config", async (bot, interaction, _textValues) => {
     else if (inner.values !== undefined) selectValues[inner.customId] = inner.values;
   }
 
-  const model = (selectValues.model_select?.[0] ?? "").trim() || null;
+  const modelCustom = textValues.model_custom?.trim() || null;
+  const modelSelect = (selectValues.model_select?.[0] ?? "").trim() || null;
+  const model = modelCustom || modelSelect || null;
   const context = textValues.context?.trim() || null;
   const avatar = textValues.avatar?.trim() || null;
   const memory = textValues.memory?.trim() || null;
