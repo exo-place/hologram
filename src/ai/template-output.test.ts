@@ -17,7 +17,7 @@ import { withToJSON } from "./prompt";
 
 /** Normalize whitespace for comparison: collapse 3+ newlines to 2, trim */
 function norm(s: string): string {
-  return s.replace(/\n{3,}/g, "\n\n").trim();
+  return s.replace(/\r\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
 /** Create a mock EvaluatedEntity */
