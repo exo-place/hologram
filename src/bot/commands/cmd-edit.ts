@@ -313,7 +313,8 @@ registerCommand({
       const modelOptions = availableModels.slice(0, 24).map(m => ({
         label: m, value: m, default: m === currentModel,
       }));
-      if (currentModel && !modelOptions.some(o => o.value === currentModel)) {
+      const modelInList = modelOptions.some(o => o.value === currentModel);
+      if (currentModel && !modelInList) {
         modelOptions.unshift({ label: currentModel, value: currentModel, default: true });
         modelOptions.splice(25);
       }
@@ -341,6 +342,8 @@ registerCommand({
             type: MessageComponentTypes.TextInput,
             customId: "model_custom",
             style: TextStyles.Short,
+            // Pre-fill only when the current model isn't in the fetched list (unlisted/custom)
+            value: currentModel && !modelInList ? currentModel : undefined,
             required: false,
             placeholder: "google:gemini-2.5-flash",
           },
