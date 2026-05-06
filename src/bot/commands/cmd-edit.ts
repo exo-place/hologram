@@ -290,18 +290,6 @@ registerCommand({
         },
         {
           type: MessageComponentTypes.Label,
-          label: "Custom model (overrides selection)",
-          description: "provider:model — overrides the dropdown if set",
-          component: {
-            type: MessageComponentTypes.TextInput,
-            customId: "model_custom",
-            style: TextStyles.Short,
-            required: false,
-            placeholder: "google:gemini-2.5-flash",
-          },
-        },
-        {
-          type: MessageComponentTypes.Label,
           label: "Context",
           description: "Expression controlling how many messages go into context",
           component: {
@@ -342,7 +330,7 @@ registerCommand({
         {
           type: MessageComponentTypes.Label,
           label: "Avatar URL",
-          description: "Webhook avatar for this entity",
+          description: "Webhook avatar (or use $avatar in facts)",
           component: {
             type: MessageComponentTypes.TextInput,
             customId: "avatar",
@@ -427,35 +415,6 @@ registerCommand({
             value: config?.config_keywords || undefined,
             required: false,
             placeholder: "hello\ngood morning\n/\\bhey\\b/i",
-          },
-        },
-        {
-          type: MessageComponentTypes.Label,
-          label: "RAG Context",
-          description: "Which recent messages to use as memory retrieval queries. Default: count <= 10",
-          component: {
-            type: MessageComponentTypes.TextInput,
-            customId: "rag_context",
-            style: TextStyles.Short,
-            value: config?.config_rag_context || undefined,
-            required: false,
-            placeholder: "count <= 10",
-          },
-        },
-        {
-          type: MessageComponentTypes.Label,
-          label: "Response Queue",
-          description: "Skip the per-channel response queue (power users only — may cause context races)",
-          component: {
-            type: MessageComponentTypes.StringSelect,
-            customId: "queue_disabled",
-            minValues: 0,
-            maxValues: 1,
-            required: false,
-            placeholder: "Enabled (default)",
-            options: [
-              { label: "Disabled (skip queue)", value: "1", default: config?.config_queue_disabled === 1 },
-            ],
           },
         },
       ];
@@ -792,10 +751,7 @@ registerModalHandler("edit-config", async (bot, interaction, _textValues) => {
     else if (inner.values !== undefined) selectValues[inner.customId] = inner.values;
   }
 
-  // Custom text overrides dropdown; empty select (minValues: 0) means no change
-  const modelCustom = textValues.model_custom?.trim() || null;
-  const modelSelect = (selectValues.model_select?.[0] ?? "").trim() || null;
-  const model = modelCustom || modelSelect || null;
+  const model = (selectValues.model_select?.[0] ?? "").trim() || null;
   const context = textValues.context?.trim() || null;
   const avatar = textValues.avatar?.trim() || null;
   const memory = textValues.memory?.trim() || null;
@@ -936,18 +892,11 @@ registerModalHandler("edit-advanced", async (bot, interaction, _textValues) => {
     keywordsNormalized = lines.length > 0 ? lines.join("\n") : null;
   }
 
-  const queueDisabledSelected = selectValues.queue_disabled ?? [];
-  const queueDisabled = queueDisabledSelected.includes("1") ? 1 : 0;
-
-  const ragContext = textValues.rag_context?.trim() || null;
-
   setEntityConfig(entityId, {
     config_thinking: thinking,
     config_collapse: collapseRaw,
     config_keywords: keywordsNormalized,
     config_safety: safetyRaw,
-    config_queue_disabled: queueDisabled,
-    config_rag_context: ragContext,
   });
 
   const changes: string[] = [];
@@ -956,8 +905,6 @@ registerModalHandler("edit-advanced", async (bot, interaction, _textValues) => {
   if (safetyRaw !== null) changes.push(`safety: ${safetyRaw}`);
   if (keywordsNormalized !== null) changes.push(`keywords: ${keywordsNormalized.split("\n").length} set`);
   else if (keywordsRaw !== null) changes.push("keywords: cleared");
-  if (queueDisabled === 1) changes.push("queue: disabled");
-  if (ragContext !== null) changes.push(`rag context: ${ragContext}`);
   if (changes.length === 0) changes.push("all cleared");
 
   await respond(bot, interaction, `Updated advanced config for "${entity.name}": ${changes.join(", ")}`, true);

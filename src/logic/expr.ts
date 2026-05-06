@@ -162,6 +162,7 @@ const LOCKED_SIGIL = "$locked";
 const STREAM_SIGIL = "$stream";
 const MEMORY_SIGIL = "$memory";
 const CONTEXT_SIGIL = "$context";
+const RAG_CONTEXT_SIGIL = "$rag_context";
 const FREEFORM_SIGIL = "$freeform";
 const MODEL_SIGIL = "$model ";
 const STRIP_SIGIL = "$strip";
@@ -232,6 +233,10 @@ export interface ProcessedFact {
   isContext: boolean;
   /** For $context directives, the expression string (e.g. "chars < 16000") */
   contextExpr?: string;
+  /** True if this fact is a $rag_context directive */
+  isRagContext: boolean;
+  /** For $rag_context directives, the expression string (e.g. "count <= 10") */
+  ragContextExpr?: string;
   /** True if this fact is a $freeform directive */
   isFreeform: boolean;
   /** True if this fact is a $model directive */
@@ -294,6 +299,7 @@ export function parseFact(fact: string): ProcessedFact {
         isStream: false,
         isMemory: false,
         isContext: false,
+        isRagContext: false,
         isFreeform: false,
         isModel: false,
         isStrip: false,
@@ -331,6 +337,7 @@ export function parseFact(fact: string): ProcessedFact {
         isStream: false,
         isMemory: false,
         isContext: false,
+        isRagContext: false,
         isFreeform: false,
         isModel: false,
         isStrip: false,
@@ -356,6 +363,7 @@ export function parseFact(fact: string): ProcessedFact {
         isStream: false,
         isMemory: false,
         isContext: false,
+        isRagContext: false,
         isFreeform: false,
         isModel: false,
         isStrip: false,
@@ -382,6 +390,7 @@ export function parseFact(fact: string): ProcessedFact {
         streamDelimiter: streamResultCond.delimiter,
         isMemory: false,
         isContext: false,
+        isRagContext: false,
         isFreeform: false,
         isModel: false,
         isStrip: false,
@@ -407,6 +416,7 @@ export function parseFact(fact: string): ProcessedFact {
         isMemory: true,
         memoryScope: memoryResultCond,
         isContext: false,
+        isRagContext: false,
         isFreeform: false,
         isModel: false,
         isStrip: false,
@@ -432,6 +442,33 @@ export function parseFact(fact: string): ProcessedFact {
         isMemory: false,
         isContext: true,
         contextExpr: contextResultCond,
+        isRagContext: false,
+        isFreeform: false,
+        isModel: false,
+        isStrip: false,
+        isThinking: false,
+        isCollapse: false,
+        isSafety: false,
+      };
+    }
+
+    // Check if content is a conditional $rag_context directive
+    const ragContextResultCond = parseRagContextDirective(content);
+    if (ragContextResultCond !== null) {
+      return {
+        content,
+        conditional: true,
+        expression,
+        isRespond: false,
+        isRetry: false,
+        isAvatar: false,
+        isLockedDirective: false,
+        isLockedFact: false,
+        isStream: false,
+        isMemory: false,
+        isContext: false,
+        isRagContext: true,
+        ragContextExpr: ragContextResultCond,
         isFreeform: false,
         isModel: false,
         isStrip: false,
@@ -455,6 +492,7 @@ export function parseFact(fact: string): ProcessedFact {
         isStream: false,
         isMemory: false,
         isContext: false,
+        isRagContext: false,
         isFreeform: true,
         isModel: false,
         isStrip: false,
@@ -479,6 +517,7 @@ export function parseFact(fact: string): ProcessedFact {
         isStream: false,
         isMemory: false,
         isContext: false,
+        isRagContext: false,
         isFreeform: false,
         isModel: true,
         modelSpec: modelResultCond,
@@ -504,6 +543,7 @@ export function parseFact(fact: string): ProcessedFact {
         isStream: false,
         isMemory: false,
         isContext: false,
+        isRagContext: false,
         isFreeform: false,
         isModel: false,
         isStrip: true,
@@ -529,6 +569,7 @@ export function parseFact(fact: string): ProcessedFact {
         isStream: false,
         isMemory: false,
         isContext: false,
+        isRagContext: false,
         isFreeform: false,
         isModel: false,
         isStrip: false,
@@ -554,6 +595,7 @@ export function parseFact(fact: string): ProcessedFact {
         isStream: false,
         isMemory: false,
         isContext: false,
+        isRagContext: false,
         isFreeform: false,
         isModel: false,
         isStrip: false,
@@ -579,6 +621,7 @@ export function parseFact(fact: string): ProcessedFact {
         isStream: false,
         isMemory: false,
         isContext: false,
+        isRagContext: false,
         isFreeform: false,
         isModel: false,
         isStrip: false,
@@ -590,7 +633,7 @@ export function parseFact(fact: string): ProcessedFact {
       };
     }
 
-    return { content, conditional: true, expression, isRespond: false, isRetry: false, isAvatar: false, isLockedDirective: false, isLockedFact: false, isStream: false, isMemory: false, isContext: false, isFreeform: false, isModel: false, isStrip: false, isCollapse: false, isThinking: false, isSafety: false };
+    return { content, conditional: true, expression, isRespond: false, isRetry: false, isAvatar: false, isLockedDirective: false, isLockedFact: false, isStream: false, isMemory: false, isContext: false, isRagContext: false, isFreeform: false, isModel: false, isStrip: false, isCollapse: false, isThinking: false, isSafety: false };
   }
 
   // Check for unconditional $respond
@@ -608,6 +651,7 @@ export function parseFact(fact: string): ProcessedFact {
       isStream: false,
       isMemory: false,
       isContext: false,
+      isRagContext: false,
       isFreeform: false,
       isModel: false,
       isStrip: false,
@@ -632,6 +676,7 @@ export function parseFact(fact: string): ProcessedFact {
       isStream: false,
       isMemory: false,
       isContext: false,
+      isRagContext: false,
       isFreeform: false,
       isModel: false,
       isStrip: false,
@@ -656,6 +701,7 @@ export function parseFact(fact: string): ProcessedFact {
       isStream: false,
       isMemory: false,
       isContext: false,
+      isRagContext: false,
       isFreeform: false,
       isModel: false,
       isStrip: false,
@@ -681,6 +727,7 @@ export function parseFact(fact: string): ProcessedFact {
       streamDelimiter: streamResult.delimiter,
       isMemory: false,
       isContext: false,
+      isRagContext: false,
       isFreeform: false,
       isModel: false,
       isStrip: false,
@@ -705,6 +752,7 @@ export function parseFact(fact: string): ProcessedFact {
       isMemory: true,
       memoryScope: memoryResult,
       isContext: false,
+      isRagContext: false,
       isFreeform: false,
       isModel: false,
       isStrip: false,
@@ -729,6 +777,32 @@ export function parseFact(fact: string): ProcessedFact {
       isMemory: false,
       isContext: true,
       contextExpr: contextResult,
+      isRagContext: false,
+      isFreeform: false,
+      isModel: false,
+      isStrip: false,
+      isThinking: false,
+      isCollapse: false,
+      isSafety: false,
+    };
+  }
+
+  // Check for unconditional $rag_context
+  const ragContextResult = parseRagContextDirective(trimmed);
+  if (ragContextResult !== null) {
+    return {
+      content: trimmed,
+      conditional: false,
+      isRespond: false,
+      isRetry: false,
+      isAvatar: false,
+      isLockedDirective: false,
+      isLockedFact: false,
+      isStream: false,
+      isMemory: false,
+      isContext: false,
+      isRagContext: true,
+      ragContextExpr: ragContextResult,
       isFreeform: false,
       isModel: false,
       isStrip: false,
@@ -751,13 +825,14 @@ export function parseFact(fact: string): ProcessedFact {
       isStream: false,
       isMemory: false,
       isContext: false,
-        isFreeform: true,
-        isModel: false,
-        isStrip: false,
-        isThinking: false,
-        isCollapse: false,
-        isSafety: false,
-      };
+      isRagContext: false,
+      isFreeform: true,
+      isModel: false,
+      isStrip: false,
+      isThinking: false,
+      isCollapse: false,
+      isSafety: false,
+    };
   }
 
   // Check for unconditional $model
@@ -774,6 +849,7 @@ export function parseFact(fact: string): ProcessedFact {
       isStream: false,
       isMemory: false,
       isContext: false,
+      isRagContext: false,
       isFreeform: false,
       isModel: true,
       modelSpec: modelResult,
@@ -798,6 +874,7 @@ export function parseFact(fact: string): ProcessedFact {
       isStream: false,
       isMemory: false,
       isContext: false,
+      isRagContext: false,
       isFreeform: false,
       isModel: false,
       isStrip: true,
@@ -822,6 +899,7 @@ export function parseFact(fact: string): ProcessedFact {
       isStream: false,
       isMemory: false,
       isContext: false,
+      isRagContext: false,
       isFreeform: false,
       isModel: false,
       isStrip: false,
@@ -846,6 +924,7 @@ export function parseFact(fact: string): ProcessedFact {
       isStream: false,
       isMemory: false,
       isContext: false,
+      isRagContext: false,
       isFreeform: false,
       isModel: false,
       isStrip: false,
@@ -870,6 +949,7 @@ export function parseFact(fact: string): ProcessedFact {
       isStream: false,
       isMemory: false,
       isContext: false,
+      isRagContext: false,
       isFreeform: false,
       isModel: false,
       isStrip: false,
@@ -881,7 +961,7 @@ export function parseFact(fact: string): ProcessedFact {
     };
   }
 
-  return { content: trimmed, conditional: false, isRespond: false, isRetry: false, isAvatar: false, isLockedDirective: false, isLockedFact: false, isStream: false, isMemory: false, isContext: false, isFreeform: false, isModel: false, isStrip: false, isCollapse: false, isThinking: false, isSafety: false };
+  return { content: trimmed, conditional: false, isRespond: false, isRetry: false, isAvatar: false, isLockedDirective: false, isLockedFact: false, isStream: false, isMemory: false, isContext: false, isRagContext: false, isFreeform: false, isModel: false, isStrip: false, isCollapse: false, isThinking: false, isSafety: false };
 }
 
 /**
@@ -1302,6 +1382,12 @@ function parseContextDirective(content: string): string | null {
   return rest;
 }
 
+function parseRagContextDirective(content: string): string | null {
+  if (!content.startsWith(RAG_CONTEXT_SIGIL)) return null;
+  const rest = content.slice(RAG_CONTEXT_SIGIL.length).trim();
+  return rest || null;
+}
+
 // =============================================================================
 // Context Expression Compiler
 // =============================================================================
@@ -1371,6 +1457,8 @@ export interface EvaluatedFacts {
   memoryScope: MemoryScope;
   /** Context expression if $context directive present (e.g. "chars < 16000") */
   contextExpr: string | null;
+  /** RAG context expression if $rag_context directive present (e.g. "count <= 10") */
+  ragContextExpr: string | null;
   /** True if $freeform directive present (multi-char responses not split) */
   isFreeform: boolean;
   /** Model spec from $model directive (e.g. "google:gemini-2.0-flash"), last wins */
@@ -1444,6 +1532,7 @@ export function evaluateFacts(
   let streamDelimiter: string[] | null = defaults?.streamDelimiter ?? null;
   let memoryScope: MemoryScope = defaults?.memoryScope ?? "none";
   let contextExpr: string | null = defaults?.contextExpr ?? null;
+  let ragContextExpr: string | null = defaults?.ragContextExpr ?? null;
   let isFreeform = defaults?.isFreeform ?? false;
   let modelSpec: string | null = defaults?.modelSpec ?? null;
   let stripPatterns: string[] | null = defaults?.stripPatterns ?? null;
@@ -1518,6 +1607,12 @@ export function evaluateFacts(
       continue;
     }
 
+    // Handle $rag_context directives - last one wins
+    if (parsed.isRagContext) {
+      ragContextExpr = parsed.ragContextExpr ?? null;
+      continue;
+    }
+
     // Handle $freeform directive
     if (parsed.isFreeform) {
       isFreeform = true;
@@ -1577,7 +1672,7 @@ export function evaluateFacts(
 
   const contentFilters: ContentFilter[] = Array.from(safetyMap.entries())
     .map(([category, threshold]) => ({ category, threshold }));
-  return { facts: results, shouldRespond, respondSource, retryMs, avatarUrl, isLocked, lockedFacts, streamMode, streamDelimiter, memoryScope, contextExpr, isFreeform, modelSpec, stripPatterns, thinkingLevel, collapseMessages, contentFilters };
+  return { facts: results, shouldRespond, respondSource, retryMs, avatarUrl, isLocked, lockedFacts, streamMode, streamDelimiter, memoryScope, contextExpr, ragContextExpr, isFreeform, modelSpec, stripPatterns, thinkingLevel, collapseMessages, contentFilters };
 }
 
 // =============================================================================
