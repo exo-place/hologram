@@ -125,16 +125,16 @@ export function getEmbeddingCoverage(entityId: number): EmbeddingCoverage {
 
 export async function testRagRetrieval(
   entityId: number,
-  query: string,
+  queryTexts: string[],
   scope: "channel" | "guild" | "global" = "global",
   channelId?: string,
   guildId?: string,
 ): Promise<RagResult[]> {
   const results: RagResult[] = [];
 
-  // Memory search via existing pipeline (wrap single query in array)
+  // Memory search via existing pipeline
   const memoryResults = await searchMemoriesBySimilarity(
-    entityId, [query], scope, channelId, guildId,
+    entityId, queryTexts, scope, channelId, guildId,
   );
   for (const { memory, similarity } of memoryResults) {
     results.push({ content: memory.content, similarity, type: "memory", id: memory.id });
@@ -145,7 +145,7 @@ export async function testRagRetrieval(
   const facts = getFactsForEntity(entityId);
   const factIds = facts.map(f => f.id);
   if (factIds.length > 0) {
-    const queryEmbedding = await embed(query);
+    const queryEmbedding = await embed(queryTexts[0] ?? "");
     const placeholders = factIds.map(() => "?").join(",");
     const rows = db.prepare(
       `SELECT fact_id, embedding FROM fact_embeddings WHERE fact_id IN (${placeholders})`

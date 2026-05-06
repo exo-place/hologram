@@ -19,6 +19,7 @@ import {
   countUnreadMessages,
   getSystemNoteCount,
   getRecentSystemNotes,
+  getMessages,
 } from "../../db/discord";
 import { createBaseContext } from "../../logic/expr";
 import { buildEvaluatedEntity } from "../../debug/evaluation";
@@ -351,33 +352,45 @@ async function handleInfoRag(ctx: CommandContext, options: Record<string, unknow
 
   const lines: string[] = [];
 
-  // Memory coverage (facts are not embedded — omit fact coverage)
-  const coverage = getEmbeddingCoverage(targetEntity.id);
   const config = getEntityConfig(targetEntity.id);
   const memoryScope = (config?.config_memory ?? "none") as string;
   lines.push(`**${targetEntity.name}** — memory scope: \`${memoryScope}\``);
-  lines.push(`Memories: ${coverage.memories.withEmbedding}/${coverage.memories.total} embedded`);
 
-  // RAG retrieval if query provided
-  if (query) {
-    if (memoryScope === "none") {
-      lines.push(`\n*Memory is disabled for this entity — no retrieval will occur.*`);
+  // Only show coverage when something is actually missing
+  const coverage = getEmbeddingCoverage(targetEntity.id);
+  if (coverage.memories.withEmbedding < coverage.memories.total) {
+    lines.push(`⚠ Memories: ${coverage.memories.withEmbedding}/${coverage.memories.total} embedded`);
+  }
+
+  if (memoryScope === "none") {
+    lines.push(`*Memory is disabled — no retrieval occurs.*`);
+  } else {
+    // Use provided query, or fall back to recent channel messages (mirrors real pipeline)
+    let queryTexts: string[];
+    let queryLabel: string;
+    if (query) {
+      queryTexts = [query];
+      queryLabel = `"${query}"`;
     } else {
-      lines.push(`\n**RAG Results for:** "${query}" (scope: ${memoryScope}, threshold: ${MIN_SIMILARITY_THRESHOLD})`);
-      const results = await testRagRetrieval(
-        targetEntity.id, query,
-        memoryScope as "channel" | "guild" | "global",
-        ctx.channelId, ctx.guildId,
-      );
-      if (results.length === 0) {
-        lines.push("No memories found.");
-      } else {
-        for (const r of results.slice(0, 15)) {
-          const sim = (r.similarity * 100).toFixed(1);
-          const passes = r.similarity >= MIN_SIMILARITY_THRESHOLD;
-          const preview = r.content.length > 100 ? r.content.slice(0, 100) + "…" : r.content;
-          lines.push(`${passes ? "✓" : "✗"} \`${sim}%\` ${preview}`);
-        }
+      const recent = getMessages(ctx.channelId, 20);
+      queryTexts = recent.map(m => m.content).filter(Boolean);
+      queryLabel = `recent context (${queryTexts.length} messages)`;
+    }
+
+    lines.push(`\n**RAG** (scope: ${memoryScope}, threshold: ${MIN_SIMILARITY_THRESHOLD}) — ${queryLabel}`);
+    const results = await testRagRetrieval(
+      targetEntity.id, queryTexts,
+      memoryScope as "channel" | "guild" | "global",
+      ctx.channelId, ctx.guildId,
+    );
+    if (results.length === 0) {
+      lines.push("No memories retrieved.");
+    } else {
+      for (const r of results.slice(0, 15)) {
+        const sim = (r.similarity * 100).toFixed(1);
+        const passes = r.similarity >= MIN_SIMILARITY_THRESHOLD;
+        const preview = r.content.length > 100 ? r.content.slice(0, 100) + "…" : r.content;
+        lines.push(`${passes ? "✓" : "✗"} \`${sim}%\` ${preview}`);
       }
     }
   }
