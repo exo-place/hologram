@@ -25,6 +25,7 @@ import {
   setMemories,
 } from "../../db/memories";
 import { checkKeywordMatch } from "../../logic/expr";
+import { getAvailableModels } from "../../ai/model-list";
 import { chunkContent, buildDefaultValues, buildEntries, type ResolvedData } from "./helpers";
 import { canUserEdit } from "./cmd-permissions";
 
@@ -258,50 +259,102 @@ registerCommand({
         }
       }
 
-      const configFields = [
+      const availableModels = await getAvailableModels();
+      const currentModel = config?.config_model ?? null;
+      // Top 23 to leave room for a "current model" option and "custom" hint
+      const modelOptions = availableModels.slice(0, 23).map(m => ({
+        label: m,
+        value: m,
+        default: m === currentModel,
+      }));
+      // If current model isn't in the fetched list, prepend it
+      if (currentModel && !modelOptions.some(o => o.value === currentModel)) {
+        modelOptions.unshift({ label: currentModel, value: currentModel, default: true });
+        modelOptions.splice(25); // enforce cap
+      }
+
+      const configLabels = [
         {
-          customId: "model",
+          type: MessageComponentTypes.Label,
           label: "Model",
-          style: TextStyles.Short,
-          value: config?.config_model ?? "",
-          required: false,
-          placeholder: "provider:model (e.g. google:gemini-3-flash-preview)",
+          description: "Select a model, or type a custom spec below",
+          component: {
+            type: MessageComponentTypes.StringSelect,
+            customId: "model_select",
+            minValues: 0,
+            maxValues: 1,
+            required: false,
+            placeholder: modelOptions.length > 0 ? "Select a model…" : "No models fetched — use custom field below",
+            options: modelOptions.length > 0 ? modelOptions : [{ label: "—", value: "" }],
+          },
         },
         {
-          customId: "context",
+          type: MessageComponentTypes.Label,
+          label: "Custom model (overrides selection)",
+          description: "provider:model — overrides the dropdown if set",
+          component: {
+            type: MessageComponentTypes.TextInput,
+            customId: "model_custom",
+            style: TextStyles.Short,
+            required: false,
+            placeholder: "google:gemini-2.5-flash",
+          },
+        },
+        {
+          type: MessageComponentTypes.Label,
           label: "Context",
-          style: TextStyles.Short,
-          value: config?.config_context ?? "",
-          required: false,
-          placeholder: "chars < 4000 || count < 20",
+          description: "Expression controlling how many messages go into context",
+          component: {
+            type: MessageComponentTypes.TextInput,
+            customId: "context",
+            style: TextStyles.Short,
+            value: config?.config_context || undefined,
+            required: false,
+            placeholder: "chars < 4000 || count < 20",
+          },
         },
         {
-          customId: "stream",
+          type: MessageComponentTypes.Label,
           label: "Stream",
-          style: TextStyles.Short,
-          value: streamDisplay,
-          required: false,
-          placeholder: 'lines, full, full "\\n", "delimiter"',
+          description: "Streaming mode",
+          component: {
+            type: MessageComponentTypes.TextInput,
+            customId: "stream",
+            style: TextStyles.Short,
+            value: streamDisplay || undefined,
+            required: false,
+            placeholder: 'lines, full, full "\\n", "delimiter"',
+          },
         },
         {
-          customId: "avatar",
-          label: "Avatar URL",
-          style: TextStyles.Short,
-          value: config?.config_avatar ?? "",
-          required: false,
-          placeholder: "https://example.com/avatar.png",
-        },
-        {
-          customId: "memory",
+          type: MessageComponentTypes.Label,
           label: "Memory scope",
-          style: TextStyles.Short,
-          value: config?.config_memory ?? "",
-          required: false,
-          placeholder: "none, channel, guild, global",
+          description: "Memory retrieval scope",
+          component: {
+            type: MessageComponentTypes.TextInput,
+            customId: "memory",
+            style: TextStyles.Short,
+            value: config?.config_memory || undefined,
+            required: false,
+            placeholder: "none, channel, guild, global",
+          },
+        },
+        {
+          type: MessageComponentTypes.Label,
+          label: "Avatar URL",
+          description: "Webhook avatar for this entity",
+          component: {
+            type: MessageComponentTypes.TextInput,
+            customId: "avatar",
+            style: TextStyles.Short,
+            value: config?.config_avatar || undefined,
+            required: false,
+            placeholder: "https://example.com/avatar.png",
+          },
         },
       ];
 
-      await respondWithModal(ctx.bot, ctx.interaction, `edit-config:${entity.id}`, `Config: ${entity.name}`, configFields);
+      await respondWithV2Modal(ctx.bot, ctx.interaction, `edit-config:${entity.id}`, `Config: ${entity.name}`, configLabels);
       return;
     }
 
@@ -709,7 +762,7 @@ registerModalHandler("edit-system-template", async (bot, interaction, values) =>
   await respond(bot, interaction, `Updated system prompt for "${entity.name}" (${templateText.length} chars)`, true);
 });
 
-registerModalHandler("edit-config", async (bot, interaction, values) => {
+registerModalHandler("edit-config", async (bot, interaction, _textValues) => {
   const customId = interaction.data?.customId ?? "";
   const entityId = parseInt(customId.split(":")[1]);
 
@@ -727,13 +780,28 @@ registerModalHandler("edit-config", async (bot, interaction, values) => {
     return;
   }
 
-  const model = values.model?.trim() || null;
-  const context = values.context?.trim() || null;
-  const avatar = values.avatar?.trim() || null;
-  const memory = values.memory?.trim() || null;
+  // Parse V2 Label components
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const components: any[] = interaction.data?.components ?? [];
+  const textValues: Record<string, string> = {};
+  const selectValues: Record<string, string[]> = {};
+  for (const comp of components) {
+    const inner = comp.component;
+    if (!inner?.customId) continue;
+    if (inner.value !== undefined) textValues[inner.customId] = inner.value;
+    else if (inner.values !== undefined) selectValues[inner.customId] = inner.values;
+  }
+
+  // Custom text overrides dropdown; empty select (minValues: 0) means no change
+  const modelCustom = textValues.model_custom?.trim() || null;
+  const modelSelect = (selectValues.model_select?.[0] ?? "").trim() || null;
+  const model = modelCustom || modelSelect || null;
+  const context = textValues.context?.trim() || null;
+  const avatar = textValues.avatar?.trim() || null;
+  const memory = textValues.memory?.trim() || null;
 
   // Parse stream config: "lines", "full", 'full "\n"', '"delimiter"'
-  const streamRaw = values.stream?.trim() || "";
+  const streamRaw = textValues.stream?.trim() || "";
   let streamMode: string | null = null;
   let streamDelimiters: string | null = null;
 
