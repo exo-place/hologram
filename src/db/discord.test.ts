@@ -1279,6 +1279,7 @@ describe("getRecentChannelMessages / searchChannelMessages", () => {
     expect(recent.length).toBe(1);
     expect(recent[0].isSystemNote).toBe(true);
     expect(recent[0].messageId).toBeNull();
+    expect(recent[0].messageIds).toEqual([]);
     expect(recent[0].dbId).toBe(note.id);
     expect(recent[0].entityName).toBe("(system note)");
   });
@@ -1292,7 +1293,56 @@ describe("getRecentChannelMessages / searchChannelMessages", () => {
     expect(recent.length).toBe(1);
     expect(recent[0].isSystemNote).toBe(false);
     expect(recent[0].messageId).toBe("discord-msg-1");
+    expect(recent[0].messageIds).toEqual(["discord-msg-1"]);
     expect(recent[0].entityId).toBe(1);
+  });
+
+  test("consecutive same-entity messages are grouped into one logical entry", () => {
+    testDb.prepare(`INSERT OR REPLACE INTO entities (id, name) VALUES (1, 'BotA')`).run();
+    // Simulate a streaming-lines response: 3 Discord messages from BotA
+    addMessage("chan-1", "bot-1", "BotA", "Line one", "msg-1");
+    trackWebhookMessage("msg-1", 1, "BotA");
+    addMessage("chan-1", "bot-1", "BotA", "Line two", "msg-2");
+    trackWebhookMessage("msg-2", 1, "BotA");
+    addMessage("chan-1", "bot-1", "BotA", "Line three", "msg-3");
+    trackWebhookMessage("msg-3", 1, "BotA");
+
+    const recent = getRecentChannelMessages("chan-1", 10);
+    expect(recent.length).toBe(1);
+    expect(recent[0].messageIds).toEqual(["msg-1", "msg-2", "msg-3"]);
+    expect(recent[0].messageId).toBe("msg-1");
+    expect(recent[0].content).toContain("Line one");
+    expect(recent[0].content).toContain("Line two");
+    expect(recent[0].content).toContain("Line three");
+  });
+
+  test("messages from different entities are not grouped", () => {
+    testDb.prepare(`INSERT OR REPLACE INTO entities (id, name) VALUES (1, 'BotA')`).run();
+    testDb.prepare(`INSERT OR REPLACE INTO entities (id, name) VALUES (2, 'BotB')`).run();
+    addMessage("chan-1", "bot-1", "BotA", "A says hi", "msg-1");
+    trackWebhookMessage("msg-1", 1, "BotA");
+    addMessage("chan-1", "bot-2", "BotB", "B says hi", "msg-2");
+    trackWebhookMessage("msg-2", 2, "BotB");
+
+    const recent = getRecentChannelMessages("chan-1", 10);
+    expect(recent.length).toBe(2);
+    expect(recent[0].entityId).toBe(2); // BotB is more recent
+    expect(recent[1].entityId).toBe(1);
+  });
+
+  test("searchChannelMessages matches across grouped content", () => {
+    testDb.prepare(`INSERT OR REPLACE INTO entities (id, name) VALUES (1, 'BotA')`).run();
+    // Two chunks from the same entity — query matches the second chunk
+    addMessage("chan-1", "bot-1", "BotA", "First part of response", "msg-1");
+    trackWebhookMessage("msg-1", 1, "BotA");
+    addMessage("chan-1", "bot-1", "BotA", "Second part with keyword", "msg-2");
+    trackWebhookMessage("msg-2", 1, "BotA");
+
+    const results = searchChannelMessages("chan-1", "keyword");
+    expect(results.length).toBe(1);
+    expect(results[0].messageIds).toEqual(["msg-1", "msg-2"]);
+    expect(results[0].content).toContain("First part");
+    expect(results[0].content).toContain("keyword");
   });
 
   test("searchChannelMessages matches system notes by content", () => {
