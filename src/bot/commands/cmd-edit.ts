@@ -270,7 +270,7 @@ registerCommand({
             maxValues: 1,
             required: false,
             placeholder: modelOptions.length > 0 ? "Select a model…" : "No models fetched — use field below",
-            options: modelOptions.length > 0 ? modelOptions : [{ label: "—", value: "" }],
+            options: modelOptions.length > 0 ? modelOptions : [{ label: "—", value: "none" }],
           },
         },
         {
@@ -492,7 +492,7 @@ registerCommand({
             required: false,
             placeholder: "Default (from facts)",
             options: [
-              { label: "Default (from facts)", value: "", default: currentRespond === null },
+              { label: "Default (from facts)", value: "default", default: currentRespond === null },
               { label: "Always", value: "true", default: currentRespond === "true" },
               { label: "Never", value: "false", default: currentRespond === "false" },
             ],
@@ -510,7 +510,7 @@ registerCommand({
             required: false,
             placeholder: "Default (disabled)",
             options: [
-              { label: "Default (disabled)", value: "", default: !currentFreeform },
+              { label: "Default (disabled)", value: "default", default: !currentFreeform },
               { label: "Enabled", value: "1", default: !!currentFreeform },
             ],
           },
@@ -980,7 +980,8 @@ registerModalHandler("edit-model", async (bot, interaction, _values) => {
   }
 
   const modelCustom = textValues.model_custom?.trim() || null;
-  const modelSelect = (selectValues.model_select?.[0] ?? "").trim() || null;
+  const modelSelectRaw = (selectValues.model_select?.[0] ?? "").trim();
+  const modelSelect = modelSelectRaw === "none" ? null : modelSelectRaw || null;
   const model = modelCustom || modelSelect || null;
 
   const thinking = textValues.thinking?.trim().toLowerCase() || null;
