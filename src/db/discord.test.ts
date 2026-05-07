@@ -56,6 +56,7 @@ import {
   deleteSystemNote,
   getRecentChannelMessages,
   searchChannelMessages,
+  getLastMessageSnowflake,
   type MessageData,
   type EmbedData,
   type AttachmentData,
@@ -590,6 +591,44 @@ describe("addMessage / getMessages", () => {
     const msg = addMessage("chan-1", "u1", "A", "test", "discord-123", { is_bot: true });
     expect(msg?.discord_message_id).toBe("discord-123");
     expect(msg?.data).toBe('{"is_bot":true}');
+  });
+});
+
+describe("getLastMessageSnowflake", () => {
+  beforeEach(() => {
+    testDb = createTestDb();
+  });
+
+  test("returns null when channel has no messages with snowflakes", () => {
+    expect(getLastMessageSnowflake("empty-chan")).toBeNull();
+    addMessage("chan-1", "u1", "A", "no-snowflake");
+    expect(getLastMessageSnowflake("chan-1")).toBeNull();
+  });
+
+  test("returns the largest snowflake without precision loss", () => {
+    // Real-world snowflake that round-trips lossily through JS Number
+    // (Number(1501596441779634186n) === 1501596441779634200, BigInt(...) → ...176).
+    // The cursor must be exact, otherwise Discord's `after:` re-returns the last message.
+    const a = "1501596441779634100";
+    const b = "1501596441779634186";
+    addMessage("chan-1", "u1", "A", "first", a);
+    addMessage("chan-1", "u1", "A", "second", b);
+    const last = getLastMessageSnowflake("chan-1");
+    expect(last).toBe(BigInt(b));
+  });
+
+  test("compares numerically across snowflakes of different lengths", () => {
+    const older = "999999999999999999";       // 18 digits
+    const newer = "1000000000000000000";      // 19 digits — numerically larger
+    addMessage("chan-1", "u1", "A", "newer", newer);
+    addMessage("chan-1", "u1", "A", "older", older);
+    expect(getLastMessageSnowflake("chan-1")).toBe(BigInt(newer));
+  });
+
+  test("scopes to the requested channel", () => {
+    addMessage("chan-1", "u1", "A", "x", "1501596441779634186");
+    addMessage("chan-2", "u1", "A", "y", "1501596441779634100");
+    expect(getLastMessageSnowflake("chan-2")).toBe(1501596441779634100n);
   });
 });
 

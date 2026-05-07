@@ -586,12 +586,18 @@ export function parseMessageData(raw: string | null): MessageData | null {
  */
 export function getLastMessageSnowflake(channelId: string): bigint | null {
   const db = getDb();
-  // CAST to INTEGER is safe: Discord snowflakes fit in SQLite's signed 64-bit int
+  // Snowflakes are ~60-bit and don't fit in JS's 53-bit Number mantissa.
+  // Select as TEXT and parse via BigInt to avoid precision loss in the catch-up cursor
+  // (a rounded-down cursor causes `after:` to re-return the genuine last message).
+  // Order by length first so older (shorter) snowflakes don't beat newer ones lexically.
   const row = db.prepare(`
-    SELECT MAX(CAST(discord_message_id AS INTEGER)) as last_id
-    FROM messages WHERE channel_id = ? AND discord_message_id IS NOT NULL
-  `).get(channelId) as { last_id: number | null };
-  return row.last_id !== null ? BigInt(row.last_id) : null;
+    SELECT discord_message_id AS last_id
+    FROM messages
+    WHERE channel_id = ? AND discord_message_id IS NOT NULL
+    ORDER BY LENGTH(discord_message_id) DESC, discord_message_id DESC
+    LIMIT 1
+  `).get(channelId) as { last_id: string | null } | undefined;
+  return row?.last_id ? BigInt(row.last_id) : null;
 }
 
 export function addMessage(

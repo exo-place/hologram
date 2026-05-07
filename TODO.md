@@ -1,5 +1,11 @@
 # TODO
 
+## Catch-up cursor precision bug — FIXED 2026-05-08
+
+`getLastMessageSnowflake` previously cast `discord_message_id` to SQLite INTEGER and returned it via JS `number`, losing precision on ~60-bit Discord snowflakes (rounded to multiples of ~256). The rounded-down cursor caused `getMessages({ after })` to re-return the genuine last message on every startup, which then duplicated because `idx_messages_discord_id` had been created non-UNIQUE in the live DB (the schema's `CREATE UNIQUE INDEX IF NOT EXISTS` was a no-op on the existing index).
+
+Fixed by selecting the snowflake as TEXT and parsing with `BigInt`. Live DB deduped (923 rows removed) and index recreated as UNIQUE — backup at `hologram.db.bak-dedup-20260508-093436`. **Watch for**: any other place that reads a snowflake-shaped column from SQLite via the default `number` path. `discord_id` columns in `discord_entities` / `discord_config` are stored as TEXT and read as strings, so they're safe; new code touching snowflake math should stay in `bigint`/`string` and never round-trip through `number`.
+
 ## `/sendnote` implementation spec (2026-05-04)
 
 ### Decisions
