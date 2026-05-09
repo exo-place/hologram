@@ -623,10 +623,14 @@ function getOrInitMentionCache(channelId: string): MentionCache {
     const allRows = db.prepare(
       `SELECT DISTINCT author_id, author_name FROM messages WHERE channel_id = ?`
     ).all(channelId) as { author_id: string; author_name: string }[];
-    // nameToId: exclude webhook and entity messages — their display names are arbitrary
-    const userRows = db.prepare(
-      `SELECT DISTINCT author_id, author_name FROM messages WHERE channel_id = ? AND (data IS NULL OR (json_extract(data, '$.is_webhook') IS NOT 1 AND json_extract(data, '$.is_entity') IS NOT 1))`
-    ).all(channelId) as { author_id: string; author_name: string }[];
+    // nameToId: exclude our own entity messages (webhook or fallback) — their display names don't map to real Discord IDs
+    const userRows = db.prepare(`
+      SELECT DISTINCT m.author_id, m.author_name FROM messages m
+      LEFT JOIN webhook_messages wm ON wm.message_id = m.discord_message_id
+      WHERE m.channel_id = ?
+        AND wm.message_id IS NULL
+        AND (m.data IS NULL OR json_extract(m.data, '$.is_entity') IS NOT 1)
+    `).all(channelId) as { author_id: string; author_name: string }[];
     cache = { idToName: new Map(), nameToId: new Map(), outboundRegex: null };
     for (const { author_id, author_name } of allRows) cache.idToName.set(author_id, author_name);
     for (const { author_id, author_name } of userRows) cache.nameToId.set(author_name, author_id);
@@ -635,11 +639,12 @@ function getOrInitMentionCache(channelId: string): MentionCache {
   return cache;
 }
 
-function updateMentionCache(channelId: string, authorId: string, authorName: string, isWebhook: boolean): void {
+function updateMentionCache(channelId: string, authorId: string, authorName: string, discordMessageId: string | null | undefined, isEntity: boolean): void {
   const cache = getOrInitMentionCache(channelId);
+  const isOurWebhook = discordMessageId ? !!getWebhookMessageEntity(discordMessageId) : false;
   const nameChanged = cache.idToName.get(authorId) !== authorName;
   cache.idToName.set(authorId, authorName);
-  if (!isWebhook) {
+  if (!isOurWebhook && !isEntity) {
     cache.nameToId.set(authorName, authorId);
   }
   if (nameChanged) cache.outboundRegex = null;
@@ -689,7 +694,7 @@ export function addMessage(
     VALUES (?, ?, ?, ?, ?, ?)
     RETURNING *
   `).get(channelId, authorId, authorName, content, discordMessageId ?? null, data ? JSON.stringify(data) : null) as Message;
-  if (msg) updateMentionCache(channelId, authorId, authorName, (data?.is_webhook ?? false) || (data?.is_entity ?? false));
+  if (msg) updateMentionCache(channelId, authorId, authorName, discordMessageId, data?.is_entity ?? false);
   return msg;
 }
 
