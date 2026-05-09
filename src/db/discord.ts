@@ -616,26 +616,31 @@ const mentionCaches = new Map<string, MentionCache>();
 function getOrInitMentionCache(channelId: string): MentionCache {
   let cache = mentionCaches.get(channelId);
   if (!cache) {
-    const rows = getDb().prepare(
+    const db = getDb();
+    // idToName: all authors (for inbound <@ID> → @Name)
+    const allRows = db.prepare(
       `SELECT DISTINCT author_id, author_name FROM messages WHERE channel_id = ?`
     ).all(channelId) as { author_id: string; author_name: string }[];
+    // nameToId: only real users, not bots/entities (for outbound @Name → <@ID>)
+    const userRows = db.prepare(
+      `SELECT DISTINCT author_id, author_name FROM messages WHERE channel_id = ? AND (data IS NULL OR json_extract(data, '$.is_bot') IS NOT 1)`
+    ).all(channelId) as { author_id: string; author_name: string }[];
     cache = { idToName: new Map(), nameToId: new Map(), outboundRegex: null };
-    for (const { author_id, author_name } of rows) {
-      cache.idToName.set(author_id, author_name);
-      cache.nameToId.set(author_name, author_id);
-    }
+    for (const { author_id, author_name } of allRows) cache.idToName.set(author_id, author_name);
+    for (const { author_id, author_name } of userRows) cache.nameToId.set(author_name, author_id);
     mentionCaches.set(channelId, cache);
   }
   return cache;
 }
 
-function updateMentionCache(channelId: string, authorId: string, authorName: string): void {
+function updateMentionCache(channelId: string, authorId: string, authorName: string, isBot: boolean): void {
   const cache = getOrInitMentionCache(channelId);
-  if (cache.idToName.get(authorId) !== authorName) {
-    cache.idToName.set(authorId, authorName);
+  const nameChanged = cache.idToName.get(authorId) !== authorName;
+  cache.idToName.set(authorId, authorName);
+  if (!isBot) {
     cache.nameToId.set(authorName, authorId);
-    cache.outboundRegex = null;
   }
+  if (nameChanged) cache.outboundRegex = null;
 }
 
 const INBOUND_MENTION_RE = /<@!?(\d+)>/g;
@@ -682,7 +687,7 @@ export function addMessage(
     VALUES (?, ?, ?, ?, ?, ?)
     RETURNING *
   `).get(channelId, authorId, authorName, content, discordMessageId ?? null, data ? JSON.stringify(data) : null) as Message;
-  if (msg) updateMentionCache(channelId, authorId, authorName);
+  if (msg) updateMentionCache(channelId, authorId, authorName, data?.is_bot ?? false);
   return msg;
 }
 
