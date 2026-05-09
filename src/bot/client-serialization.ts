@@ -40,6 +40,7 @@ export function buildMsgDataAndContent(message: BotMessage): { content: string; 
 
   const msgData: MessageData = {};
   if (isBot) msgData.is_bot = true;
+  if (message.webhookId) msgData.is_webhook = true;
   if (isForward) msgData.is_forward = true;
   if (allEmbeds.length > 0) msgData.embeds = allEmbeds.map(serializeEmbed);
   if (allStickers.length > 0) {

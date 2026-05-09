@@ -398,6 +398,7 @@ async function catchUpChannel(channelId: string): Promise<void> {
       } else {
         // Store for context only — skipped by markProcessed on next messageCreate
         const { content, msgData } = buildMsgDataAndContent(message);
+
         const authorName = message.author.globalName ?? message.author.username;
         addMessage(channelId, message.author.id.toString(), authorName, content, message.id.toString(), msgData);
         totalStored++;

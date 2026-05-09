@@ -564,6 +564,7 @@ export interface DiscordComponentData {
 
 export interface MessageData {
   is_bot?: boolean;
+  is_webhook?: boolean;
   is_forward?: boolean;
   is_note?: boolean;
   is_system?: boolean;
@@ -621,9 +622,9 @@ function getOrInitMentionCache(channelId: string): MentionCache {
     const allRows = db.prepare(
       `SELECT DISTINCT author_id, author_name FROM messages WHERE channel_id = ?`
     ).all(channelId) as { author_id: string; author_name: string }[];
-    // nameToId: only real users, not bots/entities (for outbound @Name → <@ID>)
+    // nameToId: exclude webhook messages — their display names are arbitrary and don't map to real user IDs
     const userRows = db.prepare(
-      `SELECT DISTINCT author_id, author_name FROM messages WHERE channel_id = ? AND (data IS NULL OR json_extract(data, '$.is_bot') IS NOT 1)`
+      `SELECT DISTINCT author_id, author_name FROM messages WHERE channel_id = ? AND (data IS NULL OR json_extract(data, '$.is_webhook') IS NOT 1)`
     ).all(channelId) as { author_id: string; author_name: string }[];
     cache = { idToName: new Map(), nameToId: new Map(), outboundRegex: null };
     for (const { author_id, author_name } of allRows) cache.idToName.set(author_id, author_name);
@@ -633,11 +634,11 @@ function getOrInitMentionCache(channelId: string): MentionCache {
   return cache;
 }
 
-function updateMentionCache(channelId: string, authorId: string, authorName: string, isBot: boolean): void {
+function updateMentionCache(channelId: string, authorId: string, authorName: string, isWebhook: boolean): void {
   const cache = getOrInitMentionCache(channelId);
   const nameChanged = cache.idToName.get(authorId) !== authorName;
   cache.idToName.set(authorId, authorName);
-  if (!isBot) {
+  if (!isWebhook) {
     cache.nameToId.set(authorName, authorId);
   }
   if (nameChanged) cache.outboundRegex = null;
@@ -687,7 +688,7 @@ export function addMessage(
     VALUES (?, ?, ?, ?, ?, ?)
     RETURNING *
   `).get(channelId, authorId, authorName, content, discordMessageId ?? null, data ? JSON.stringify(data) : null) as Message;
-  if (msg) updateMentionCache(channelId, authorId, authorName, data?.is_bot ?? false);
+  if (msg) updateMentionCache(channelId, authorId, authorName, data?.is_webhook ?? false);
   return msg;
 }
 
