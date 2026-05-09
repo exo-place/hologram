@@ -610,6 +610,8 @@ export function getLastMessageSnowflake(channelId: string): bigint | null {
 interface MentionCache {
   idToName: Map<string, string>;
   nameToId: Map<string, string>;
+  /** Tracks distinct names seen per webhook author_id. If size > 1 the sender is unstable and excluded from nameToId. */
+  webhookNames: Map<string, Set<string>>;
   outboundRegex: RegExp | null;
 }
 
@@ -619,17 +621,34 @@ function getOrInitMentionCache(channelId: string): MentionCache {
   let cache = mentionCaches.get(channelId);
   if (!cache) {
     const db = getDb();
+    cache = { idToName: new Map(), nameToId: new Map(), webhookNames: new Map(), outboundRegex: null };
+
     // idToName: all authors (for inbound <@ID> → @Name)
     const allRows = db.prepare(
       `SELECT DISTINCT author_id, author_name FROM messages WHERE channel_id = ?`
     ).all(channelId) as { author_id: string; author_name: string }[];
-    // nameToId: exclude webhook and entity messages — webhook display names are arbitrary and not real user IDs
-    const userRows = db.prepare(
-      `SELECT DISTINCT author_id, author_name FROM messages WHERE channel_id = ? AND (data IS NULL OR (json_extract(data, '$.is_webhook') IS NOT 1 AND json_extract(data, '$.is_entity') IS NOT 1))`
-    ).all(channelId) as { author_id: string; author_name: string }[];
-    cache = { idToName: new Map(), nameToId: new Map(), outboundRegex: null };
     for (const { author_id, author_name } of allRows) cache.idToName.set(author_id, author_name);
-    for (const { author_id, author_name } of userRows) cache.nameToId.set(author_name, author_id);
+
+    // nameToId: senders with exactly one distinct name (excludes entity messages)
+    const stableRows = db.prepare(`
+      SELECT author_id, MAX(author_name) as author_name FROM messages
+      WHERE channel_id = ? AND (data IS NULL OR json_extract(data, '$.is_entity') IS NOT 1)
+      GROUP BY author_id HAVING COUNT(DISTINCT author_name) = 1
+    `).all(channelId) as { author_id: string; author_name: string }[];
+    for (const { author_id, author_name } of stableRows) cache.nameToId.set(author_name, author_id);
+
+    // webhookNames: all distinct names per webhook author_id for live eviction tracking
+    const webhookRows = db.prepare(`
+      SELECT DISTINCT author_id, author_name FROM messages
+      WHERE channel_id = ? AND json_extract(data, '$.is_webhook') = 1
+        AND (data IS NULL OR json_extract(data, '$.is_entity') IS NOT 1)
+    `).all(channelId) as { author_id: string; author_name: string }[];
+    for (const { author_id, author_name } of webhookRows) {
+      let names = cache.webhookNames.get(author_id);
+      if (!names) { names = new Set(); cache.webhookNames.set(author_id, names); }
+      names.add(author_name);
+    }
+
     mentionCaches.set(channelId, cache);
   }
   return cache;
@@ -639,8 +658,31 @@ function updateMentionCache(channelId: string, authorId: string, authorName: str
   const cache = getOrInitMentionCache(channelId);
   if (cache.idToName.get(authorId) === authorName) return;
   cache.idToName.set(authorId, authorName);
-  if (!isWebhook && !isEntity) cache.nameToId.set(authorName, authorId);
-  cache.outboundRegex = null;
+
+  if (isEntity) return;
+
+  if (!isWebhook) {
+    cache.nameToId.set(authorName, authorId);
+    cache.outboundRegex = null;
+    return;
+  }
+
+  // Webhook sender: include in nameToId only while it has a single consistent name
+  let names = cache.webhookNames.get(authorId);
+  if (!names) {
+    cache.webhookNames.set(authorId, new Set([authorName]));
+    cache.nameToId.set(authorName, authorId);
+    cache.outboundRegex = null;
+    return;
+  }
+  if (names.has(authorName)) return; // name already tracked, Set unchanged
+  names.add(authorName);
+  if (names.size === 2) {
+    // Second distinct name: sender is unstable — evict all its names immediately
+    for (const name of names) cache.nameToId.delete(name);
+    cache.outboundRegex = null;
+  }
+  // size > 2: already evicted, nothing to do
 }
 
 const INBOUND_MENTION_RE = /<@!?(\d+)>/g;
