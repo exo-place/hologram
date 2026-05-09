@@ -8,7 +8,7 @@ import {
   DEFAULT_CONTEXT_EXPR,
   type EvaluatedEntity,
 } from "./context";
-import { getMessages, getWebhookMessageEntity, parseMessageData, resolveDiscordEntity, resolvePersona, type EmbedData, type AttachmentData, type StickerData, type DiscordComponentData } from "../db/discord";
+import { getMessages, getWebhookMessageEntity, parseMessageData, resolveDiscordEntity, resolvePersona, resolveInboundMentions, type EmbedData, type AttachmentData, type StickerData, type DiscordComponentData } from "../db/discord";
 import { evalMacroValue, formatDuration, rollDice, compileContextExpr, parseFact, stripComments, ExprError, type CollapseRoles, type ExprContext } from "../logic/expr";
 import { DEFAULT_MODEL } from "./models";
 import { DEFAULT_TEMPLATE, renderStructuredTemplate, renderSystemPrompt } from "./template";
@@ -420,11 +420,12 @@ export function buildPromptAndMessages(
     });
     if (!shouldInclude && history.length > 0) break;
 
-    // Apply strip patterns to raw content
+    // Apply strip patterns to raw content, then resolve Discord mention IDs to names
     let content = m.content;
     if (stripPatterns.length > 0) {
       content = applyStripPatterns(content, stripPatterns);
     }
+    content = resolveInboundMentions(channelId, content);
 
     const embeds = withToJSON(withEmbedDefaults(data?.embeds ?? []));
     const stickers = withToJSON(data?.stickers ?? []);
@@ -443,7 +444,9 @@ export function buildPromptAndMessages(
       stickers,
       attachments,
       components,
-      referenced_message: data?.referenced_message ?? null,
+      referenced_message: data?.referenced_message
+        ? { author: data.referenced_message.author, content: resolveInboundMentions(channelId, data.referenced_message.content) }
+        : null,
       toJSON: () => JSON.stringify({ author: entry.author, content: entry.content, author_id: entry.author_id, created_at: entry.created_at, is_bot: entry.is_bot, entity_id: entry.entity_id, is_note: entry.is_note, is_system: entry.is_system, embeds: data?.embeds ?? [], stickers: data?.stickers ?? [], attachments: data?.attachments ?? [], components: data?.components ?? [], referenced_message: entry.referenced_message }),
     };
     history.push(entry);

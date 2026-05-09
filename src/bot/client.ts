@@ -10,7 +10,7 @@ import { handleMessageStreaming } from "../ai/streaming";
 import { InferenceError, isDedicatedImageModel, isModelAllowed, parseModelSpec } from "../ai/models";
 import type { EvaluatedEntity } from "../ai/context";
 import { retrieveRelevantMemories, type MemoryScope } from "../db/memories";
-import { resolveDiscordEntity, resolveDiscordEntities, isNewUser, markUserWelcomed, addMessage, updateMessageByDiscordId, mergeMessageData, deleteMessageByDiscordId, trackWebhookMessage, getWebhookMessageEntity, getMessages, getFilteredMessages, formatMessagesForContext, recordEvalError, isOurWebhookUserId, countUnreadMessages, getLastMessageSnowflake, getAllBoundChannelIds, getChannelScopedEntities, storeChannelMeta, resolveChainLimit, type MessageData } from "../db/discord";
+import { resolveDiscordEntity, resolveDiscordEntities, isNewUser, markUserWelcomed, addMessage, updateMessageByDiscordId, mergeMessageData, deleteMessageByDiscordId, trackWebhookMessage, getWebhookMessageEntity, getMessages, getFilteredMessages, formatMessagesForContext, recordEvalError, isOurWebhookUserId, countUnreadMessages, getLastMessageSnowflake, getAllBoundChannelIds, getChannelScopedEntities, storeChannelMeta, resolveChainLimit, resolveOutboundMentions, type MessageData } from "../db/discord";
 import { getEntity, getEntityWithFacts, getSystemEntity, getFactsForEntity, getEntityEvalDefaults, getEntityKeywords, getEntityConfig, getPermissionDefaults, type EntityWithFacts } from "../db/entities";
 import { evaluateFacts, getTickInterval, createBaseContext, parsePermissionDirectives, isUserBlacklisted, isUserAllowed, compileContextExpr, ExprError } from "../logic/expr";
 import { DEFAULT_RAG_CONTEXT_EXPR } from "../ai/context";
@@ -1813,6 +1813,12 @@ export async function sendResponse(
 
     // Stop typing before sending response (indicator will expire naturally)
     stopTyping();
+
+    // Resolve @Name mentions in the LLM response to Discord <@ID> format
+    result.response = resolveOutboundMentions(channelId, result.response);
+    if (result.entityResponses) {
+      for (const er of result.entityResponses) er.content = resolveOutboundMentions(channelId, er.content);
+    }
 
     // Use webhooks when we have responding entities (custom name/avatar)
     if (respondingEntities && respondingEntities.length > 0) {

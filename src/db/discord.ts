@@ -601,6 +601,73 @@ export function getLastMessageSnowflake(channelId: string): bigint | null {
   return row?.last_id ? BigInt(row.last_id) : null;
 }
 
+// =============================================================================
+// Mention Cache
+// =============================================================================
+
+interface MentionCache {
+  idToName: Map<string, string>;
+  nameToId: Map<string, string>;
+  outboundRegex: RegExp | null;
+}
+
+const mentionCaches = new Map<string, MentionCache>();
+
+function getOrInitMentionCache(channelId: string): MentionCache {
+  let cache = mentionCaches.get(channelId);
+  if (!cache) {
+    const rows = getDb().prepare(
+      `SELECT DISTINCT author_id, author_name FROM messages WHERE channel_id = ?`
+    ).all(channelId) as { author_id: string; author_name: string }[];
+    cache = { idToName: new Map(), nameToId: new Map(), outboundRegex: null };
+    for (const { author_id, author_name } of rows) {
+      cache.idToName.set(author_id, author_name);
+      cache.nameToId.set(author_name, author_id);
+    }
+    mentionCaches.set(channelId, cache);
+  }
+  return cache;
+}
+
+function updateMentionCache(channelId: string, authorId: string, authorName: string): void {
+  const cache = getOrInitMentionCache(channelId);
+  if (cache.idToName.get(authorId) !== authorName) {
+    cache.idToName.set(authorId, authorName);
+    cache.nameToId.set(authorName, authorId);
+    cache.outboundRegex = null;
+  }
+}
+
+const INBOUND_MENTION_RE = /<@!?(\d+)>/g;
+
+/** Replace `<@ID>` with `@Name` in content received from Discord. */
+export function resolveInboundMentions(channelId: string, content: string): string {
+  if (!content.includes('<@')) return content;
+  const cache = getOrInitMentionCache(channelId);
+  if (cache.idToName.size === 0) return content;
+  return content.replace(INBOUND_MENTION_RE, (_, id: string) => {
+    const name = cache.idToName.get(id);
+    return name ? `@${name}` : `<@${id}>`;
+  });
+}
+
+/** Replace `@Name` with `<@ID>` in content the bot is about to send to Discord. */
+export function resolveOutboundMentions(channelId: string, content: string): string {
+  if (!content.includes('@')) return content;
+  const cache = getOrInitMentionCache(channelId);
+  if (cache.nameToId.size === 0) return content;
+  if (!cache.outboundRegex) {
+    const escaped = [...cache.nameToId.keys()]
+      .sort((a, b) => b.length - a.length)
+      .map(name => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    cache.outboundRegex = new RegExp(`@(${escaped.join('|')})`, 'g');
+  }
+  return content.replace(cache.outboundRegex, (_, name: string) => {
+    const id = cache.nameToId.get(name);
+    return id ? `<@${id}>` : `@${name}`;
+  });
+}
+
 export function addMessage(
   channelId: string,
   authorId: string,
@@ -610,11 +677,13 @@ export function addMessage(
   data?: MessageData
 ): Message | undefined {
   const db = getDb();
-  return db.prepare(`
+  const msg = db.prepare(`
     INSERT OR IGNORE INTO messages (channel_id, author_id, author_name, content, discord_message_id, data)
     VALUES (?, ?, ?, ?, ?, ?)
     RETURNING *
   `).get(channelId, authorId, authorName, content, discordMessageId ?? null, data ? JSON.stringify(data) : null) as Message;
+  if (msg) updateMentionCache(channelId, authorId, authorName);
+  return msg;
 }
 
 export function updateMessageByDiscordId(
