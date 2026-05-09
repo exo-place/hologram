@@ -1193,6 +1193,7 @@ async function sendStreamMessage(
   entity?: EvaluatedEntity
 ): Promise<string | null> {
   if (!content.trim()) return null;
+  content = resolveOutboundMentions(channelId, content);
   if (entity) {
     // Try webhook first
     const ids = await executeWebhook(channelId, content, entity.name, entity.avatarUrl ?? undefined);
