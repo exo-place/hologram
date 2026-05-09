@@ -64,6 +64,12 @@ export function buildMsgDataAndContent(message: BotMessage): { content: string; 
     }));
   }
   if (hasComponents) msgData.components = serializeComponents(message.components!);
+  if (message.referencedMessage) {
+    const ref = message.referencedMessage;
+    const refAuthor = ref.author.globalName ?? ref.author.username;
+    const refContent = (ref.content ?? "").split("\n")[0].slice(0, 200);
+    msgData.referenced_message = { author: refAuthor, content: refContent };
+  }
 
   return { content, msgData: Object.keys(msgData).length > 0 ? msgData : undefined };
 }

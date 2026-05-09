@@ -393,6 +393,7 @@ export function buildPromptAndMessages(
     stickers: StickerData[] & { toJSON(): string };
     attachments: AttachmentData[] & { toJSON(): string };
     components: DiscordComponentData[] & { toJSON(): string };
+    referenced_message: { author: string; content: string } | null;
     toJSON(): string;
   }
 
@@ -442,7 +443,8 @@ export function buildPromptAndMessages(
       stickers,
       attachments,
       components,
-      toJSON: () => JSON.stringify({ author: entry.author, content: entry.content, author_id: entry.author_id, created_at: entry.created_at, is_bot: entry.is_bot, entity_id: entry.entity_id, is_note: entry.is_note, is_system: entry.is_system, embeds: data?.embeds ?? [], stickers: data?.stickers ?? [], attachments: data?.attachments ?? [], components: data?.components ?? [] }),
+      referenced_message: data?.referenced_message ?? null,
+      toJSON: () => JSON.stringify({ author: entry.author, content: entry.content, author_id: entry.author_id, created_at: entry.created_at, is_bot: entry.is_bot, entity_id: entry.entity_id, is_note: entry.is_note, is_system: entry.is_system, embeds: data?.embeds ?? [], stickers: data?.stickers ?? [], attachments: data?.attachments ?? [], components: data?.components ?? [], referenced_message: entry.referenced_message }),
     };
     history.push(entry);
     totalChars += len;

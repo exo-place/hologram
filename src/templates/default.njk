@@ -47,6 +47,9 @@ Not everyone needs to respond to every message. Only respond as those who would 
     {%- endcall %}
     {% else %}
     {% call send_as("assistant" if is_assistant else "user") -%}
+      {%- if msg.referenced_message %}
+      ↩ {{ msg.referenced_message.author }}: {{ msg.referenced_message.content | truncate(80, true, "…") }}
+      {% endif -%}
       {{ msg.author }}: {{ parse_emojis(msg.content) }}
       {%- if not is_assistant %}
       {%- for embed in msg.embeds %}

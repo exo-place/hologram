@@ -571,6 +571,7 @@ export interface MessageData {
   stickers?: StickerData[];
   attachments?: AttachmentData[];
   components?: DiscordComponentData[];
+  referenced_message?: { author: string; content: string };
 }
 
 export function parseMessageData(raw: string | null): MessageData | null {

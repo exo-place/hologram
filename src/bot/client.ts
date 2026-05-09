@@ -68,6 +68,7 @@ export const bot = createBot({
       member: true,
       mentions: true, // Enables computed mentionedUserIds
       messageReference: true,
+      referencedMessage: true,
       messageSnapshots: true,
       webhookId: true,
       stickerItems: true,
