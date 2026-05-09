@@ -623,7 +623,7 @@ function getOrInitMentionCache(channelId: string): MentionCache {
     const allRows = db.prepare(
       `SELECT DISTINCT author_id, author_name FROM messages WHERE channel_id = ?`
     ).all(channelId) as { author_id: string; author_name: string }[];
-    // nameToId: exclude our own entity messages (webhook or fallback) — their display names don't map to real Discord IDs
+    // nameToId: exclude our own entity messages (webhook or fallback) — the LLM shouldn't mention them as Discord users
     const userRows = db.prepare(`
       SELECT DISTINCT m.author_id, m.author_name FROM messages m
       LEFT JOIN webhook_messages wm ON wm.message_id = m.discord_message_id
