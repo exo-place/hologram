@@ -1209,7 +1209,7 @@ async function sendStreamMessage(
         content: `**${entity.name}:** ${content}`,
       });
       // Bot messages skip messageCreate, store in history manually
-      const storedStream = addMessage(channelId, sent.author.id.toString(), entity.name, content, sent.id.toString());
+      const storedStream = addMessage(channelId, sent.author.id.toString(), entity.name, content, sent.id.toString(), { is_bot: true, is_entity: true });
       if (storedStream) broadcastSSE(channelId, { type: "message", message: storedStream });
       return sent.id.toString();
     } catch (err) {
@@ -1947,7 +1947,7 @@ async function sendFallbackMessage(channelId: string, name: string, content: str
     trackBotMessage(sent.id);
     // Bot messages skip messageCreate (filtered by botUserId check),
     // so store in history manually for LLM context
-    const storedFallback = addMessage(channelId, sent.author.id.toString(), name, content, sent.id.toString());
+    const storedFallback = addMessage(channelId, sent.author.id.toString(), name, content, sent.id.toString(), { is_bot: true, is_entity: true });
     if (storedFallback) broadcastSSE(channelId, { type: "message", message: storedFallback });
   } catch (err) {
     error("Failed to send fallback message", err);
