@@ -637,12 +637,10 @@ function getOrInitMentionCache(channelId: string): MentionCache {
 
 function updateMentionCache(channelId: string, authorId: string, authorName: string, isWebhook: boolean, isEntity: boolean): void {
   const cache = getOrInitMentionCache(channelId);
-  const nameChanged = cache.idToName.get(authorId) !== authorName;
+  if (cache.idToName.get(authorId) === authorName) return;
   cache.idToName.set(authorId, authorName);
-  if (!isWebhook && !isEntity) {
-    cache.nameToId.set(authorName, authorId);
-  }
-  if (nameChanged) cache.outboundRegex = null;
+  if (!isWebhook && !isEntity) cache.nameToId.set(authorName, authorId);
+  cache.outboundRegex = null;
 }
 
 const INBOUND_MENTION_RE = /<@!?(\d+)>/g;
