@@ -108,8 +108,9 @@ export async function handleMessage(ctx: MessageContext): Promise<ResponseResult
       messages: normalizedMessages,
       providerOptions,
       stopWhen: stepCountIs(5), // Allow up to 5 tool call rounds
-      onStepFinish: ({ toolCalls }: { toolCalls?: { toolName: string }[] }) => {
+      onStepFinish: ({ toolCalls }: { toolCalls?: { toolName: string; args?: unknown }[] }) => {
         for (const call of toolCalls ?? []) {
+          debug("Tool call", { tool: call.toolName, args: call.args });
           if (call.toolName === "add_fact") factsAdded++;
           if (call.toolName === "update_fact") factsUpdated++;
           if (call.toolName === "remove_fact") factsRemoved++;
