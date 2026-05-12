@@ -896,7 +896,7 @@ bot.events.messageCreate = async (message) => {
     }
 
     for (const [, groupEntities] of templateGroups) {
-      await sendResponse(channelId, guildId, authorName, content, isMentioned ?? false, groupEntities, "message");
+      await sendResponse(channelId, guildId, authorName, content, isMentioned ?? false, groupEntities, "message", message.id.toString());
     }
   }
 
@@ -904,9 +904,10 @@ bot.events.messageCreate = async (message) => {
   for (const { entity, retryMs } of retryEntities) {
     const key = retryKey(channelId, entity.id);
     debug("Scheduling entity retry", { entity: entity.name, retryMs });
+    const retryTriggerMessageId = message.id.toString();
     const timer = setTimeout(() => {
       retryTimers.delete(key);
-      processEntityRetry(channelId, guildId, entity.id, authorName, content, messageTime, channelEntities).catch(err => {
+      processEntityRetry(channelId, guildId, entity.id, authorName, content, messageTime, channelEntities, retryTriggerMessageId).catch(err => {
         error("Unhandled error in entity retry", err, { entity: entity.name, channelId });
       });
     }, retryMs);
@@ -924,7 +925,8 @@ async function processEntityRetry(
   username: string,
   content: string,
   messageTime: number,
-  allChannelEntities: EntityWithFacts[]
+  allChannelEntities: EntityWithFacts[],
+  triggerMessageId?: string,
 ) {
   const entity = getEntityWithFacts(entityId);
   if (!entity) return;
@@ -1045,7 +1047,7 @@ async function processEntityRetry(
     template: entity.template,
     systemTemplate: entity.system_template,
     exprContext: ctx,
-  }], "retry");
+  }], "retry", triggerMessageId);
 }
 
 async function processEntityTick(
@@ -1542,7 +1544,8 @@ export async function sendResponse(
   content: string,
   isMentioned: boolean,
   respondingEntities?: EvaluatedEntity[],
-  triggerType: TriggerType = "message"
+  triggerType: TriggerType = "message",
+  triggerMessageId?: string,
 ) {
   // Apply rate limits before touching the LLM or typing indicator
   let rateLimitOwnerIds: Map<number, string | null> | undefined;
@@ -1879,8 +1882,9 @@ export async function sendResponse(
           const count = recordEvalError(entity.id, editors[0] ?? "", errorMsg);
           if (count <= 2) {
             const isRecurring = count === 2;
+            const errCtx: ErrorNotifyContext = { channelId, guildId, triggeredBy: username, triggerType, triggerMessageId };
             for (const uid of editors) {
-              notifyUserOfError(uid, entity.name, errorMsg, "LLM error", `Check the model config with \`/edit ${entity.name} type:config\`.`, isRecurring).catch(() => {});
+              notifyUserOfError(uid, entity.name, errorMsg, "LLM error", `Check the model config with \`/edit ${entity.name} type:config\`.`, isRecurring, errCtx).catch(() => {});
             }
           }
         }
@@ -1897,8 +1901,9 @@ export async function sendResponse(
           const count = recordEvalError(entity.id, editors[0] ?? "", errorMsg);
           if (count <= 2) {
             const isRecurring = count === 2;
+            const errCtx: ErrorNotifyContext = { channelId, guildId, triggeredBy: username, triggerType, triggerMessageId };
             for (const uid of editors) {
-              notifyUserOfError(uid, entity.name, errorMsg, undefined, undefined, isRecurring).catch(() => {});
+              notifyUserOfError(uid, entity.name, errorMsg, undefined, undefined, isRecurring, errCtx).catch(() => {});
             }
           }
         }
@@ -2034,6 +2039,14 @@ function extractBlockReason(err: unknown): string | undefined {
   return extractBlockReason(e["cause"]);
 }
 
+interface ErrorNotifyContext {
+  channelId: string;
+  guildId: string | undefined;
+  triggeredBy: string;
+  triggerType: TriggerType;
+  triggerMessageId?: string;
+}
+
 async function notifyUserOfError(
   userId: string,
   entityName: string,
@@ -2041,6 +2054,7 @@ async function notifyUserOfError(
   title = "Condition error",
   suggestion = `Use \`/edit ${entityName}\` to fix the condition.`,
   isRecurring = false,
+  ctx?: ErrorNotifyContext,
 ): Promise<void> {
   try {
     const dmChannel = await bot.helpers.getDmChannel(BigInt(userId));
@@ -2048,8 +2062,31 @@ async function notifyUserOfError(
     const footer = isRecurring
       ? `\n\n_This error has recurred. Further occurrences will be suppressed until the facts are edited or \`/debug\` clears the state._`
       : "";
+
+    let contextBlock = "";
+    if (ctx) {
+      const triggerLabel: Record<TriggerType, string> = {
+        message: "message",
+        retry: "delayed retry",
+        tick: "periodic tick",
+        trigger_tool: "trigger tool",
+        slash_trigger: "/trigger command",
+        web: "web message",
+      };
+      const guildPart = ctx.guildId ?? "@me";
+      const messageLink = ctx.triggerMessageId
+        ? `https://discord.com/channels/${guildPart}/${ctx.channelId}/${ctx.triggerMessageId}`
+        : null;
+      const channelRef = `<#${ctx.channelId}>`;
+      const triggeredByPart = ctx.triggeredBy ? ` by **${ctx.triggeredBy}**` : "";
+      const triggerLine = `Triggered via ${triggerLabel[ctx.triggerType]}${triggeredByPart} in ${channelRef}`;
+      contextBlock = messageLink
+        ? `\n${triggerLine} — [jump to message](${messageLink})`
+        : `\n${triggerLine}`;
+    }
+
     await bot.helpers.sendMessage(dmChannel.id, {
-      content: `**${heading} in ${entityName}**\n\`\`\`\n${errorMsg}\n\`\`\`\n${suggestion}${footer}`,
+      content: `**${heading} in ${entityName}**\n\`\`\`\n${errorMsg}\n\`\`\`\n${suggestion}${contextBlock}${footer}`,
     });
     debug("Sent error DM", { userId, entityName, isRecurring });
   } catch (err) {
