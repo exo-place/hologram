@@ -16,6 +16,7 @@ export function initSchema(db: Database, { useVec0 = true } = {}) {
     CREATE TABLE IF NOT EXISTS entities (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
+      nickname TEXT,
       owned_by TEXT,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       template TEXT,

@@ -8,7 +8,7 @@ Discord bot for collaborative worldbuilding and roleplay. Built on an entity-fac
   - `src/ai/` — LLM pipeline: prompt building, streaming, template engine, tools, models
   - `src/templates/` — Nunjucks template sources (default.njk)
   - `src/bot/` — Discord client (Discordeno) + 7 slash commands
-  - `src/db/` — SQLite schema (9 tables), entity/fact CRUD, message history
+  - `src/db/` — SQLite schema (18+ tables), entity/fact CRUD, message history
   - `src/logic/` — `$if` expression evaluator, safe-regex validator
   - `src/debug/` — DB state inspection and fact evaluation tracing
 - `docs/` — VitePress documentation site (user-facing)

@@ -10,7 +10,7 @@ Discord interface layer. Owns the Discordeno bot instance, message ingestion pip
 - `webhooks.ts` — Webhook creation, caching, and message delivery. `executeWebhook` posts entity responses as webhook messages (with custom avatar and name). Handles thread channel resolution (threads must use the parent channel's webhook with a `thread_id` parameter). `editWebhookMessage` updates existing messages. `setBot` avoids circular imports by receiving the bot reference at startup.
 - `mute-filter.ts` — Entity mute gating. `filterMutedEntities(entities, channelId, guildId)` checks channel/guild kill-switches first, then per-owner and per-entity mutes. Called before fact evaluation to avoid wasted LLM work. Returns `{ active, muted }`.
 - `rate-limit.ts` — Sliding-window rate-limit enforcement. `checkRateLimits(channelId, guildId, entities)` evaluates three limit scopes (per-entity, per-owner, per-channel) and returns `{ allow, denied, ownerIds }`. Denied entities are dropped from the response set; `mod_events` rows are recorded. `shouldWarnRateLimit` provides TTL-based dedup (5 min) so the owner gets at most 1 DM per (entity, scope) per window.
-- `commands/` — Slash command definitions and interaction routing (see `commands/SUMMARY.md`).
+- `commands/` — Slash command definitions and interaction routing (see `commands/SUMMARY.md`). Autocomplete uses entity `nickname` for disambiguation display.
 
 ## Notes
 

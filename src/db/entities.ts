@@ -16,6 +16,7 @@ export function safeParseFallback<T>(json: string | null, fallback: T): T {
 export interface Entity {
   id: number;
   name: string;
+  nickname: string | null;
   owned_by: string | null;
   created_at: string;
   template: string | null;
@@ -408,6 +409,18 @@ export function transferOwnership(entityId: number, newOwnerId: string): Entity 
   const db = getDb();
   return db.prepare(`
     UPDATE entities SET owned_by = ? WHERE id = ?
-    RETURNING id, name, owned_by, created_at
+    RETURNING id, name, nickname, owned_by, created_at
   `).get(newOwnerId, entityId) as Entity | null;
+}
+
+/**
+ * Set or clear the nickname for an entity (used for disambiguation in autocomplete).
+ * Returns the updated entity, or null if not found.
+ */
+export function setEntityNickname(id: number, nickname: string | null): Entity | null {
+  const db = getDb();
+  return db.prepare(`
+    UPDATE entities SET nickname = ? WHERE id = ?
+    RETURNING id, name, nickname, owned_by, created_at
+  `).get(nickname, id) as Entity | null;
 }

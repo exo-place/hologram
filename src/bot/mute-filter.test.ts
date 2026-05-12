@@ -24,6 +24,7 @@ function makeEntityWithFacts(id: number, name = `entity-${id}`, owned_by: string
   return {
     id,
     name,
+    nickname: null,
     owned_by,
     created_at: new Date().toISOString(),
     template: null,

@@ -607,7 +607,7 @@ async function handleAutocomplete(bot: Bot, interaction: Interaction) {
           }
         }
 
-        results.push({ id: entityId, name: entityWithFacts.name, owned_by: entityWithFacts.owned_by });
+        results.push({ id: entityId, name: entityWithFacts.name, nickname: entityWithFacts.nickname, owned_by: entityWithFacts.owned_by });
       }
       results = results.slice(0, 25);
     }
@@ -710,7 +710,7 @@ async function handleAutocomplete(bot: Bot, interaction: Interaction) {
 
     // Prepend @system if query matches
     if ("@system".startsWith(query.toLowerCase()) || query === "") {
-      const systemChoice = { id: -1, name: "@system", owned_by: null };
+      const systemChoice = { id: -1, name: "@system", nickname: null, owned_by: null };
       results = [systemChoice as typeof results[number], ...results].slice(0, 25);
     }
   } else {
@@ -720,14 +720,26 @@ async function handleAutocomplete(bot: Bot, interaction: Interaction) {
 
   // Disambiguate duplicate names in display only; value is always the ID so
   // handlers resolve unambiguously via parseInt() before the name fallback.
-  const nameCounts = new Map<string, number>();
-  for (const e of results) nameCounts.set(e.name, (nameCounts.get(e.name) ?? 0) + 1);
+  // Step 1: compute display name per entity (nickname suffix if set).
+  // Step 2: count duplicates on display name.
+  // Step 3: append #ID only when display name is still duplicated.
+  const displayNames = new Map<number, string>();
+  for (const e of results) {
+    if (e.id === -1) continue; // @system handled separately
+    displayNames.set(e.id, e.nickname ? `${e.name} (${e.nickname})` : e.name);
+  }
 
-  const choices = results.map(e => ({
-    // @system is a synthetic entry with id -1 — keep its value as the literal string
-    name: e.id === -1 ? e.name : nameCounts.get(e.name)! > 1 ? `${e.name} (#${e.id})` : e.name,
-    value: e.id === -1 ? e.name : e.id.toString(),
-  }));
+  const displayNameCounts = new Map<string, number>();
+  for (const [, dn] of displayNames) {
+    displayNameCounts.set(dn, (displayNameCounts.get(dn) ?? 0) + 1);
+  }
+
+  const choices = results.map(e => {
+    if (e.id === -1) return { name: e.name, value: e.name };
+    const dn = displayNames.get(e.id)!;
+    const label = displayNameCounts.get(dn)! > 1 ? `${dn} (#${e.id})` : dn;
+    return { name: label, value: e.id.toString() };
+  });
 
   try {
     await bot.helpers.sendInteractionResponse(interaction.id, interaction.token, {

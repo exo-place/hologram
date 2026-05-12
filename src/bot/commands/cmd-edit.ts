@@ -16,6 +16,7 @@ import {
   getEntityWithFactsByName,
   getEntityConfig,
   setEntityConfig,
+  setEntityNickname,
   getPermissionDefaults,
   setFacts,
   updateEntity,
@@ -448,12 +449,26 @@ registerCommand({
     }
 
     if (editType === "identity") {
-      // Identity — avatar, keywords, respond, freeform
+      // Identity — nickname, avatar, keywords, respond, freeform
       const config = getEntityConfig(entity.id);
       const currentRespond = config?.config_respond ?? null;
       const currentFreeform = config?.config_freeform ?? 0;
 
       const identityLabels = [
+        {
+          type: MessageComponentTypes.Label,
+          label: "Nickname (for disambiguation)",
+          description: "Short label shown in autocomplete as \"Name (nickname)\" to distinguish entities with the same name",
+          component: {
+            type: MessageComponentTypes.TextInput,
+            customId: "nickname",
+            style: TextStyles.Short,
+            value: entity.nickname || undefined,
+            required: false,
+            placeholder: "e.g. Server A, human form, villain",
+            maxLength: 50,
+          },
+        },
         {
           type: MessageComponentTypes.Label,
           label: "Avatar URL",
@@ -1049,6 +1064,7 @@ registerModalHandler("edit-identity", async (bot, interaction, _values) => {
     else if (inner.values !== undefined) selectValues[inner.customId] = inner.values;
   }
 
+  const nickname = textValues.nickname?.trim() || null;
   const avatar = textValues.avatar?.trim() || null;
 
   // Validate and normalize keywords (reject invalid regex patterns)
@@ -1083,6 +1099,7 @@ registerModalHandler("edit-identity", async (bot, interaction, _values) => {
   const freeformSelected = selectValues.freeform?.[0] ?? "";
   const configFreeform: number = freeformSelected === "1" ? 1 : 0;
 
+  setEntityNickname(entityId, nickname);
   setEntityConfig(entityId, {
     config_avatar: avatar,
     config_keywords: keywordsNormalized,
@@ -1091,6 +1108,8 @@ registerModalHandler("edit-identity", async (bot, interaction, _values) => {
   });
 
   const changes: string[] = [];
+  if (nickname) changes.push(`nickname: "${nickname}"`);
+  else changes.push("nickname: cleared");
   if (avatar) changes.push("avatar: set");
   else changes.push("avatar: cleared");
   if (keywordsNormalized !== null) changes.push(`keywords: ${keywordsNormalized.split("\n").length} set`);

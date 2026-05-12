@@ -59,6 +59,7 @@ function mockRawEntity(id: number, name: string, facts: string[]): EntityWithFac
   return {
     id,
     name,
+    nickname: null,
     owned_by: null,
     created_at: "2024-01-01",
     template: null,
