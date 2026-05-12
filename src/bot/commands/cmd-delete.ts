@@ -10,7 +10,7 @@ import {
 } from "../../db/discord";
 import { recordModEvent } from "../../db/moderation";
 import { deleteWebhookMessageFromDiscord } from "../webhooks";
-import { canUserDelete } from "./cmd-permissions";
+import { canUserDelete, canUserSendNoteInLocation } from "./cmd-permissions";
 import { debug } from "../../logger";
 
 const MANAGE_WEBHOOKS = BitwisePermissionFlags.MANAGE_WEBHOOKS;
@@ -80,10 +80,13 @@ async function canDelete(
   invokerHasManageWebhooks: boolean,
 ): Promise<boolean> {
   if (invokerHasManageWebhooks) return true;
-  // System notes can be deleted by anyone with Manage Webhooks (already checked above)
-  // or by the author themselves
   if (msg.isSystemNote) {
-    return false; // Only Manage Webhooks can purge system notes
+    // Mirror /sendnote permission: sendnote allowlist, or fall back to Manage Messages
+    const allowlistResult = canUserSendNoteInLocation(ctx.userId, ctx.username, ctx.userRoles, ctx.channelId, ctx.guildId);
+    if (allowlistResult !== null) return allowlistResult;
+    const memberPerms = ctx.interaction.member?.permissions;
+    return memberPerms != null && typeof memberPerms === "object" &&
+      (memberPerms.has("MANAGE_MESSAGES") || memberPerms.has("ADMINISTRATOR"));
   }
   if (msg.entityId === null) return false;
   const entity = getEntityWithFacts(msg.entityId);
