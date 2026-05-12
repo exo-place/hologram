@@ -1226,8 +1226,6 @@ export interface RecentChannelMessage {
   entityId: number | null;
   /** Entity name — "(system note)" for system notes */
   entityName: string;
-  /** Discord user ID of the message author */
-  authorId: string;
   content: string;
   createdAt: string;
   /** True when this is a system note (discord_message_id IS NULL + data.is_note = true) */
@@ -1244,7 +1242,6 @@ export function getRecentChannelMessages(channelId: string, limit: number): Rece
     SELECT
       m.id as db_id,
       m.discord_message_id as message_id,
-      m.author_id,
       wm.entity_id,
       wm.entity_name,
       m.content,
@@ -1261,7 +1258,6 @@ export function getRecentChannelMessages(channelId: string, limit: number): Rece
   `).all(channelId, limit) as Array<{
     db_id: number;
     message_id: string | null;
-    author_id: string;
     entity_id: number | null;
     entity_name: string | null;
     content: string;
@@ -1271,7 +1267,6 @@ export function getRecentChannelMessages(channelId: string, limit: number): Rece
   return rows.map(r => ({
     dbId: r.db_id,
     messageId: r.message_id,
-    authorId: r.author_id,
     entityId: r.entity_id,
     entityName: r.entity_name ?? "(system note)",
     content: r.content,
@@ -1289,7 +1284,6 @@ export function searchChannelMessages(channelId: string, query: string, limit = 
     SELECT
       m.id as db_id,
       m.discord_message_id as message_id,
-      m.author_id,
       wm.entity_id,
       wm.entity_name,
       m.content,
@@ -1306,7 +1300,6 @@ export function searchChannelMessages(channelId: string, query: string, limit = 
   `).all(channelId, `%${query.replace(/[%_\\]/g, "\\$&")}%`, limit) as Array<{
     db_id: number;
     message_id: string | null;
-    author_id: string;
     entity_id: number | null;
     entity_name: string | null;
     content: string;
@@ -1316,7 +1309,6 @@ export function searchChannelMessages(channelId: string, query: string, limit = 
   return rows.map(r => ({
     dbId: r.db_id,
     messageId: r.message_id,
-    authorId: r.author_id,
     entityId: r.entity_id,
     entityName: r.entity_name ?? "(system note)",
     content: r.content,

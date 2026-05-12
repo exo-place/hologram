@@ -80,8 +80,10 @@ async function canDelete(
   invokerHasManageWebhooks: boolean,
 ): Promise<boolean> {
   if (invokerHasManageWebhooks) return true;
+  // System notes can be deleted by anyone with Manage Webhooks (already checked above)
+  // or by the author themselves
   if (msg.isSystemNote) {
-    return msg.authorId === ctx.userId;
+    return false; // Only Manage Webhooks can purge system notes
   }
   if (msg.entityId === null) return false;
   const entity = getEntityWithFacts(msg.entityId);
