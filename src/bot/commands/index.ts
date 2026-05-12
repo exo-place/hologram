@@ -718,9 +718,15 @@ async function handleAutocomplete(bot: Bot, interaction: Interaction) {
     results = searchEntities(query, 25);
   }
 
+  // Disambiguate duplicate names in display only; value is always the ID so
+  // handlers resolve unambiguously via parseInt() before the name fallback.
+  const nameCounts = new Map<string, number>();
+  for (const e of results) nameCounts.set(e.name, (nameCounts.get(e.name) ?? 0) + 1);
+
   const choices = results.map(e => ({
-    name: e.name,
-    value: e.name,
+    // @system is a synthetic entry with id -1 — keep its value as the literal string
+    name: e.id === -1 ? e.name : nameCounts.get(e.name)! > 1 ? `${e.name} (#${e.id})` : e.name,
+    value: e.id === -1 ? e.name : e.id.toString(),
   }));
 
   try {
