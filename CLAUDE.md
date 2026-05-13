@@ -297,13 +297,46 @@ error("Message", err, { key: "value" });
 
 **Dogfooding.** Help system is implemented via entities with facts.
 
+## Context Is The Only Scarce Resource
+
+Every byte that enters the main session stays for its entire lifetime. File contents, command output, search results — once read, it lingers in cache and shapes every downstream token. There is no "just looking."
+
+**All exploration runs in subagents.** Investigations, audits, deep dives, surveys, "let me check," "let me find" — if the purpose of a tool sequence is to find out something you don't yet know, it runs in a subagent. Renaming the activity doesn't change what it is. The subagent returns a distilled summary; raw output stays in the subagent.
+
+Inline tool use in the main context is reserved for: reading a known file at a known path, edits/writes you're committing to, a single targeted lookup whose result you'll act on immediately. If you find yourself running a second grep to refine the first, you should have spawned a subagent.
+
+## Durability
+
+Subagent reports, mid-session realizations, "I'll remember this" — none of these outlast the session. Anything worth keeping goes into CLAUDE.md, code, docs, or a commit. If it isn't written down, it is gone.
+
+**Warning — these phrases mean something needs to be written down right now:**
+- "I won't do X again" / "I'll remember to..." / "I've learned that..."
+- "Next time I'll..." / "From now on I'll..."
+- Any acknowledgement of a recurring error without a corresponding CLAUDE.md edit
+
+**Commit completed work immediately.** After tests pass, commit. After each phase of a multi-phase plan, commit. Uncommitted work is lost work.
+
+**Docs change in the same commit as the code.** Keep `docs/`, `README.md`, and `CLAUDE.md` in sync. New pages enter the sidebar in that commit. Outdated docs are bugs. There is no follow-up.
+
+## Authenticity
+
+When asked to analyze X, read X. Do not synthesize from conversation memory, prior summaries, or what the file probably says. Claims must correspond to evidence produced this session.
+
+**No undocumented workarounds. No copouts** like "this is out of date, leaving it" — fix it or flag it.
+
+**Something unexpected is a signal.** Surprising output, anomalous numbers, files containing what they shouldn't — stop and find out why before continuing. Do not accept anomalies and move on.
+
+## Discipline
+
+Corrections from the user are conversation, not material for new rules. A single correction does not warrant a CLAUDE.md edit. Rules are added when a failure mode is observed repeatedly and the rule names the failure it prevents.
+
+Do not announce actions ("I will now…"). Act.
+
 ## Core Rules
 
 - **No cutting corners. Ever.** If state needs to persist, use the database. If something needs tracking, track it properly. No "resets on restart is fine" or in-memory shortcuts for persistent data.
 - **Never reimplement.** If logic exists elsewhere, import and use it. No local copies of functions, no "simplified versions for this use case." Find the canonical implementation and make it work.
 - **Note things down immediately:** problems, tech debt, issues → TODO.md. If you see ANY issue while working - inconsistency, bug, missing feature, tech debt - add it to TODO.md before you forget.
-- **Do the work properly.** No undocumented workarounds. No copouts like "this is out of date, leaving it" - fix it or flag it.
-- **Update docs after every task.** Keep `docs/`, `README.md`, and `CLAUDE.md` in sync with code changes. Outdated docs are bugs.
 - **Keep SUMMARY.md files current.** Every directory under `src/` and `docs/` needs a `SUMMARY.md` describing its purpose and contents. When you add, remove, or significantly change files in a directory, update that directory's `SUMMARY.md`. The pre-commit hook runs `normalize rules run` — a `stale-summary` warning means the SUMMARY.md is out of date and must be refreshed before committing.
 - **Always write tests for new features.** Every new feature, bug fix, or behavior change must include corresponding tests. Tests go in `*.test.ts` files next to the code they test. Run `bun test` to execute.
 - **Single-instance project — no DB migrations.** There is only one deployed Hologram database. When schema changes, edit `CREATE TABLE` / `CREATE INDEX` in `src/db/schema.ts` directly and apply the change to `hologram.db` manually (`sqlite3 hologram.db "ALTER TABLE ..."` or a one-shot `bun -e` script). Do not add `ALTER TABLE` / recreate-table migration blocks — `schema.ts` should describe the current state, not history.
@@ -312,24 +345,11 @@ error("Message", err, { key: "value" });
   - Days elapsed since `meta.date` ≥ 7
   - Update format: `{ commit, date (YYYY-MM-DD), lines (%), functions (%), tests (count) }`
 
-**Conversation is not memory.** Anything said in chat evaporates at session end. If it implies future behavior change, write it to CLAUDE.md immediately — or it will not happen.
+## Hard Constraints
 
-**Warning — these phrases mean something needs to be written down right now:**
-- "I won't do X again" / "I'll remember to..." / "I've learned that..."
-- "Next time I'll..." / "From now on I'll..."
-- Any acknowledgement of a recurring error without a corresponding CLAUDE.md edit
-
-**When the user corrects you:** Ask what rule would have prevented this, and write it before proceeding. **"The rule exists, I just didn't follow it" is never the diagnosis** — a rule that doesn't prevent the failure it describes is incomplete; fix the rule, not your behavior.
-
-**Something unexpected is a signal, not noise.** Surprising output, anomalous numbers, files containing what they shouldn't — stop and ask why before continuing. Don't accept anomalies and move on.
-
-## Negative Constraints
-
-Do not:
-- Announce actions ("I will now...") - just do them
-- Use interactive git commands (`git add -p`, `git add -i`, `git rebase -i`) — these block on stdin and hang in non-interactive shells; stage files by name instead
-- Use `--no-verify` - fix the issue or fix the hook
-- Assume tools are missing - check if `bun` is available
+- No interactive git commands (`git add -p`, `git add -i`, `git rebase -i`) — these block on stdin and hang in non-interactive shells; stage files by name instead
+- No `--no-verify` — fix the issue or fix the hook
+- Don't assume tools are missing — check if `bun` is available
 - Use `as any` type assertions or `type Foo = any` aliases - they hide type errors and indicate missing/wrong types. Fix the underlying type issue instead (add proper desiredProperties, use correct property paths like `toggles.nsfw` instead of `nsfw`, etc.). For Discordeno types, use `typeof bot` from `src/bot/client.ts` to get the fully-resolved `Bot<TProps, TBehavior>` without manually threading generics.
 - **Never downgrade fidelity.** When storing or rendering Discord data (embeds, components, attachments, etc.), preserve the full structure. Never flatten rich data to "just text" — store the complete data and render it properly in templates. (`embed.toJSON()` in the default template is intentional — see `docs/design/decisions.md`.)
 - **`sqlite-vec` returns `Uint8Array`, not `Float32Array`.** Always convert: `new Float32Array(blob.buffer, blob.byteOffset, blob.byteLength / 4)`. Affects `fact_embeddings` and `memory_embeddings`.
@@ -338,22 +358,7 @@ Do not:
 - **Non-responding entities need `processRawFacts()`.** Entities in the `others` and user persona slots receive raw DB facts — they must go through `processRawFacts()` from `src/ai/prompt.ts` to strip `$if` prefixes and directives before being passed to templates.
 - **`buildEvaluatedEntity` mock context** (`src/debug/evaluation.ts`) omits real runtime values like `unread_count`. When adding new `ExprContext` fields, also update the mock there.
 
-## Context Management
-
-**ALL exploration runs in subagents.** Any tool call whose purpose is "find out what's here" — grep, find, broad reads, surveys, audits — belongs in a subagent. Raw exploratory output in the main context is active context poisoning: it lingers in cache, shapes downstream reasoning, can't be unsent. The subagent returns a distilled summary; the noise stays in the subagent.
-
-Inline tool use in the main context is reserved for:
-- Reading a known file at a known path
-- Edits/writes you're committing to
-- A single targeted lookup whose result you'll act on immediately
-
-If you find yourself running a second grep to refine the first, you should have spawned a subagent.
-
 ## Commits
-
-**ALWAYS COMMIT AFTER EVERY TASK. DO NOT WAIT TO BE ASKED.**
-
-This is non-negotiable. When work is done, commit it immediately. Not committing is a failure mode.
 
 Use conventional commits: `type(scope): message`
 
