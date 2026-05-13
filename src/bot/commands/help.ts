@@ -2,18 +2,16 @@ import { ensureSystemEntity, getSystemEntities, deleteEntity } from "../../db/en
 
 const HELP_ENTITY_FACTS: Record<string, string[]> = {
   help: [
-    "$view @everyone",
     "is the help system",
     "topics: start, commands, expressions, patterns, facts, bindings, permissions, models, output",
-    "use `/view help:<topic>` for details",
+    "use `/help <topic>` for details",
     "---",
     "**Hologram** - Collaborative worldbuilding and roleplay",
     "Everything is an **entity** with **facts**.",
     "---",
-    "New here? Try `/view help:start`",
+    "New here? Try `/help start`",
   ],
   "help:start": [
-    "$view @everyone",
     "is the getting started guide",
     "---",
     "**Setting up a channel:**",
@@ -31,10 +29,9 @@ const HELP_ENTITY_FACTS: Record<string, string[]> = {
     "**Tips:**",
     "• Use `/debug` to see current channel state",
     "• Use `/view <entity>` to view any entity",
-    "• Control responses with `$if` (`/view help:expressions`)",
+    "• Control responses with `$if` (`/help expressions`)",
   ],
   "help:commands": [
-    "$view @everyone",
     "is help for commands",
     "---",
     "**Commands** (10 total)",
@@ -60,7 +57,6 @@ const HELP_ENTITY_FACTS: Record<string, string[]> = {
     "`/bind channel Aria` - Bind to channel",
   ],
   "help:expressions": [
-    "$view @everyone",
     "is help for $if expressions and response control",
     "---",
     "**Syntax:** `$if <expr>: <fact or directive>`",
@@ -69,7 +65,7 @@ const HELP_ENTITY_FACTS: Record<string, string[]> = {
     "**Directives:**",
     "• `$respond` / `$respond false` - control response",
     "• `$retry <ms>` - re-evaluate after delay",
-    "• `$stream` / `$model` / `$context` / `$strip` / `$collapse` - see `/view help:output`",
+    "• `$stream` / `$model` / `$context` / `$strip` / `$collapse` - see `/help output`",
     "---",
     "**Operators:**",
     "`&&` `||` `!` `==` `!=` `<` `>` `<=` `>=`",
@@ -108,10 +104,9 @@ const HELP_ENTITY_FACTS: Record<string, string[]> = {
     "---",
     "**Additional variables:** `group` (all bound chars), `name` (entity name)",
     "---",
-    "See `/view help:patterns` for common examples",
+    "See `/help patterns` for common examples",
   ],
   "help:patterns": [
-    "$view @everyone",
     "is help for common $if patterns",
     "---",
     "**Recommended defaults:**",
@@ -149,7 +144,6 @@ const HELP_ENTITY_FACTS: Record<string, string[]> = {
     "`$if retry_ms > 10000: $respond` - after 10s delay",
   ],
   "help:facts": [
-    "$view @everyone",
     "is help for facts",
     "---",
     "**Facts** - Define entities",
@@ -174,10 +168,9 @@ const HELP_ENTITY_FACTS: Record<string, string[]> = {
     "• `{{idle_duration}}` - human-readable idle time",
     "• `$if condition: $respond` - response control",
     "---",
-    "**Permissions:** See `/view help:permissions`",
+    "**Permissions:** See `/help permissions`",
   ],
   "help:bindings": [
-    "$view @everyone",
     "is help for bindings",
     "---",
     "**Bindings** - Connect Discord to entities",
@@ -191,7 +184,6 @@ const HELP_ENTITY_FACTS: Record<string, string[]> = {
     "**Scopes:** channel (default), guild, global",
   ],
   "help:permissions": [
-    "$view @everyone",
     "is help for entity permissions",
     "---",
     "**Ownership** - Each entity has an owner",
@@ -230,7 +222,6 @@ const HELP_ENTITY_FACTS: Record<string, string[]> = {
     "All permission directives accept usernames, Discord user IDs, and role IDs.",
   ],
   "help:models": [
-    "$view @everyone",
     "is help for models",
     "---",
     "**Models** - `provider:model` format",
@@ -241,7 +232,6 @@ const HELP_ENTITY_FACTS: Record<string, string[]> = {
     "• `openai:gpt-4o`",
   ],
   "help:output": [
-    "$view @everyone",
     "is help for output directives",
     "---",
     "**Output directives** control how the LLM generates and delivers responses.",
@@ -249,7 +239,7 @@ const HELP_ENTITY_FACTS: Record<string, string[]> = {
     "**`$model provider:model`** - Override the LLM model",
     '`$model google:gemini-2.0-flash`',
     '`$if mentioned: $model openai:gpt-4o`',
-    "See `/view help:models` for available models.",
+    "See `/help models` for available models.",
     "---",
     "**`$stream`** - Stream responses progressively",
     "`$stream` - new message per line",
@@ -279,6 +269,11 @@ const HELP_ENTITY_FACTS: Record<string, string[]> = {
     "Accepts: `all`, `none`, or space-separated: `user`, `assistant`, `system`.",
   ],
 };
+
+/** Subtopic names without the "help:" prefix (for /help autocomplete). */
+export const HELP_TOPICS: readonly string[] = Object.keys(HELP_ENTITY_FACTS)
+  .filter(k => k.startsWith("help:"))
+  .map(k => k.slice("help:".length));
 
 export function ensureHelpEntities(): void {
   for (const [name, facts] of Object.entries(HELP_ENTITY_FACTS)) {

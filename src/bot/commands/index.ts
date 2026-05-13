@@ -14,6 +14,7 @@ import { debug, info, warn, error } from "../../logger";
 import { searchEntities, searchEntitiesOwnedBy, getEntitiesWithFacts, getPermissionDefaults } from "../../db/entities";
 import { parsePermissionDirectives, matchesUserEntry, isUserBlacklisted, isUserAllowed } from "../../logic/expr";
 import { getBoundEntityIds, type DiscordType } from "../../db/discord";
+import { HELP_TOPICS } from "./help";
 
 // =============================================================================
 // Types
@@ -520,6 +521,24 @@ async function handleAutocomplete(bot: Bot, interaction: Interaction) {
   const userId = interaction.user?.id?.toString() ?? "";
   const username = interaction.user?.username ?? "";
   const userRoles: string[] = (interaction.member?.roles ?? []).map((r: bigint) => r.toString());
+
+  // /help: static topic list, not entity-shaped — short-circuit.
+  if (commandName === "help") {
+    const q = query.toLowerCase();
+    const choices = HELP_TOPICS
+      .filter(t => t.toLowerCase().includes(q))
+      .slice(0, 25)
+      .map(t => ({ name: t, value: t }));
+    try {
+      await bot.helpers.sendInteractionResponse(interaction.id, interaction.token, {
+        type: InteractionResponseTypes.ApplicationCommandAutocompleteResult,
+        data: { choices },
+      });
+    } catch (err) {
+      warn("Autocomplete response failed (interaction may have expired)", { err });
+    }
+    return;
+  }
 
   let results;
 

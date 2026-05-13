@@ -229,9 +229,9 @@ Permission lists are stored as JSON arrays in entity config columns. Role IDs us
 | `/debug rag [entity] [query]` | Show embedding status + RAG retrieval results |
 | `/trigger <entity> [verb]` | Manually trigger entity response; verb requires persona and sets `interaction_type` |
 | `/forget` | Exclude messages before now from context |
-| `/help [topic]` | Show help entity content (alias for `/view help` or `/view help:<topic>`) |
+| `/help [topic]` | Show help entity content. All help entities (`help` and `help:*`) have owner-only `$view` so they're hidden from `/view` autocomplete and only reachable via `/help` (which bypasses view-perm checks). The `topic` option has its own autocomplete sourced from `HELP_TOPICS`. |
 
-Help is an entity: `/view help`, `/view help:commands`, `/view help:respond`
+Help is an entity: `/help`, `/help commands`, `/help expressions`.
 
 ## Dev Commands
 

@@ -37,7 +37,7 @@ Bind an entity to a channel and it comes alive - responding to messages, maintai
 | `/unbind <target> <entity>` | Remove binding |
 | `/status` | Show channel bindings |
 
-**Help is an entity**: `/view help`, `/view help:commands`, `/view help:respond`
+**Help**: `/help`, `/help commands`, `/help expressions`
 
 ## Response Control
 

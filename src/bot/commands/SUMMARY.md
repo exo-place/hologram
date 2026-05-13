@@ -12,7 +12,7 @@ Slash command definitions and interaction routing. All user-facing Discord comma
 - `cmd-delete.ts` — The `/purge` slash command for deleting bot messages and system notes by substring or 1-indexed stack range (e.g. `1-4`). Respects `$delete` permission directive and MANAGE_WEBHOOKS fallback. System notes (no Discord message ID) are deleted DB-only.
 - `index.ts` — Command registry and interaction router. Defines `CommandContext`, `CommandHandler`, `registerCommand`, and `registerModalHandler`. `handleInteraction` dispatches incoming Discord interactions to the correct handler. Also contains autocomplete logic (entity search filtered by ownership and permissions) and helper functions `respond`, `respondWithModal`, `respondWithV2Modal`.
 - `helpers.ts` — Pure, Discord-free helper functions extracted for unit testability: `chunkContent` (split long text at newlines), `elideText` (keep head+tail within char limit), `buildDefaultValues` (modal pre-fill from current config), `buildEntries` (format config display text).
-- `help.ts` — `ensureHelpEntities`: creates or refreshes the built-in help system entities (`help`, `help:start`, `help:commands`, etc.) on startup. Help is implemented as regular entities with facts, viewable via `/view help`.
+- `help.ts` — `ensureHelpEntities`: creates or refreshes the built-in help system entities (`help`, `help:start`, `help:commands`, etc.) on startup. Help is implemented as regular entities with facts. None of them set `$view`, so they're owner-only and hidden from `/view` autocomplete; the only public route is `/help [topic]` (which bypasses view-perm checks). Also exports `HELP_TOPICS` (subtopic names without the `help:` prefix) for the `/help` autocomplete.
 
 ## Notes
 

@@ -206,7 +206,7 @@ registerCommand({
 });
 
 // =============================================================================
-// /help - Show help (alias for /view help or /view help:<topic>)
+// /help - Show help (the only public route to help:<topic> entities; their $view is owner-only)
 // =============================================================================
 
 registerCommand({
@@ -218,6 +218,7 @@ registerCommand({
       description: "Help topic (e.g. commands, respond)",
       type: ApplicationCommandOptionTypes.String,
       required: false,
+      autocomplete: true,
     },
   ],
   async handler(ctx, options) {

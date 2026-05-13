@@ -37,8 +37,8 @@ The optional `type` parameter controls what is shown:
 **Examples:**
 ```
 /view Aria             # View facts and memories
-/view help             # View help entity
-/view help:triggers    # View triggers help
+/help                  # View top-level help (help entities are hidden from /view)
+/help expressions      # View a help subtopic
 ```
 
 ---
@@ -369,16 +369,18 @@ Messages are not deleted — they remain in the database. They are simply exclud
 
 ## Help
 
-Help is an entity! View it with `/view`:
+Help is an entity! Use `/help`:
 
 ```
-/view help              # Overview
-/view help:start        # Getting started guide
-/view help:commands     # Command reference
-/view help:expressions  # Response control ($if)
-/view help:patterns     # Common expression patterns
-/view help:facts        # Fact patterns
-/view help:bindings     # Binding system
-/view help:permissions  # Entity permissions
-/view help:models       # LLM configuration
+/help               # Overview
+/help start         # Getting started guide
+/help commands      # Command reference
+/help expressions   # Response control ($if)
+/help patterns      # Common expression patterns
+/help facts         # Fact patterns
+/help bindings      # Binding system
+/help permissions   # Entity permissions
+/help models        # LLM configuration
 ```
+
+All help entities (`help`, `help:start`, `help:commands`, etc.) have owner-only `$view`, so they don't appear in `/view` autocomplete. The only public route is `/help [topic]`, which bypasses view-perm checks.
