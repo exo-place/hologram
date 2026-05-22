@@ -7,6 +7,7 @@
 
 import { getDb } from "./index";
 import { embed, similarityMatrix } from "../ai/embeddings";
+import { info } from "../logger";
 
 // =============================================================================
 // Types
@@ -626,28 +627,74 @@ function setsEqual<T>(a: Set<T>, b: Set<T>): boolean {
 /**
  * Retrieve relevant memories and boost their frecency.
  * Main entry point for memory retrieval in the message pipeline.
+ *
+ * Accepts two query variants:
+ *  - messagesWithName: queries formatted as "${author_name}: ${content}"
+ *  - messagesWithoutName: queries using only message content
+ *
+ * Both searches are run and results are merged per memory by taking the MAX
+ * similarity. The final retrieval set is based on the merged scores. For
+ * observational purposes, logs any memory where the without-name variant
+ * scored strictly higher than the with-name variant ("RAG without-name win").
  */
 export async function retrieveRelevantMemories(
   entityId: number,
-  messages: string[],
+  messagesWithName: string[],
+  messagesWithoutName: string[],
   scope: MemoryScope,
   channelId?: string,
   guildId?: string,
 ): Promise<Memory[]> {
-  const results = await searchMemoriesBySimilarity(
-    entityId,
-    messages,
-    scope,
-    channelId,
-    guildId,
-  );
+  const [withNameResults, withoutNameResults] = await Promise.all([
+    searchMemoriesBySimilarity(entityId, messagesWithName, scope, channelId, guildId),
+    searchMemoriesBySimilarity(entityId, messagesWithoutName, scope, channelId, guildId),
+  ]);
+
+  // Merge by memory id, taking the MAX similarity from either variant
+  const mergedMap = new Map<number, { memory: Memory; withName: number; withoutName: number }>();
+  for (const { memory, similarity } of withNameResults) {
+    mergedMap.set(memory.id, { memory, withName: similarity, withoutName: 0 });
+  }
+  for (const { memory, similarity } of withoutNameResults) {
+    const existing = mergedMap.get(memory.id);
+    if (existing) {
+      existing.withoutName = similarity;
+    } else {
+      mergedMap.set(memory.id, { memory, withName: 0, withoutName: similarity });
+    }
+  }
+
+  // Log cases where the without-name variant would have surfaced a memory with higher similarity
+  const wins: Array<{ memoryId: number; withName: number; withoutName: number; delta: number; contentPreview: string }> = [];
+  const merged: Array<{ memory: Memory; similarity: number }> = [];
+  for (const { memory, withName, withoutName } of mergedMap.values()) {
+    const maxSim = Math.max(withName, withoutName);
+    if (maxSim >= MIN_SIMILARITY_THRESHOLD) {
+      merged.push({ memory, similarity: maxSim });
+      if (withoutName > withName) {
+        wins.push({
+          memoryId: memory.id,
+          withName,
+          withoutName,
+          delta: withoutName - withName,
+          contentPreview: memory.content.slice(0, 80),
+        });
+      }
+    }
+  }
+
+  if (wins.length > 0) {
+    info("RAG without-name win", { entityId, count: wins.length, wins });
+  }
+
+  merged.sort((a, b) => b.similarity - a.similarity);
 
   // Boost frecency for retrieved memories
-  for (const { memory } of results) {
+  for (const { memory } of merged) {
     boostMemoryFrecency(memory.id);
   }
 
-  return results.map(r => r.memory);
+  return merged.map(r => r.memory);
 }
 
 // =============================================================================

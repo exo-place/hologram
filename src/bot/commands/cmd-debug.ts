@@ -307,29 +307,33 @@ function resolveRagQueryTexts(
   ctx: CommandContext,
   ragContextExpr: string | null | undefined,
   query: string | undefined,
-): { queryTexts: string[]; queryLabel: string } {
+): { queryTextsWithName: string[]; queryTextsWithoutName: string[]; queryLabel: string } {
   if (query) {
-    return { queryTexts: [query], queryLabel: `"${query}"` };
+    // Explicit query: both variants are identical (no author name distinction)
+    return { queryTextsWithName: [query], queryTextsWithoutName: [query], queryLabel: `"${query}"` };
   }
   const expr = ragContextExpr ?? DEFAULT_RAG_CONTEXT_EXPR;
   const contextFilter = compileContextExpr(expr);
   const rawMessages = getMessages(ctx.channelId, 100);
   const now = Date.now();
-  const queryTexts: string[] = [];
+  const queryTextsWithName: string[] = [];
+  const queryTextsWithoutName: string[] = [];
   let totalChars = 0;
   for (const m of rawMessages) {
-    const len = `${m.author_name}: ${m.content}`.length + 1;
+    const formatted = `${m.author_name}: ${m.content}`;
+    const len = formatted.length + 1;
     const msgAge = now - new Date(m.created_at).getTime();
     const shouldInclude = contextFilter({
-      chars: totalChars + len, count: queryTexts.length,
+      chars: totalChars + len, count: queryTextsWithName.length,
       age: msgAge, age_h: msgAge / 3_600_000,
       age_m: msgAge / 60_000, age_s: msgAge / 1000,
     });
-    if (!shouldInclude && queryTexts.length > 0) break;
-    if (m.content) queryTexts.push(m.content);
+    if (!shouldInclude && queryTextsWithName.length > 0) break;
+    queryTextsWithName.push(formatted);
+    if (m.content) queryTextsWithoutName.push(m.content);
     totalChars += len;
   }
-  return { queryTexts, queryLabel: `context window (${queryTexts.length} messages)` };
+  return { queryTextsWithName, queryTextsWithoutName, queryLabel: `context window (${queryTextsWithName.length} messages)` };
 }
 
 async function handleInfoContext(ctx: CommandContext, options: Record<string, unknown>) {
@@ -377,9 +381,9 @@ async function handleInfoContext(ctx: CommandContext, options: Record<string, un
   const memoryScope = (config?.config_memory ?? "none") as MemoryScope;
   let entityMemories: Map<number, Array<{ content: string }>> | undefined;
   if (memoryScope !== "none") {
-    const { queryTexts } = resolveRagQueryTexts(ctx, config?.config_rag_context, query);
+    const { queryTextsWithName, queryTextsWithoutName } = resolveRagQueryTexts(ctx, config?.config_rag_context, query);
     const memories = await retrieveRelevantMemories(
-      targetEntity.id, queryTexts, memoryScope, ctx.channelId, ctx.guildId,
+      targetEntity.id, queryTextsWithName, queryTextsWithoutName, memoryScope, ctx.channelId, ctx.guildId,
     );
     if (memories.length > 0) {
       entityMemories = new Map([[targetEntity.id, memories.map(m => ({ content: m.content }))]]);
@@ -421,11 +425,11 @@ async function handleInfoRag(ctx: CommandContext, options: Record<string, unknow
   if (memoryScope === "none") {
     lines.push(`*Memory is disabled — no retrieval occurs.*`);
   } else {
-    const { queryTexts, queryLabel } = resolveRagQueryTexts(ctx, config?.config_rag_context, query);
+    const { queryTextsWithName, queryLabel } = resolveRagQueryTexts(ctx, config?.config_rag_context, query);
 
     lines.push(`\n**RAG** (scope: ${memoryScope}, threshold: ${MIN_SIMILARITY_THRESHOLD}) — ${queryLabel}`);
     const results = await testRagRetrieval(
-      targetEntity.id, queryTexts,
+      targetEntity.id, queryTextsWithName,
       memoryScope as "channel" | "guild" | "global",
       ctx.channelId, ctx.guildId,
     );

@@ -665,7 +665,7 @@ describe("retrieveRelevantMemories", () => {
     const memory = await addMemory(entityId, "retrievable memory");
     await storeMemoryEmbedding(memory.id, mockEmbedding);
 
-    const results = await retrieveRelevantMemories(entityId, ["query"], "global");
+    const results = await retrieveRelevantMemories(entityId, ["query"], ["query"], "global");
     expect(results).toHaveLength(1);
     expect(results[0].id).toBe(memory.id);
   });
@@ -676,7 +676,7 @@ describe("retrieveRelevantMemories", () => {
     testDb.prepare(`DELETE FROM memory_embeddings WHERE memory_id = ?`).run(memory.id);
     clearRetrievalCaches();
 
-    const results = await retrieveRelevantMemories(entityId, ["query"], "global");
+    const results = await retrieveRelevantMemories(entityId, ["query"], ["query"], "global");
     expect(results).toEqual([]);
   });
 
@@ -686,7 +686,7 @@ describe("retrieveRelevantMemories", () => {
     await storeMemoryEmbedding(memory.id, mockEmbedding);
 
     await addMemory(entityId, "x"); // fresh memory as frecency baseline ~1.0
-    await retrieveRelevantMemories(entityId, ["query"], "global");
+    await retrieveRelevantMemories(entityId, ["query"], ["query"], "global");
 
     // After retrieval, frecency should be boosted above initial
     const updated = testDb
@@ -700,8 +700,8 @@ describe("retrieveRelevantMemories", () => {
     const memory = await addMemory(entityId, "a memory");
     await storeMemoryEmbedding(memory.id, mockEmbedding);
 
-    const r1 = await retrieveRelevantMemories(entityId, ["q"], "global");
-    const r2 = await retrieveRelevantMemories(entityId, ["q"], "global");
+    const r1 = await retrieveRelevantMemories(entityId, ["q"], ["q"], "global");
+    const r2 = await retrieveRelevantMemories(entityId, ["q"], ["q"], "global");
     expect(r1).toHaveLength(1);
     expect(r2).toHaveLength(1);
   });

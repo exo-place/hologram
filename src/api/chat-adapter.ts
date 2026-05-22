@@ -213,7 +213,8 @@ async function fireResponse(
   const contextFilter = compileContextExpr(contextExpr);
   const rawMessages = getMessages(channelId, 100);
   const now = Date.now();
-  const contextMessages: string[] = [];
+  const contextMessagesWithName: string[] = [];
+  const contextMessagesWithoutName: string[] = [];
   let totalChars = 0;
 
   for (const m of rawMessages) {
@@ -222,14 +223,15 @@ async function fireResponse(
     const msgAge = now - new Date(m.created_at).getTime();
     const shouldInclude = contextFilter({
       chars: totalChars + len,
-      count: contextMessages.length,
+      count: contextMessagesWithName.length,
       age: msgAge,
       age_h: msgAge / 3_600_000,
       age_m: msgAge / 60_000,
       age_s: msgAge / 1000,
     });
-    if (!shouldInclude && contextMessages.length > 0) break;
-    contextMessages.push(m.content);
+    if (!shouldInclude && contextMessagesWithName.length > 0) break;
+    contextMessagesWithName.push(formatted);
+    if (m.content) contextMessagesWithoutName.push(m.content);
     totalChars += len;
   }
 
@@ -237,7 +239,8 @@ async function fireResponse(
     if (entity.memoryScope !== "none") {
       const memories = await retrieveRelevantMemories(
         entity.id,
-        contextMessages,
+        contextMessagesWithName,
+        contextMessagesWithoutName,
         entity.memoryScope as MemoryScope,
         channelId,
         guildId,
