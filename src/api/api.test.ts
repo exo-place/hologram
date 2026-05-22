@@ -152,6 +152,43 @@ describe("entityRoutes — CRUD", () => {
     expect(body.data.name).toBe("NewName");
   });
 
+  test("PUT /api/entities/:id transfers ownership", async () => {
+    const { body: c } = await json<{ ok: boolean; data: { id: number } }>(
+      entityRoutes, "POST", "/api/entities", { name: "ToTransfer", owned_by: "user-a" }
+    );
+    const id = c.data.id;
+    const { status, body } = await json<{ ok: boolean; data: { owned_by: string; name: string } }>(
+      entityRoutes, "PUT", `/api/entities/${id}`, { owned_by: "user-b" }
+    );
+    expect(status).toBe(200);
+    expect(body.data.owned_by).toBe("user-b");
+    expect(body.data.name).toBe("ToTransfer");
+  });
+
+  test("PUT /api/entities/:id can rename and transfer in one call", async () => {
+    const { body: c } = await json<{ ok: boolean; data: { id: number } }>(
+      entityRoutes, "POST", "/api/entities", { name: "Combo", owned_by: "user-a" }
+    );
+    const id = c.data.id;
+    const { status, body } = await json<{ ok: boolean; data: { owned_by: string; name: string } }>(
+      entityRoutes, "PUT", `/api/entities/${id}`, { name: "ComboRenamed", owned_by: "user-b" }
+    );
+    expect(status).toBe(200);
+    expect(body.data.name).toBe("ComboRenamed");
+    expect(body.data.owned_by).toBe("user-b");
+  });
+
+  test("PUT /api/entities/:id rejects empty body", async () => {
+    const { body: c } = await json<{ ok: boolean; data: { id: number } }>(
+      entityRoutes, "POST", "/api/entities", { name: "NoOp" }
+    );
+    const id = c.data.id;
+    const { status } = await json<{ ok: boolean }>(
+      entityRoutes, "PUT", `/api/entities/${id}`, {}
+    );
+    expect(status).toBe(400);
+  });
+
   test("DELETE /api/entities/:id removes entity", async () => {
     const { body: c } = await json<{ ok: boolean; data: { id: number } }>(
       entityRoutes, "POST", "/api/entities", { name: "ToDelete" }

@@ -4,7 +4,7 @@
  * GET    /api/entities               -- list (limit/offset/search query params)
  * POST   /api/entities               -- create
  * GET    /api/entities/:id           -- get with facts
- * PUT    /api/entities/:id           -- rename
+ * PUT    /api/entities/:id           -- rename and/or transfer ownership (name?, owned_by?)
  * DELETE /api/entities/:id           -- delete
  * GET    /api/entities/:id/facts     -- list facts
  * POST   /api/entities/:id/facts     -- add fact
@@ -28,6 +28,7 @@ import {
   listEntities,
   searchEntities,
   updateEntity,
+  transferOwnership,
   deleteEntity,
   addFact,
   updateFact,
@@ -92,10 +93,17 @@ export const entityRoutes: RouteHandler = async (req, url) => {
   if (sub === "" && method === "PUT") {
     const body = await parseBody<UpdateEntityBody>(req);
     if (!body) return err("Invalid JSON body");
-    if (!body.name?.trim()) return err("name is required");
-    const entity = updateEntity(entityId, body.name.trim());
-    if (!entity) return err("Not found", 404);
-    return ok(entity);
+    const newName = body.name?.trim();
+    const newOwner = body.owned_by?.trim();
+    if (newName === undefined && newOwner === undefined) {
+      return err("name or owned_by is required");
+    }
+    if (body.name !== undefined && !newName) return err("name cannot be empty");
+    if (body.owned_by !== undefined && !newOwner) return err("owned_by cannot be empty");
+    if (!getEntityWithFacts(entityId)) return err("Not found", 404);
+    if (newName) updateEntity(entityId, newName);
+    if (newOwner) transferOwnership(entityId, newOwner);
+    return ok(getEntityWithFacts(entityId));
   }
 
   // DELETE /api/entities/:id

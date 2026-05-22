@@ -97,7 +97,8 @@ export interface CreateEntityBody {
 }
 
 export interface UpdateEntityBody {
-  name: string;
+  name?: string;
+  owned_by?: string;
 }
 
 export interface CreateFactBody {

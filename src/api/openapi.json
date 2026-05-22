@@ -1346,9 +1346,10 @@
       "UpdateEntityBody": {
         "type": "object",
         "properties": {
-          "name": { "type": "string", "minLength": 1 }
+          "name": { "type": "string", "minLength": 1 },
+          "owned_by": { "type": "string", "minLength": 1, "description": "Discord user ID of the new owner." }
         },
-        "required": ["name"]
+        "minProperties": 1
       },
       "CreateFactBody": {
         "type": "object",
