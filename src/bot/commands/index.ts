@@ -11,9 +11,9 @@ import type { bot } from "../client";
 type Bot = typeof bot;
 type Interaction = Parameters<NonNullable<Bot["events"]["interactionCreate"]>>[0];
 import { debug, info, warn, error } from "../../logger";
-import { searchEntities, searchEntitiesOwnedBy, getEntitiesWithFacts, getPermissionDefaults } from "../../db/entities";
+import { searchEntities, searchEntitiesOwnedBy, getEntitiesWithFacts, getPermissionDefaults, formatEntityName, getEntityWithFacts } from "../../db/entities";
 import { parsePermissionDirectives, matchesUserEntry, isUserBlacklisted, isUserAllowed } from "../../logic/expr";
-import { getBoundEntityIds, type DiscordType } from "../../db/discord";
+import { getBoundEntityIds, getWebhookMessageEntity, type DiscordType } from "../../db/discord";
 import { HELP_TOPICS } from "./help";
 
 // =============================================================================
@@ -401,6 +401,18 @@ export async function registerCommands(bot: Bot) {
     defs.push(def);
   }
 
+  // Message context menu commands (right-click → Apps)
+  defs.push({
+    name: "View Entity",
+    description: "",
+    type: ApplicationCommandTypes.Message,
+  });
+  defs.push({
+    name: "Edit Entity",
+    description: "",
+    type: ApplicationCommandTypes.Message,
+  });
+
   await bot.helpers.upsertGlobalApplicationCommands(defs);
   info("Registered commands", { count: defs.length });
 }
@@ -410,10 +422,16 @@ export async function registerCommands(bot: Bot) {
 // =============================================================================
 
 export async function handleInteraction(bot: Bot, interaction: Interaction) {
-  // Handle slash commands
+  // Handle slash commands and message context menu commands
   if (interaction.type === InteractionTypes.ApplicationCommand) {
     const name = interaction.data?.name;
     if (!name) return;
+
+    // Message context menu commands — dispatched separately from slash commands
+    if (interaction.data?.type === ApplicationCommandTypes.Message) {
+      await handleMessageContextMenu(bot, interaction, name);
+      return;
+    }
 
     const command = commands.get(name);
     if (!command) {
@@ -745,7 +763,7 @@ async function handleAutocomplete(bot: Bot, interaction: Interaction) {
   const displayNames = new Map<number, string>();
   for (const e of results) {
     if (e.id === -1) continue; // @system handled separately
-    displayNames.set(e.id, e.nickname ? `${e.name} (${e.nickname})` : e.name);
+    displayNames.set(e.id, formatEntityName(e));
   }
 
   const displayNameCounts = new Map<string, number>();
@@ -836,4 +854,71 @@ export async function updateMessageWithComponents(bot: Bot, interaction: Interac
       components,
     },
   });
+}
+
+// =============================================================================
+// Message Context Menu Handler
+// =============================================================================
+
+/**
+ * Handle "View Entity" and "Edit Entity" message context menu commands.
+ * Looks up the targeted message via webhook_messages, resolves the entity,
+ * checks permissions, and delegates to executeView / executeEdit.
+ */
+async function handleMessageContextMenu(bot: Bot, interaction: Interaction, commandName: string) {
+  const ctx: CommandContext = {
+    bot,
+    interaction,
+    channelId: interaction.channelId?.toString() ?? "",
+    guildId: interaction.guildId?.toString(),
+    userId: interaction.user?.id?.toString() ?? "",
+    username: interaction.user?.username ?? "unknown",
+    userRoles: (interaction.member?.roles ?? []).map((r: bigint) => r.toString()),
+  };
+
+  const targetId = interaction.data?.targetId?.toString();
+  if (!targetId) {
+    await respond(bot, interaction, "Could not determine target message.", true);
+    return;
+  }
+
+  const wh = getWebhookMessageEntity(targetId);
+  if (!wh) {
+    await respond(bot, interaction, "This message wasn't sent by a Hologram entity.", true);
+    return;
+  }
+
+  const entity = getEntityWithFacts(wh.entityId);
+  if (!entity) {
+    await respond(bot, interaction, "The entity that sent this message no longer exists.", true);
+    return;
+  }
+
+  if (commandName === "View Entity") {
+    // Defer before responding with text
+    await defer(bot, interaction, true);
+    deferredInteractions.add(interaction.id.toString());
+
+    // Lazy import to avoid module-init circular dependency
+    const { canUserView, executeView } = await import("./commands");
+    if (!canUserView(entity, ctx.userId, ctx.username, ctx.userRoles)) {
+      await respond(bot, interaction, "You don't have permission to view this entity.", true);
+      return;
+    }
+    await executeView(ctx, entity, "all");
+    return;
+  }
+
+  if (commandName === "Edit Entity") {
+    // Do NOT defer — /edit must respond with a modal as the initial response
+    const { canUserEdit, executeEdit } = await import("./cmd-edit");
+    if (!canUserEdit(entity, ctx.userId, ctx.username, ctx.userRoles)) {
+      await respond(bot, interaction, "You don't have permission to edit this entity.", true);
+      return;
+    }
+    await executeEdit(ctx, entity, "both");
+    return;
+  }
+
+  await respond(bot, interaction, `Unknown context menu command: ${commandName}`, true);
 }

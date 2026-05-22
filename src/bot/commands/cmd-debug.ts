@@ -10,6 +10,7 @@ import {
   getEntityWithFacts,
   getEntityWithFactsByName,
   getEntityConfig,
+  formatEntityName,
 } from "../../db/entities";
 import {
   getChannelScopedEntities,
@@ -118,7 +119,7 @@ async function handleInfoStatus(ctx: CommandContext) {
     const entityNames: string[] = [];
     for (const entityId of channelEntityIds) {
       const entity = getEntity(entityId);
-      if (entity) entityNames.push(entity.name);
+      if (entity) entityNames.push(formatEntityName(entity));
     }
     lines.push(`**Channel:** ${entityNames.join(", ")}`);
 
@@ -151,9 +152,9 @@ async function handleInfoStatus(ctx: CommandContext) {
         const canRead = !entity.owned_by ||
           await canOwnerReadChannel(ctx.bot as unknown as ChannelCheckBot, entity.owned_by, guildIdBig, channelIdBig);
         if (canRead) {
-          entityNames.push(entity.name);
+          entityNames.push(formatEntityName(entity));
         } else {
-          skippedNames.push(entity.name);
+          skippedNames.push(formatEntityName(entity));
         }
       }));
       const parts: string[] = [];
@@ -170,7 +171,7 @@ async function handleInfoStatus(ctx: CommandContext) {
   if (userEntityId) {
     const userEntity = getEntityWithFacts(userEntityId);
     if (userEntity) {
-      lines.push(`**Your persona:** ${userEntity.name}`);
+      lines.push(`**Your persona:** ${formatEntityName(userEntity)}`);
     }
   } else {
     lines.push(`**Your persona:** ${ctx.username} (default)`);

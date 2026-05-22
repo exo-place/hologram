@@ -20,6 +20,7 @@ import {
   getPermissionDefaults,
   setFacts,
   updateEntity,
+  type EntityWithFacts,
 } from "../../db/entities";
 import {
   getMemoriesForEntity,
@@ -29,6 +30,7 @@ import { checkKeywordMatch } from "../../logic/expr";
 import { getAvailableModels } from "../../ai/model-list";
 import { chunkContent, buildDefaultValues, buildEntries, type ResolvedData } from "./helpers";
 import { canUserEdit } from "./cmd-permissions";
+export { canUserEdit };
 
 // =============================================================================
 // Permissions UI Helpers (V2 Modal with Mentionable Selects)
@@ -158,6 +160,20 @@ registerCommand({
       return;
     }
 
+    await executeEdit(ctx, entity, editType);
+  },
+});
+
+/**
+ * Execute the /edit body given a resolved, permission-checked entity.
+ * Shared between the /edit slash command and the "Edit Entity" message context menu.
+ * NOTE: This sends a modal, so the interaction must NOT be deferred before calling.
+ */
+export async function executeEdit(
+  ctx: CommandContext,
+  entity: EntityWithFacts,
+  editType = "both",
+): Promise<void> {
     // Discord modal: max 5 text inputs, 4000 chars each
     const MAX_FIELD_LENGTH = 4000;
     const MAX_FIELDS = 5;
@@ -706,8 +722,7 @@ registerCommand({
       const modalTitle = editType === "memories" ? `Edit Memories: ${entity.name}` : `Edit: ${entity.name}`;
       await respondWithModal(ctx.bot, ctx.interaction, modalId, modalTitle, fields);
     }
-  },
-});
+}
 
 registerModalHandler("edit", async (bot, interaction, values) => {
   const customId = interaction.data?.customId ?? "";

@@ -5,6 +5,7 @@ import {
   respond,
   respondWithModal,
   respondWithV2Modal,
+  type CommandContext,
 } from "./index";
 import {
   createEntity,
@@ -174,36 +175,48 @@ registerCommand({
       return;
     }
 
-    const parts: string[] = [formatEntityDisplay(entity.name, entity.id)];
-
-    // Show facts if requested
-    if (viewType === "all" || viewType === "facts") {
-      const factsDisplay = entity.facts.length > 0
-        ? entity.facts.map(f => `• ${f.content}`).join("\n")
-        : "(no facts)";
-      if (viewType === "all") {
-        parts.push(`\n**Facts:**\n${factsDisplay}`);
-      } else {
-        parts.push(`\n${factsDisplay}`);
-      }
-    }
-
-    // Show memories if requested
-    if (viewType === "all" || viewType === "memories") {
-      const memories = getMemoriesForEntity(entity.id);
-      const memoriesDisplay = memories.length > 0
-        ? memories.map(m => `• ${m.content} (frecency: ${m.frecency.toFixed(2)})`).join("\n")
-        : "(no memories)";
-      if (viewType === "all") {
-        parts.push(`\n**Memories:**\n${memoriesDisplay}`);
-      } else {
-        parts.push(`\n${memoriesDisplay}`);
-      }
-    }
-
-    await respond(ctx.bot, ctx.interaction, elideText(parts.join("")), true);
+    await executeView(ctx, entity, viewType);
   },
 });
+
+/**
+ * Execute the /view body given a resolved, permission-checked entity.
+ * Shared between the /view slash command and the "View Entity" message context menu.
+ */
+export async function executeView(
+  ctx: CommandContext,
+  entity: EntityWithFacts,
+  viewType = "all",
+): Promise<void> {
+  const parts: string[] = [formatEntityDisplay(entity.name, entity.id)];
+
+  // Show facts if requested
+  if (viewType === "all" || viewType === "facts") {
+    const factsDisplay = entity.facts.length > 0
+      ? entity.facts.map(f => `• ${f.content}`).join("\n")
+      : "(no facts)";
+    if (viewType === "all") {
+      parts.push(`\n**Facts:**\n${factsDisplay}`);
+    } else {
+      parts.push(`\n${factsDisplay}`);
+    }
+  }
+
+  // Show memories if requested
+  if (viewType === "all" || viewType === "memories") {
+    const memories = getMemoriesForEntity(entity.id);
+    const memoriesDisplay = memories.length > 0
+      ? memories.map(m => `• ${m.content} (frecency: ${m.frecency.toFixed(2)})`).join("\n")
+      : "(no memories)";
+    if (viewType === "all") {
+      parts.push(`\n**Memories:**\n${memoriesDisplay}`);
+    } else {
+      parts.push(`\n${memoriesDisplay}`);
+    }
+  }
+
+  await respond(ctx.bot, ctx.interaction, elideText(parts.join("")), true);
+}
 
 // =============================================================================
 // /help - Show help (the only public route to help:<topic> entities; their $view is owner-only)

@@ -23,6 +23,11 @@ export interface Entity {
   system_template: string | null;
 }
 
+/** Format entity display name as "Name (nickname)" when a nickname is set. */
+export function formatEntityName(entity: { name: string; nickname: string | null }): string {
+  return entity.nickname ? `${entity.name} (${entity.nickname})` : entity.name;
+}
+
 export function createEntity(name: string, ownedBy?: string): Entity {
   const db = getDb();
   const row = db.prepare(`
