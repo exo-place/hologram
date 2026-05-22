@@ -27,7 +27,7 @@ import { DEFAULT_RAG_CONTEXT_EXPR } from "../../ai/context";
 import { buildEvaluatedEntity } from "../../debug/evaluation";
 import { preparePromptContext } from "../../ai/prompt";
 import { getEmbeddingCoverage, testRagRetrieval } from "../../debug/embeddings";
-import { MIN_SIMILARITY_THRESHOLD } from "../../db/memories";
+import { MIN_SIMILARITY_THRESHOLD, retrieveRelevantMemories, type MemoryScope } from "../../db/memories";
 import { getChannelMetadata, getGuildMetadata } from "../client";
 import { elideText } from "./helpers";
 import { canUserView, canOwnerReadChannel, type ChannelCheckBot } from "./cmd-permissions";
@@ -70,6 +70,12 @@ registerCommand({
           type: ApplicationCommandOptionTypes.String,
           required: false,
           autocomplete: true,
+        },
+        {
+          name: "query",
+          description: "Override RAG query (defaults to recent channel messages)",
+          type: ApplicationCommandOptionTypes.String,
+          required: false,
         },
       ],
     },
@@ -294,8 +300,41 @@ async function handleInfoPrompt(ctx: CommandContext, options: Record<string, unk
   await respond(ctx.bot, ctx.interaction, elideText(systemPrompt || "(no system prompt)"), true);
 }
 
+// Resolve RAG query texts the same way the real pipeline does: use the
+// explicit query if provided, otherwise replicate the channel's RAG context
+// window via config_rag_context (or DEFAULT_RAG_CONTEXT_EXPR).
+function resolveRagQueryTexts(
+  ctx: CommandContext,
+  ragContextExpr: string | null | undefined,
+  query: string | undefined,
+): { queryTexts: string[]; queryLabel: string } {
+  if (query) {
+    return { queryTexts: [query], queryLabel: `"${query}"` };
+  }
+  const expr = ragContextExpr ?? DEFAULT_RAG_CONTEXT_EXPR;
+  const contextFilter = compileContextExpr(expr);
+  const rawMessages = getMessages(ctx.channelId, 100);
+  const now = Date.now();
+  const queryTexts: string[] = [];
+  let totalChars = 0;
+  for (const m of rawMessages) {
+    const len = `${m.author_name}: ${m.content}`.length + 1;
+    const msgAge = now - new Date(m.created_at).getTime();
+    const shouldInclude = contextFilter({
+      chars: totalChars + len, count: queryTexts.length,
+      age: msgAge, age_h: msgAge / 3_600_000,
+      age_m: msgAge / 60_000, age_s: msgAge / 1000,
+    });
+    if (!shouldInclude && queryTexts.length > 0) break;
+    if (m.content) queryTexts.push(m.content);
+    totalChars += len;
+  }
+  return { queryTexts, queryLabel: `context window (${queryTexts.length} messages)` };
+}
+
 async function handleInfoContext(ctx: CommandContext, options: Record<string, unknown>) {
   const entityInput = options.entity as string | undefined;
+  const query = options.query as string | undefined;
   const targetEntity = await resolveTargetEntity(ctx, entityInput, "context");
   if (!targetEntity) return;
   if (!canUserView(targetEntity, ctx.userId, ctx.username, ctx.userRoles)) {
@@ -332,9 +371,24 @@ async function handleInfoContext(ctx: CommandContext, options: Record<string, un
   });
   const evaluated = buildEvaluatedEntity(targetEntity, exprCtx);
 
+  // Retrieve memories via RAG so they show up in the rendered context
+  // (matches the real pipeline in src/bot/client.ts).
+  const config = getEntityConfig(targetEntity.id);
+  const memoryScope = (config?.config_memory ?? "none") as MemoryScope;
+  let entityMemories: Map<number, Array<{ content: string }>> | undefined;
+  if (memoryScope !== "none") {
+    const { queryTexts } = resolveRagQueryTexts(ctx, config?.config_rag_context, query);
+    const memories = await retrieveRelevantMemories(
+      targetEntity.id, queryTexts, memoryScope, ctx.channelId, ctx.guildId,
+    );
+    if (memories.length > 0) {
+      entityMemories = new Map([[targetEntity.id, memories.map(m => ({ content: m.content }))]]);
+    }
+  }
+
   // Use the actual template pipeline to build structured messages
   const { messages } = preparePromptContext(
-    [evaluated], ctx.channelId, ctx.guildId, ctx.userId,
+    [evaluated], ctx.channelId, ctx.guildId, ctx.userId, entityMemories,
   );
 
   // Show all messages (system, user, assistant) — each as a separate embed
@@ -367,34 +421,7 @@ async function handleInfoRag(ctx: CommandContext, options: Record<string, unknow
   if (memoryScope === "none") {
     lines.push(`*Memory is disabled — no retrieval occurs.*`);
   } else {
-    // Use provided query, or fall back to recent channel messages (mirrors real pipeline)
-    let queryTexts: string[];
-    let queryLabel: string;
-    if (query) {
-      queryTexts = [query];
-      queryLabel = `"${query}"`;
-    } else {
-      // Replicate the exact RAG context window (same logic as the pipeline)
-      const ragContextExpr = config?.config_rag_context ?? DEFAULT_RAG_CONTEXT_EXPR;
-      const contextFilter = compileContextExpr(ragContextExpr);
-      const rawMessages = getMessages(ctx.channelId, 100);
-      const now = Date.now();
-      queryTexts = [];
-      let totalChars = 0;
-      for (const m of rawMessages) {
-        const len = `${m.author_name}: ${m.content}`.length + 1;
-        const msgAge = now - new Date(m.created_at).getTime();
-        const shouldInclude = contextFilter({
-          chars: totalChars + len, count: queryTexts.length,
-          age: msgAge, age_h: msgAge / 3_600_000,
-          age_m: msgAge / 60_000, age_s: msgAge / 1000,
-        });
-        if (!shouldInclude && queryTexts.length > 0) break;
-        if (m.content) queryTexts.push(m.content);
-        totalChars += len;
-      }
-      queryLabel = `context window (${queryTexts.length} messages)`;
-    }
+    const { queryTexts, queryLabel } = resolveRagQueryTexts(ctx, config?.config_rag_context, query);
 
     lines.push(`\n**RAG** (scope: ${memoryScope}, threshold: ${MIN_SIMILARITY_THRESHOLD}) — ${queryLabel}`);
     const results = await testRagRetrieval(

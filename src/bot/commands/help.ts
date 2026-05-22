@@ -49,7 +49,7 @@ const HELP_ENTITY_FACTS: Record<string, string[]> = {
     "**Debug subcommands:**",
     "`/debug status` - Channel state (default)",
     "`/debug prompt [entity]` - Show system prompt",
-    "`/debug context [entity]` - Show message context",
+    "`/debug context [entity] [query]` - Show message context",
     "---",
     "**Examples:**",
     "`/create Aria` - Create entity",

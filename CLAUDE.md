@@ -225,7 +225,7 @@ Permission lists are stored as JSON arrays in entity config columns. Role IDs us
 | `/sendas <entity> <content>` | Send a message as an entity (requires entity edit+use) or as `@system` (requires Manage Webhooks) |
 | `/debug [status]` | Channel state (default); shows system note count and recent note previews |
 | `/debug prompt [entity]` | Show system prompt for entity |
-| `/debug context [entity]` | Show message context for entity |
+| `/debug context [entity] [query]` | Show message context for entity |
 | `/debug rag [entity] [query]` | Show embedding status + RAG retrieval results |
 | `/trigger <entity> [verb]` | Manually trigger entity response; verb requires persona and sets `interaction_type` |
 | `/forget` | Exclude messages before now from context |
