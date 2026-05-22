@@ -1,7 +1,7 @@
 import { fetchAndCacheAttachment } from "../db/attachment-cache";
 import { recordEvalError } from "../db/discord";
 import { warn } from "../logger";
-import { supportsVision, supportsDocumentType } from "./models";
+import { supportsVision, supportsImageType, supportsDocumentType } from "./models";
 import { MARKER_HATT_PREFIX, MARKER_SUFFIX } from "./template";
 import type { StructuredMessage, ContentPart, ResolvedMessage } from "./context";
 
@@ -130,6 +130,17 @@ async function resolveAttachment(
   const isImage = mimeType === "image" || mimeType.startsWith("image/");
 
   if (isImage && supportsVision(providerName)) {
+    // Normalize bare "image" to a concrete type so per-provider allowlists can match.
+    const checkType = mimeType === "image" ? "image/jpeg" : mimeType;
+    if (!supportsImageType(providerName, checkType)) {
+      return fallbackPart(
+        url,
+        mimeType,
+        entityId,
+        ownerId,
+        `${providerName} does not accept ${mimeType} images (JPG/PNG/WebP only)`,
+      );
+    }
     if (isDiscordCdnUrl(url)) {
       try {
         const { data, contentType } = await fetchAndCacheAttachment(url, undefined, signal);

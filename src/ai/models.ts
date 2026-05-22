@@ -154,6 +154,21 @@ const VISION_CAPABLE_PROVIDERS = new Set([
   "xai",
 ]);
 
+/**
+ * Per-provider image MIME allowlist. Providers absent from this map accept any `image/*`.
+ * xAI rejects anything outside JPG/PNG/WebP with a 400 that crashes streaming.
+ */
+const IMAGE_TYPE_CAPABLE: Record<string, Set<string>> = {
+  xai: new Set(["image/jpeg", "image/jpg", "image/png", "image/webp"]),
+};
+
+/** Returns true if the provider accepts this image MIME type. */
+export function supportsImageType(providerName: string, mimeType: string): boolean {
+  const allowed = IMAGE_TYPE_CAPABLE[providerName];
+  if (!allowed) return true;
+  return allowed.has(mimeType);
+}
+
 /** Providers and the document MIME types they accept as file parts */
 const DOCUMENT_CAPABLE: Record<string, Set<string>> = {
   anthropic: new Set([
