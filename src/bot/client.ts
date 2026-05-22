@@ -517,13 +517,17 @@ bot.events.messageCreate = async (message) => {
     uniquePreCheckIds.every(id => getEntityConfig(id)?.config_queue_disabled === 1);
 
   const enqueue = allQueueDisabled
-    ? (fn: () => Promise<void>) => fn()
-    : (fn: () => Promise<void>) => runOnChannel(channelId, fn, { label: "messageCreate" });
+    ? (fn: (signal: AbortSignal) => Promise<void>) => fn(new AbortController().signal)
+    : (fn: (signal: AbortSignal) => Promise<void>) => runOnChannel(channelId, fn, { label: "messageCreate" });
 
-  enqueue(async () => {
+  enqueue(async (signal) => {
   // Lazy catch-up: on first message in a channel, backfill history before processing
   if ((process.env.CATCHUP_ON_STARTUP ?? "all") === "lazy") {
-    await catchUpChannel(channelId);
+    try {
+      await catchUpChannel(channelId);
+    } catch (err) {
+      error("step: catchUpChannel", err, { channelId });
+    }
   }
 
   const { content, msgData } = buildMsgDataAndContent(message);
@@ -668,7 +672,14 @@ bot.events.messageCreate = async (message) => {
     const skippedOwners: string[] = [];
     await Promise.all(allChannelEntities.map(async (entity) => {
       if (!entity.owned_by) { kept.push(entity); return; }
-      const allowed = await canOwnerReadChannel(bot as unknown as ChannelCheckBot, entity.owned_by, guildIdBig, channelIdBig);
+      let allowed = false;
+      try {
+        allowed = await canOwnerReadChannel(bot as unknown as ChannelCheckBot, entity.owned_by, guildIdBig, channelIdBig);
+      } catch (err) {
+        error("step: canOwnerReadChannel", err, { entity: entity.name, channelId });
+        kept.push(entity);
+        return;
+      }
       if (allowed) {
         kept.push(entity);
       } else {
@@ -896,7 +907,7 @@ bot.events.messageCreate = async (message) => {
     }
 
     for (const [, groupEntities] of templateGroups) {
-      await sendResponse(channelId, guildId, authorName, content, isMentioned ?? false, groupEntities, "message", message.id.toString());
+      await sendResponse(channelId, guildId, authorName, content, isMentioned ?? false, groupEntities, "message", message.id.toString(), signal);
     }
   }
 
@@ -1284,6 +1295,7 @@ async function handleStreamingResponse(
     triggerEntityFn?: (entityId: number, verb: string, authorName: string) => Promise<void>;
     triggerType?: TriggerType;
     rateLimitOwnerIds?: Map<number, string | null>;
+    abortSignal?: AbortSignal;
   }
 ): Promise<void> {
   const allMessageIds: string[] = [];
@@ -1308,6 +1320,7 @@ async function handleStreamingResponse(
     entities,
     streamMode,
     delimiter,
+    abortSignal: ctx.abortSignal,
   })) {
     switch (event.type) {
       case "line": {
@@ -1546,6 +1559,7 @@ export async function sendResponse(
   respondingEntities?: EvaluatedEntity[],
   triggerType: TriggerType = "message",
   triggerMessageId?: string,
+  abortSignal?: AbortSignal,
 ) {
   // Apply rate limits before touching the LLM or typing indicator
   let rateLimitOwnerIds: Map<number, string | null> | undefined;
@@ -1773,6 +1787,7 @@ export async function sendResponse(
           triggerEntityFn,
           triggerType,
           rateLimitOwnerIds,
+          abortSignal,
         });
 
         // Mark response time
@@ -1801,6 +1816,7 @@ export async function sendResponse(
       respondingEntities,
       entityMemories,
       triggerEntityFn,
+      abortSignal,
     });
 
     // Mark response time

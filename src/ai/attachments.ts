@@ -44,6 +44,7 @@ export async function resolveAttachmentMarkers(
   providerName: string,
   entityId: number,
   ownerId: string,
+  signal?: AbortSignal,
 ): Promise<ResolvedMessage[]> {
   const hattSentinel = MARKER_HATT_PREFIX + nonce;
   const pattern = buildHattPattern(nonce);
@@ -77,7 +78,7 @@ export async function resolveAttachmentMarkers(
 
       const url = match[1];
       const mimeType = match[2] || "application/octet-stream";
-      const part = await resolveAttachment(url, mimeType, providerName, entityId, ownerId);
+      const part = await resolveAttachment(url, mimeType, providerName, entityId, ownerId, signal);
       parts.push(part);
 
       lastIndex = match.index + match[0].length;
@@ -123,6 +124,7 @@ async function resolveAttachment(
   providerName: string,
   entityId: number,
   ownerId: string,
+  signal?: AbortSignal,
 ): Promise<ContentPart> {
   // Accept both full MIME types ("image/jpeg") and base types ("image") for routing.
   const isImage = mimeType === "image" || mimeType.startsWith("image/");
@@ -130,7 +132,7 @@ async function resolveAttachment(
   if (isImage && supportsVision(providerName)) {
     if (isDiscordCdnUrl(url)) {
       try {
-        const { data, contentType } = await fetchAndCacheAttachment(url);
+        const { data, contentType } = await fetchAndCacheAttachment(url, undefined, signal);
         // data is Buffer from getCachedAttachment (Buffer.from'd from SQLite Uint8Array).
         // Use Buffer.from() to guarantee a real Buffer before encoding — AI SDK schema
         // rejects Buffer objects and requires a base64 string for inline image data.
@@ -153,7 +155,7 @@ async function resolveAttachment(
 
   if (!isImage && supportsDocumentType(providerName, mimeType)) {
     try {
-      const { data } = await fetchAndCacheAttachment(url);
+      const { data } = await fetchAndCacheAttachment(url, undefined, signal);
       return { type: "file", data: data.toString("base64"), mediaType: mimeType };
     } catch (err) {
       warn("Failed to fetch document attachment", { url, mimeType, err });

@@ -18,6 +18,8 @@ export interface MessageContext {
   entityMemories?: Map<number, Array<{ content: string }>>;
   /** Callback to trigger another entity's pipeline (from trigger_entity tool or /trigger verb) */
   triggerEntityFn?: (entityId: number, verb: string, authorName: string) => Promise<void>;
+  /** AbortSignal from the channel queue timeout — forwarded to LLM calls */
+  abortSignal?: AbortSignal;
 }
 
 /** Entity with pre-evaluated facts (directives processed and removed) */

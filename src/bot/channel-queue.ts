@@ -23,7 +23,7 @@ const DEFAULT_TIMEOUT_MS = 120_000;
 
 export function runOnChannel<T>(
   channelId: string,
-  task: () => Promise<T>,
+  task: (signal: AbortSignal) => Promise<T>,
   opts?: { timeoutMs?: number; label?: string },
 ): Promise<T> {
   const timeoutMs = opts?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -37,16 +37,18 @@ export function runOnChannel<T>(
   tails.set(channelId, prev.then(() => slot));
 
   return prev.then(async (): Promise<T> => {
+    const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeoutPromise = new Promise<never>((_, reject) => {
       timer = setTimeout(() => {
         warn("Channel queue task timed out", { channelId, label, timeoutMs });
+        controller.abort(new Error(`Channel queue timeout: ${label}`));
         reject(new Error(`Channel queue timeout: ${label}`));
       }, timeoutMs);
     });
 
     try {
-      const result = await Promise.race([task(), timeoutPromise]);
+      const result = await Promise.race([task(controller.signal), timeoutPromise]);
       return result;
     } finally {
       if (timer !== undefined) clearTimeout(timer);

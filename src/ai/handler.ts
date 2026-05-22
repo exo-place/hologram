@@ -40,7 +40,7 @@ export interface ResponseResult {
 // =============================================================================
 
 export async function handleMessage(ctx: MessageContext): Promise<ResponseResult | null> {
-  const { channelId, guildId, userId, isMentioned, respondingEntities } = ctx;
+  const { channelId, guildId, userId, isMentioned, respondingEntities, abortSignal } = ctx;
 
   const evaluated: EvaluatedEntity[] = respondingEntities ?? [];
 
@@ -85,7 +85,7 @@ export async function handleMessage(ctx: MessageContext): Promise<ResponseResult
     // Resolve attachment markers (HATT → ImagePart / FilePart / text fallback)
     const entityId = evaluated[0]?.id ?? 0;
     const ownerId = entityId ? (getEntity(entityId)?.owned_by ?? "") : "";
-    const resolvedMessages = await resolveAttachmentMarkers(llmMessages, nonce, providerName, entityId, ownerId);
+    const resolvedMessages = await resolveAttachmentMarkers(llmMessages, nonce, providerName, entityId, ownerId, abortSignal);
 
     // Normalize messages for provider-specific restrictions (e.g., Google doesn't have system role)
     const normalizedMessages = normalizeMessagesForProvider(resolvedMessages, providerName);
@@ -108,6 +108,7 @@ export async function handleMessage(ctx: MessageContext): Promise<ResponseResult
       messages: normalizedMessages,
       providerOptions,
       stopWhen: stepCountIs(5), // Allow up to 5 tool call rounds
+      abortSignal,
       onStepFinish: ({ toolCalls }: { toolCalls?: { toolName: string; args?: unknown }[] }) => {
         for (const call of toolCalls ?? []) {
           debug("Tool call", { tool: call.toolName, args: call.args });

@@ -90,7 +90,7 @@ export function findFirstDelimiter(buffer: string, delimiters: string[]): { inde
 export async function* handleMessageStreaming(
   ctx: StreamingContext
 ): AsyncGenerator<StreamEvent, void, unknown> {
-  const { channelId, guildId, entities, streamMode, delimiter } = ctx;
+  const { channelId, guildId, entities, streamMode, delimiter, abortSignal } = ctx;
 
   // Prepare prompt context (expand refs, resolve user entity, build messages)
   const { systemPrompt, messages: llmMessages, nonce, contextExpr } = preparePromptContext(
@@ -117,7 +117,7 @@ export async function* handleMessageStreaming(
     // Resolve attachment markers (HATT → ImagePart / FilePart / text fallback)
     const entityId = entities[0]?.id ?? 0;
     const ownerId = entityId ? (getEntity(entityId)?.owned_by ?? "") : "";
-    const resolvedMessages = await resolveAttachmentMarkers(llmMessages, nonce, providerName, entityId, ownerId);
+    const resolvedMessages = await resolveAttachmentMarkers(llmMessages, nonce, providerName, entityId, ownerId, abortSignal);
 
     // Normalize messages for provider-specific restrictions (e.g., Google doesn't have system role)
     const normalizedMessages = normalizeMessagesForProvider(resolvedMessages, providerName);
@@ -134,6 +134,7 @@ export async function* handleMessageStreaming(
       messages: normalizedMessages,
       providerOptions,
       stopWhen: stepCountIs(5),
+      abortSignal,
       onStepFinish: ({ toolCalls }: { toolCalls?: { toolName: string; args?: unknown }[] }) => {
         for (const call of toolCalls ?? []) {
           debug("Tool call", { tool: call.toolName, args: call.args });

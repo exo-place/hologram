@@ -59,12 +59,13 @@ export function deleteCachedAttachmentsByMessageId(messageId: string): void {
 export async function fetchAndCacheAttachment(
   url: string,
   messageId?: string,
+  signal?: AbortSignal,
 ): Promise<CachedAttachment> {
   const urlHash = hashUrl(url);
   const cached = getCachedAttachment(urlHash);
   if (cached) return cached;
 
-  const response = await fetch(url);
+  const response = await fetch(url, signal ? { signal } : undefined);
   if (!response.ok) {
     throw new Error(`Failed to fetch attachment: ${response.status} ${response.statusText}`);
   }
