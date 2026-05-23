@@ -365,15 +365,15 @@ registerCommand({
   options: [
     {
       name: "target",
-      description: "What to bind",
+      description: "What to bind (channel/server = entity speaks; me = you speak as entity)",
       type: ApplicationCommandOptionTypes.String,
       required: true,
       choices: [
-        { name: "This channel", value: "channel" },
-        { name: "This server", value: "server" },
-        { name: "Me (this channel)", value: "me:channel" },
-        { name: "Me (this server)", value: "me:server" },
-        { name: "Me (global)", value: "me:global" },
+        { name: "This channel — entity responds here", value: "channel" },
+        { name: "This server — entity responds in every channel", value: "server" },
+        { name: "Me, this channel — I speak as the entity here", value: "me:channel" },
+        { name: "Me, this server — I speak as the entity server-wide", value: "me:server" },
+        { name: "Me, everywhere — I always speak as the entity", value: "me:global" },
       ],
     },
     {
@@ -518,15 +518,15 @@ registerCommand({
   options: [
     {
       name: "target",
-      description: "What to unbind from",
+      description: "What to bind (channel/server = entity speaks; me = you speak as entity)",
       type: ApplicationCommandOptionTypes.String,
       required: true,
       choices: [
-        { name: "This channel", value: "channel" },
-        { name: "This server", value: "server" },
-        { name: "Me (this channel)", value: "me:channel" },
-        { name: "Me (this server)", value: "me:server" },
-        { name: "Me (global)", value: "me:global" },
+        { name: "This channel — entity responds here", value: "channel" },
+        { name: "This server — entity responds in every channel", value: "server" },
+        { name: "Me, this channel — I speak as the entity here", value: "me:channel" },
+        { name: "Me, this server — I speak as the entity server-wide", value: "me:server" },
+        { name: "Me, everywhere — I always speak as the entity", value: "me:global" },
       ],
     },
     {
