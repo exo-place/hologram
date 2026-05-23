@@ -15,6 +15,7 @@ Discord interface layer. Owns the Discordeno bot instance, message ingestion pip
 ## Notes
 
 - `MESSAGE_UPDATE` handler is overridden to also process non-edit embed-only updates (URL previews, late bot embeds), which Discordeno's default handler silently drops.
+- Guild-scoped (server-bound) entities are suppressed in private threads (channel type 12). A `/bind` on the thread itself is the explicit opt-in path.
 - Self-message detection uses entity ID comparison, not name comparison, to avoid false positives.
 - Response-chain depth is tracked per-channel and reset when a human message arrives.
 - `entity_events` are recorded after every successful webhook emit (via `recordEntityEvent`) to power the sliding-window rate-limit queries.

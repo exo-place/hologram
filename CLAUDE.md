@@ -192,7 +192,7 @@ Nunjucks templates override the default system prompt formatting per entity. Imp
 Discord channels/users/servers map to entities via `discord_entities`:
 - **Scope resolution**: channel-scoped > guild-scoped > global
 - **Channel binding**: Entity responds in that channel
-- **Server binding**: Entity responds in all channels of that server
+- **Server binding**: Entity responds in all channels of that server, **except private threads** (type 12). Server-bound entities don't respond in private threads by default; `/bind` the thread directly to opt in.
 - **User binding**: User speaks as that entity (persona)
 
 Bind permissions are three-layer: entity-side (edit/use permission) + Discord permission gate (Manage Channels for channel-bind, Manage Guild for server-bind) + server-side allowlist override (per-channel/guild in `discord_config`). When a `/config bind` allowlist exists, it replaces the Discord permission gate. See `src/bot/commands/commands.ts` for implementation.

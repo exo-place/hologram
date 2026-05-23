@@ -233,7 +233,7 @@ const lastResponseTime = new Map<string, number>();
 const lastMessageTime = new Map<string, number>();
 
 // Channel/guild metadata cache with 5-min TTL
-interface ChannelMeta { id: string; name: string; description: string; is_nsfw: boolean; type: string; mention: string; fetchedAt: number }
+interface ChannelMeta { id: string; name: string; description: string; is_nsfw: boolean; type: string; rawType: number; mention: string; fetchedAt: number }
 interface GuildMeta { id: string; name: string; description: string; nsfw_level: string; fetchedAt: number }
 const channelMetaCache = new Map<string, ChannelMeta>();
 const guildMetaCache = new Map<string, GuildMeta>();
@@ -253,13 +253,14 @@ export async function getChannelMetadata(channelId: string): Promise<Omit<Channe
       description: ch.topic ?? "",
       is_nsfw: ch.toggles?.nsfw ?? false,
       type: channelTypeString(ch.type ?? 0),
+      rawType: ch.type ?? 0,
       mention: `<#${channelId}>`,
       fetchedAt: Date.now(),
     };
     channelMetaCache.set(channelId, meta);
     return meta;
   } catch {
-    return { id: channelId, name: "", description: "", is_nsfw: false, type: "text", mention: `<#${channelId}>` };
+    return { id: channelId, name: "", description: "", is_nsfw: false, type: "text", rawType: 0, mention: `<#${channelId}>` };
   }
 }
 
@@ -505,12 +506,18 @@ bot.events.messageCreate = async (message) => {
   const channelId = message.channelId.toString();
   const guildId = message.guildId?.toString();
 
+  // Private threads (type 12) suppress guild-scoped bindings — users must /bind the thread
+  // directly to opt in. Channel-scoped bindings on the thread itself still work normally.
+  const isPrivateThread = guildId
+    ? (await getChannelMetadata(channelId)).rawType === 12
+    : false;
+
   // Check if all channel-bound entities have opted out of the response queue.
   // Skips serialization only when EVERY entity is opted out — mixing opt-out and
   // non-opt-out entities would break ordering for the non-exempt ones.
   const preCheckIds = [
     ...resolveDiscordEntities(channelId, "channel", guildId, channelId),
-    ...(guildId ? resolveDiscordEntities(guildId, "guild", guildId, channelId) : []),
+    ...(guildId && !isPrivateThread ? resolveDiscordEntities(guildId, "guild", guildId, channelId) : []),
   ];
   const uniquePreCheckIds = [...new Set(preCheckIds)];
   const allQueueDisabled = uniquePreCheckIds.length > 0 &&
@@ -627,8 +634,9 @@ bot.events.messageCreate = async (message) => {
   // Get ALL channel entities (supports multiple characters)
   const channelEntityIds = resolveDiscordEntities(channelId, "channel", guildId, channelId);
 
-  // Also get guild-level entities (bound to server) - only if in a guild
-  const guildEntityIds = guildId
+  // Also get guild-level entities (bound to server) - only if in a guild and not a private thread.
+  // Server-bound entities don't respond in private threads by default; bind on the thread to opt in.
+  const guildEntityIds = guildId && !isPrivateThread
     ? resolveDiscordEntities(guildId, "guild", guildId, channelId)
     : [];
 
