@@ -857,11 +857,12 @@ bot.events.messageCreate = async (message) => {
       // 3. Respond if entity's name is mentioned in dialogue (not self-triggered)
       // 4. Respond if message matches any configured trigger keyword
       const nameMentioned = ctx.mentioned_in_dialogue(entity.name) && !isSelf;
-      // A reply only counts as a trigger when the user kept the mention on. Discord drops the
-      // replied-to user from mentionedUserIds when the reply-ping toggle is off, so isMentioned
-      // captures that signal for both bot and webhook replies.
+      // In guilds, a reply only counts as a trigger when the user kept the ping on — Discord drops
+      // the replied-to user from mentionedUserIds when the toggle is off, and we treat a no-ping
+      // reply as a soft reference (the user is quoting the bot to talk to someone else). DMs have
+      // no third party, so a reply is always addressing.
       const repliedToThis = repliedToWebhookEntity?.entityName.toLowerCase() === entity.name.toLowerCase()
-        && isMentioned;
+        && (isMentioned || !guildId);
       const keywordMatch = ctx.keyword_match && !isSelf;
       const defaultRespond =
         (channelEntities.length === 1 && isMentioned) ||
@@ -1519,7 +1520,7 @@ async function handleStreamingResponse(
               allMessageIds.push(id);
             }
           } else {
-            await sendFallbackMessage(channelId, fileEntity.name, "", event.files);
+            await sendFallbackMessage(channelId, fileEntity.name, "", event.files, fileEntity.id);
           }
         }
         break;
@@ -1877,7 +1878,7 @@ export async function sendResponse(
             trackWebhookMessages(messageIds, entity.id, entity.name);
             recordEntityEvent(entity.id, rateLimitOwnerIds?.get(entity.id) ?? null, channelId, guildId ?? null, triggerType);
           } else if (!messageIds) {
-            await sendFallbackMessage(channelId, entityResponse.name, entityResponse.content, i === 0 ? result.files : undefined);
+            await sendFallbackMessage(channelId, entityResponse.name, entityResponse.content, i === 0 ? result.files : undefined, entity?.id);
           }
         }
       } else {
@@ -1894,7 +1895,7 @@ export async function sendResponse(
           trackWebhookMessages(messageIds, entity.id, entity.name);
           recordEntityEvent(entity.id, rateLimitOwnerIds?.get(entity.id) ?? null, channelId, guildId ?? null, triggerType);
         } else {
-          await sendFallbackMessage(channelId, entity.name, result.response, result.files);
+          await sendFallbackMessage(channelId, entity.name, result.response, result.files, entity.id);
         }
       }
     } else {
@@ -1970,7 +1971,7 @@ async function sendRegularMessage(channelId: string, content: string): Promise<v
 
 /** Send fallback message with character name prefix.
  * Stores in message history since bot messages bypass messageCreate. */
-async function sendFallbackMessage(channelId: string, name: string, content: string, files?: GeneratedFile[]): Promise<void> {
+async function sendFallbackMessage(channelId: string, name: string, content: string, files?: GeneratedFile[], entityId?: number): Promise<void> {
   if (!content.trim() && (!files || files.length === 0)) return;
   try {
     const discordFiles = files?.map((f, i) => {
@@ -1981,7 +1982,11 @@ async function sendFallbackMessage(channelId: string, name: string, content: str
       content: content.trim() ? `**${name}:** ${content}` : undefined,
       files: discordFiles,
     });
-    trackBotMessage(sent.id);
+    if (entityId !== undefined) {
+      trackWebhookMessages([sent.id.toString()], entityId, name);
+    } else {
+      trackBotMessage(sent.id);
+    }
     // Bot messages skip messageCreate (filtered by botUserId check),
     // so store in history manually for LLM context
     const storedFallback = addMessage(channelId, sent.author.id.toString(), name, content, sent.id.toString(), { is_bot: true, is_entity: true });
