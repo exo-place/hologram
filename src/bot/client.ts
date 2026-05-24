@@ -651,9 +651,10 @@ bot.events.messageCreate = async (message) => {
     return;
   }
 
-  // Welcome new users with a DM — only when they explicitly reply to a bot message
+  // Welcome new users with a DM — only when they explicitly reply (with ping) to a bot message.
+  // A reply with the mention toggled off is a soft reference, not an address.
   const userId = message.author.id.toString();
-  if (isReplied && isNewUser(userId)) {
+  if (isReplied && isMentioned && isNewUser(userId)) {
     markUserWelcomed(userId);
     sendWelcomeDm(message.author.id).catch(err => {
       warn("Failed to send welcome DM", { userId: message.author.id.toString(), err });
@@ -856,7 +857,11 @@ bot.events.messageCreate = async (message) => {
       // 3. Respond if entity's name is mentioned in dialogue (not self-triggered)
       // 4. Respond if message matches any configured trigger keyword
       const nameMentioned = ctx.mentioned_in_dialogue(entity.name) && !isSelf;
-      const repliedToThis = repliedToWebhookEntity?.entityName.toLowerCase() === entity.name.toLowerCase();
+      // A reply only counts as a trigger when the user kept the mention on. Discord drops the
+      // replied-to user from mentionedUserIds when the reply-ping toggle is off, so isMentioned
+      // captures that signal for both bot and webhook replies.
+      const repliedToThis = repliedToWebhookEntity?.entityName.toLowerCase() === entity.name.toLowerCase()
+        && isMentioned;
       const keywordMatch = ctx.keyword_match && !isSelf;
       const defaultRespond =
         (channelEntities.length === 1 && isMentioned) ||
