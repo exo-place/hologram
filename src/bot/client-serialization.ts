@@ -1,6 +1,7 @@
 import type { DiscordEmbed } from "@discordeno/types";
 import type { EmbedData, DiscordComponentData, MessageData } from "../db/discord";
 import type { bot } from "./client";
+import { info } from "../logger";
 
 /** Element type of the array returned by bot.helpers.getMessages. */
 export type BotMessage = Awaited<ReturnType<typeof bot.helpers.getMessages>>[number];
@@ -76,6 +77,18 @@ export function buildMsgDataAndContent(message: BotMessage): { content: string; 
       ...(refAuthorId && { author_id: refAuthorId }),
     };
   }
+
+  // mention-debug: log raw mention fields to diagnose missing metadata (remove after fix)
+  info("[mention-debug] mention fields", {
+    msgId: message.id?.toString(),
+    mentionedUserIds: message.mentionedUserIds,
+    mentionedRoleIds: message.mentionedRoleIds,
+    mentionEveryone: message.mentionEveryone,
+    mentionedChannelIds: message.mentionedChannelIds,
+    mentionsRaw: message.mentions?.map(u => ({ id: u.id?.toString(), username: u.username })),
+    hasMentionsProp: "mentions" in message,
+    mentionsUndefined: message.mentions === undefined,
+  });
 
   // Mention metadata — only emit non-empty/truthy values to keep data compact
   const mentionedUserIds = message.mentionedUserIds;
