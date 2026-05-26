@@ -1,5 +1,11 @@
 # TODO
 
+## Reply-to-webhook ping preference unobservable (2026-05-26)
+
+Discord never populates `mentionedUserIds` for replies to webhook messages, regardless of whether the user toggled the reply-ping on or off. This means the bot cannot distinguish "reply with ping" from "reply without ping" when the target message was sent via a webhook (which all bot responses are). The bot therefore always responds to direct replies to its own messages. If a user wants to quote the bot to talk to someone else without triggering a response, they should avoid using Discord's reply feature and instead paste the relevant text manually.
+
+---
+
 ## Catch-up cursor precision bug — FIXED 2026-05-08
 
 `getLastMessageSnowflake` previously cast `discord_message_id` to SQLite INTEGER and returned it via JS `number`, losing precision on ~60-bit Discord snowflakes (rounded to multiples of ~256). The rounded-down cursor caused `getMessages({ after })` to re-return the genuine last message on every startup, which then duplicated because `idx_messages_discord_id` had been created non-UNIQUE in the live DB (the schema's `CREATE UNIQUE INDEX IF NOT EXISTS` was a no-op on the existing index).

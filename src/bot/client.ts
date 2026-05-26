@@ -653,10 +653,9 @@ bot.events.messageCreate = async (message) => {
     return;
   }
 
-  // Welcome new users with a DM — only when they explicitly reply (with ping) to a bot message.
-  // A reply with the mention toggled off is a soft reference, not an address.
+  // Welcome new users with a DM — only when they explicitly reply to a bot message.
   const userId = message.author.id.toString();
-  if (isReplied && isMentioned && isNewUser(userId)) {
+  if (isReplied && isNewUser(userId)) {
     markUserWelcomed(userId);
     sendWelcomeDm(message.author.id).catch(err => {
       warn("Failed to send welcome DM", { userId: message.author.id.toString(), err });
@@ -859,12 +858,13 @@ bot.events.messageCreate = async (message) => {
       // 3. Respond if entity's name is mentioned in dialogue (not self-triggered)
       // 4. Respond if message matches any configured trigger keyword
       const nameMentioned = ctx.mentioned_in_dialogue(entity.name) && !isSelf;
-      // In guilds, a reply only counts as a trigger when the user kept the ping on — Discord drops
-      // the replied-to user from mentionedUserIds when the toggle is off, and we treat a no-ping
-      // reply as a soft reference (the user is quoting the bot to talk to someone else). DMs have
-      // no third party, so a reply is always addressing.
-      const repliedToThis = repliedToWebhookEntity?.entityName.toLowerCase() === entity.name.toLowerCase()
-        && (isMentioned || !guildId);
+      // We do NOT gate repliedToThis on isMentioned/ping state. Discord never includes webhook
+      // authors in the mentions array regardless of the reply-ping toggle — so mentionedUserIds
+      // is always empty for replies to the bot's own webhook messages. Gating on isMentioned
+      // would suppress ALL reply-triggered responses, not just ping-off ones. The user's ping
+      // preference for webhook replies is therefore unobservable from the gateway; we always
+      // respond to direct replies to the bot's own messages.
+      const repliedToThis = repliedToWebhookEntity?.entityName.toLowerCase() === entity.name.toLowerCase();
       const keywordMatch = ctx.keyword_match && !isSelf;
       const defaultRespond =
         (channelEntities.length === 1 && isMentioned) ||
