@@ -1,11 +1,12 @@
 /**
- * Tests for Discordeno desiredProperties configuration.
+ * Tests for Discordeno desiredProperties configuration and message serialization.
  *
  * Validates that transformer configs produce the expected object shapes.
  * Regression tests: missing desiredProperties entries caused transformers to
  * silently strip all properties, producing empty objects.
  */
 import { describe, expect, test } from "bun:test";
+import { buildMsgDataAndContent } from "./client-serialization";
 
 // =============================================================================
 // Transformer replicas (can't import from @discordeno/bot due to single export)
@@ -196,5 +197,123 @@ describe("desiredProperties.member", () => {
     const roles = extractMemberRoles(transformed);
 
     expect(roles).toEqual([]); // silently empty — permission checks would fail
+  });
+});
+
+// =============================================================================
+// buildMsgDataAndContent — mention metadata
+// =============================================================================
+
+/** Minimal fake BotMessage for testing buildMsgDataAndContent */
+function makeFakeMessage(overrides: Record<string, unknown> = {}): any {
+  return {
+    content: "hello",
+    author: {
+      id: BigInt("111"),
+      username: "testuser",
+      globalName: "Test User",
+      toggles: { bot: false },
+    },
+    embeds: [],
+    attachments: [],
+    stickerItems: [],
+    components: [],
+    messageSnapshots: [],
+    ...overrides,
+  };
+}
+
+describe("buildMsgDataAndContent — mention metadata", () => {
+  test("no mentions: msgData has no mention fields", () => {
+    const msg = makeFakeMessage();
+    const { msgData } = buildMsgDataAndContent(msg);
+    expect(msgData?.mentions).toBeUndefined();
+    expect(msgData?.mention_roles).toBeUndefined();
+    expect(msgData?.mention_everyone).toBeUndefined();
+    expect(msgData?.mention_channels).toBeUndefined();
+  });
+
+  test("mentionedUserIds are serialized as string snowflakes", () => {
+    const msg = makeFakeMessage({
+      mentionedUserIds: [BigInt("222"), BigInt("333")],
+    });
+    const { msgData } = buildMsgDataAndContent(msg);
+    expect(msgData?.mentions).toEqual(["222", "333"]);
+  });
+
+  test("mentionedRoleIds are serialized as string snowflakes", () => {
+    const msg = makeFakeMessage({
+      mentionedRoleIds: [BigInt("444"), BigInt("555")],
+    });
+    const { msgData } = buildMsgDataAndContent(msg);
+    expect(msgData?.mention_roles).toEqual(["444", "555"]);
+  });
+
+  test("mentionEveryone=true is persisted", () => {
+    const msg = makeFakeMessage({ mentionEveryone: true });
+    const { msgData } = buildMsgDataAndContent(msg);
+    expect(msgData?.mention_everyone).toBe(true);
+  });
+
+  test("mentionEveryone=false is omitted to keep data compact", () => {
+    const msg = makeFakeMessage({ mentionEveryone: false });
+    const { msgData } = buildMsgDataAndContent(msg);
+    expect(msgData?.mention_everyone).toBeUndefined();
+  });
+
+  test("mentionedChannelIds are serialized as string snowflakes", () => {
+    const msg = makeFakeMessage({
+      mentionedChannelIds: [BigInt("666")],
+    });
+    const { msgData } = buildMsgDataAndContent(msg);
+    expect(msgData?.mention_channels).toEqual(["666"]);
+  });
+
+  test("referenced_message includes author_id for reply-ping detection", () => {
+    const msg = makeFakeMessage({
+      referencedMessage: {
+        author: {
+          id: BigInt("777"),
+          username: "parentauthor",
+          globalName: "Parent Author",
+        },
+        content: "original message",
+      },
+      // The author of the reply pings the parent author
+      mentionedUserIds: [BigInt("777")],
+    });
+    const { msgData } = buildMsgDataAndContent(msg);
+    expect(msgData?.referenced_message?.author_id).toBe("777");
+    expect(msgData?.referenced_message?.author).toBe("Parent Author");
+    // Caller can check reply-ping: mentions.includes(referenced_message.author_id)
+    const authorId = msgData?.referenced_message?.author_id;
+    expect(authorId && msgData?.mentions?.includes(authorId)).toBe(true);
+  });
+
+  test("referenced_message without author.id omits author_id", () => {
+    const msg = makeFakeMessage({
+      referencedMessage: {
+        author: {
+          // No id property
+          username: "unknown",
+          globalName: null,
+        },
+        content: "something",
+      },
+    });
+    const { msgData } = buildMsgDataAndContent(msg);
+    expect(msgData?.referenced_message?.author_id).toBeUndefined();
+  });
+
+  test("empty arrays are omitted to keep data compact", () => {
+    const msg = makeFakeMessage({
+      mentionedUserIds: [],
+      mentionedRoleIds: [],
+      mentionedChannelIds: [],
+    });
+    const { msgData } = buildMsgDataAndContent(msg);
+    expect(msgData?.mentions).toBeUndefined();
+    expect(msgData?.mention_roles).toBeUndefined();
+    expect(msgData?.mention_channels).toBeUndefined();
   });
 });

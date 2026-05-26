@@ -69,7 +69,29 @@ export function buildMsgDataAndContent(message: BotMessage): { content: string; 
     const ref = message.referencedMessage;
     const refAuthor = ref.author.globalName ?? ref.author.username;
     const refContent = (ref.content ?? "").split("\n")[0].slice(0, 200);
-    msgData.referenced_message = { author: refAuthor, content: refContent };
+    const refAuthorId = ref.author.id?.toString();
+    msgData.referenced_message = {
+      author: refAuthor,
+      content: refContent,
+      ...(refAuthorId && { author_id: refAuthorId }),
+    };
+  }
+
+  // Mention metadata — only emit non-empty/truthy values to keep data compact
+  const mentionedUserIds = message.mentionedUserIds;
+  if (mentionedUserIds?.length) {
+    msgData.mentions = mentionedUserIds.map(id => id.toString());
+  }
+  const mentionedRoleIds = message.mentionedRoleIds;
+  if (mentionedRoleIds?.length) {
+    msgData.mention_roles = mentionedRoleIds.map(id => id.toString());
+  }
+  if (message.mentionEveryone) {
+    msgData.mention_everyone = true;
+  }
+  const mentionedChannelIds = message.mentionedChannelIds;
+  if (mentionedChannelIds?.length) {
+    msgData.mention_channels = mentionedChannelIds.map(id => id.toString());
   }
 
   return { content, msgData: Object.keys(msgData).length > 0 ? msgData : undefined };

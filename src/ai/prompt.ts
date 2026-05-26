@@ -393,7 +393,7 @@ export function buildPromptAndMessages(
     stickers: StickerData[] & { toJSON(): string };
     attachments: AttachmentData[] & { toJSON(): string };
     components: DiscordComponentData[] & { toJSON(): string };
-    referenced_message: { author: string; content: string } | null;
+    referenced_message: { author: string; content: string; author_id?: string } | null;
     toJSON(): string;
   }
 
@@ -445,7 +445,7 @@ export function buildPromptAndMessages(
       attachments,
       components,
       referenced_message: data?.referenced_message
-        ? { author: data.referenced_message.author, content: resolveInboundMentions(channelId, data.referenced_message.content) }
+        ? { author: data.referenced_message.author, content: resolveInboundMentions(channelId, data.referenced_message.content), ...(data.referenced_message.author_id && { author_id: data.referenced_message.author_id }) }
         : null,
       toJSON: () => JSON.stringify({ author: entry.author, content: entry.content, author_id: entry.author_id, created_at: entry.created_at, is_bot: entry.is_bot, entity_id: entry.entity_id, is_note: entry.is_note, is_system: entry.is_system, embeds: data?.embeds ?? [], stickers: data?.stickers ?? [], attachments: data?.attachments ?? [], components: data?.components ?? [], referenced_message: entry.referenced_message }),
     };

@@ -67,6 +67,8 @@ export const bot = createBot({
       author: true,
       member: true,
       mentions: true, // Enables computed mentionedUserIds
+      mentionedRoleIds: true,
+      mentionedChannelIds: true,
       messageReference: true,
       referencedMessage: true,
       messageSnapshots: true,

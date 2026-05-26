@@ -573,7 +573,15 @@ export interface MessageData {
   stickers?: StickerData[];
   attachments?: AttachmentData[];
   components?: DiscordComponentData[];
-  referenced_message?: { author: string; content: string };
+  referenced_message?: { author: string; content: string; author_id?: string };
+  /** Snowflake IDs of mentioned users. Check `mentions.includes(referenced_message.author_id)` for reply-ping detection. */
+  mentions?: string[];
+  /** Snowflake IDs of mentioned roles. */
+  mention_roles?: string[];
+  /** True when the message mentions @everyone or @here. */
+  mention_everyone?: boolean;
+  /** Snowflake IDs of mentioned channels (cross-channel links). */
+  mention_channels?: string[];
 }
 
 export function parseMessageData(raw: string | null): MessageData | null {
