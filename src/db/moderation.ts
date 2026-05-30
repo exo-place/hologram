@@ -1,5 +1,21 @@
 import { getDb } from "./index";
 
+/**
+ * Sentinel scope_id for the cross-server all-bots global kill-switch.
+ * Real guild IDs are Discord snowflakes (numeric strings); "*" is never a valid
+ * snowflake, so it cannot collide with an actual guild ID.
+ *
+ * The row stored with this sentinel is:
+ *   scope_type="guild", scope_id="*", guild_id=NULL, channel_id=NULL
+ *
+ * Because isMuted("guild", scope_id, null, null) matches any row where
+ * guild_id IS NULL AND channel_id IS NULL, calling
+ *   isMuted("guild", GLOBAL_KILL_SCOPE_ID, null, null)
+ * finds this sentinel row from ANY channel in ANY guild, making it a true
+ * cross-server kill-switch.
+ */
+export const GLOBAL_KILL_SCOPE_ID = "*";
+
 // =============================================================================
 // Entity Events (rate-limit sliding window + audit source of truth)
 // =============================================================================

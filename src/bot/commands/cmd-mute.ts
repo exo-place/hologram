@@ -5,6 +5,7 @@ import {
   removeMute,
   listActiveMutes,
   recordModEvent,
+  GLOBAL_KILL_SCOPE_ID,
   type MuteScopeType,
 } from "../../db/moderation";
 import { getEntityWithFacts, getEntityWithFactsByName } from "../../db/entities";
@@ -81,7 +82,7 @@ export function decideMuteAuth(input: MuteAuthInput): MuteAuthResult {
   }
   // scope === "everywhere"
   if (ia) return { allow: true };
-  return { allow: false, reason: "Muting all bots everywhere requires Administrator permission. Note: cross-server global kill switch is not currently supported — this would only affect bots on this server." };
+  return { allow: false, reason: "Muting all bots everywhere requires Administrator permission." };
 }
 
 // =============================================================================
@@ -112,7 +113,8 @@ interface MuteParams {
  *   channel scope → scope_type="channel", scope_id=channelId — checked as isMuted("channel", channelId, channelId, guildId)
  *   server scope  → scope_type="guild",   scope_id=guildId   — checked as isMuted("guild", guildId, null, null)
  *                   stored with guild_id=NULL, channel_id=NULL (global scope in isMuted's matching)
- *   everywhere    → scope_type="guild",   scope_id=guildId (current guild only, see TODO.md)
+ *   everywhere    → scope_type="guild",   scope_id=GLOBAL_KILL_SCOPE_ID ("*"), guild_id=NULL, channel_id=NULL
+ *                   checked as isMuted("guild", GLOBAL_KILL_SCOPE_ID, null, null) — fires from any guild
  *
  * Entity mute mapping:
  *   channel scope → scope_type="entity", scope_id=entityId, channel_id=channelId, guild_id=guildId
@@ -150,10 +152,10 @@ function buildMuteParams(
         guild_id: null,
       };
     }
-    // everywhere — same as server scope but acknowledged to be current-guild-only (see TODO.md)
+    // everywhere — true cross-server global kill-switch using sentinel scope_id
     return {
       scope_type: "guild",
-      scope_id: guildId ?? "",
+      scope_id: GLOBAL_KILL_SCOPE_ID,
       channel_id: null,
       guild_id: null,
     };
@@ -299,10 +301,6 @@ registerCommand({
     } else {
       reply = `🔇 Muted **${entityName}** in ${scopeStr} until ${discordRelative(expiresAt)}.`;
     }
-    if (scope === "everywhere" && isAllBots) {
-      reply += "\n⚠ Note: cross-server global kill-switch is not fully supported — this applies to the current server only.";
-    }
-
     await respond(ctx.bot, ctx.interaction, reply, true);
   },
 });

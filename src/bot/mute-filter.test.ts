@@ -11,7 +11,7 @@ mock.module("../db/index", () => ({
 }));
 
 import { filterMutedEntities } from "./mute-filter";
-import { addMute } from "../db/moderation";
+import { addMute, removeMute, GLOBAL_KILL_SCOPE_ID } from "../db/moderation";
 import { createEntity } from "../db/entities";
 
 beforeEach(() => {
@@ -173,6 +173,87 @@ describe("per-entity mute", () => {
     `).run(String(a.id));
     const result = filterMutedEntities([makeEntityWithFacts(a.id, "A")], "ch1", "g1");
     expect(result.active.length).toBe(1);
+  });
+});
+
+// ── global all-bots kill-switch ───────────────────────────────────────────────
+
+describe("global all-bots kill-switch", () => {
+  test("sentinel row silences all entities in any guild", () => {
+    const a = createEntity("A", "u1");
+    const b = createEntity("B", "u2");
+    const mute = addMute({
+      scope_type: "guild",
+      scope_id: GLOBAL_KILL_SCOPE_ID,
+      guild_id: null,
+      channel_id: null,
+      created_by: "admin1",
+    });
+
+    // Fires in guildId1
+    const r1 = filterMutedEntities(
+      [makeEntityWithFacts(a.id, "A"), makeEntityWithFacts(b.id, "B")],
+      "ch-alpha",
+      "guild-111",
+    );
+    expect(r1.active.length).toBe(0);
+    expect(r1.muted.every(m => m.scope === "global")).toBe(true);
+
+    // Fires in a completely different guild
+    const r2 = filterMutedEntities(
+      [makeEntityWithFacts(a.id, "A"), makeEntityWithFacts(b.id, "B")],
+      "ch-beta",
+      "guild-222",
+    );
+    expect(r2.active.length).toBe(0);
+    expect(r2.muted.every(m => m.scope === "global")).toBe(true);
+
+    // After removal, entities are active again in both guilds
+    removeMute(mute.id);
+
+    const r3 = filterMutedEntities(
+      [makeEntityWithFacts(a.id, "A"), makeEntityWithFacts(b.id, "B")],
+      "ch-alpha",
+      "guild-111",
+    );
+    expect(r3.active.length).toBe(2);
+
+    const r4 = filterMutedEntities(
+      [makeEntityWithFacts(a.id, "A"), makeEntityWithFacts(b.id, "B")],
+      "ch-beta",
+      "guild-222",
+    );
+    expect(r4.active.length).toBe(2);
+  });
+
+  test("sentinel fires even when no guildId (DM/web context)", () => {
+    const a = createEntity("A", "u1");
+    addMute({
+      scope_type: "guild",
+      scope_id: GLOBAL_KILL_SCOPE_ID,
+      guild_id: null,
+      channel_id: null,
+      created_by: "admin1",
+    });
+    const result = filterMutedEntities([makeEntityWithFacts(a.id, "A")], "web-ch", null);
+    expect(result.active.length).toBe(0);
+    expect(result.muted[0]!.scope).toBe("global");
+  });
+
+  test("sentinel checked before channel and guild kill-switches", () => {
+    const a = createEntity("A", "u1");
+    addMute({
+      scope_type: "guild",
+      scope_id: GLOBAL_KILL_SCOPE_ID,
+      guild_id: null,
+      channel_id: null,
+      created_by: "admin1",
+    });
+    // Also add a channel kill-switch
+    addMute({ scope_type: "channel", scope_id: "ch1", guild_id: "g1", channel_id: "ch1", created_by: "mod1" });
+    const result = filterMutedEntities([makeEntityWithFacts(a.id, "A")], "ch1", "g1");
+    // scope should be "global" — sentinel fires first
+    expect(result.muted[0]!.scope).toBe("global");
   });
 });
 

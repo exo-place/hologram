@@ -1,4 +1,4 @@
-import { isMuted } from "../db/moderation";
+import { isMuted, GLOBAL_KILL_SCOPE_ID } from "../db/moderation";
 import type { EntityWithFacts } from "../db/entities";
 
 export interface MuteFilterResult {
@@ -11,13 +11,14 @@ export interface MuteFilterResult {
  * Filter entities through active mutes.
  *
  * Check order per entity (first match wins):
+ * 0. Global all-bots kill-switch: scope_type='guild', scope_id=GLOBAL_KILL_SCOPE_ID ('*')
  * 1. Channel kill-switch: scope_type='channel', scope_id=channelId
  * 2. Guild kill-switch: scope_type='guild', scope_id=guildId
  * 3. Owner mute: scope_type='owner', scope_id=entity.owned_by
  * 4. Entity mute: scope_type='entity', scope_id=String(entity.id)
  *
- * Kill-switches (channel/guild) are checked once and apply to all entities.
- * Returns empty active list if the channel or guild is muted.
+ * Kill-switches (global/channel/guild) are checked once and apply to all entities.
+ * Returns empty active list if any kill-switch is active.
  */
 export function filterMutedEntities(
   entities: EntityWithFacts[],
@@ -25,6 +26,15 @@ export function filterMutedEntities(
   guildId: string | null,
 ): MuteFilterResult {
   if (entities.length === 0) return { active: [], muted: [] };
+
+  // Global all-bots kill-switch: fires from any channel in any guild
+  const globalKill = isMuted("guild", GLOBAL_KILL_SCOPE_ID, null, null);
+  if (globalKill) {
+    return {
+      active: [],
+      muted: entities.map(e => ({ entity: e, scope: "global" })),
+    };
+  }
 
   // Channel kill-switch: if this channel is muted, no entity responds
   if (channelId) {

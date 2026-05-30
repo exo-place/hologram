@@ -22,7 +22,7 @@ import {
   getRecentSystemNotes,
   getMessages,
 } from "../../db/discord";
-import { listActiveMutes } from "../../db/moderation";
+import { listActiveMutes, GLOBAL_KILL_SCOPE_ID } from "../../db/moderation";
 import { discordRelative } from "../duration";
 import { createBaseContext, compileContextExpr } from "../../logic/expr";
 import { DEFAULT_RAG_CONTEXT_EXPR } from "../../ai/context";
@@ -207,15 +207,19 @@ async function handleInfoStatus(ctx: CommandContext) {
     const channelId = ctx.channelId;
 
     // Filter to mutes that cover this channel:
+    // - global all-bots kill-switch: scope_type=guild, scope_id=GLOBAL_KILL_SCOPE_ID, both nulls
     // - channel kill-switch: scope_type=channel, scope_id=channelId
     // - guild kill-switch: scope_type=guild, scope_id=guildId, channel_id IS NULL, guild_id IS NULL
     // - global entity mutes: channel_id IS NULL AND guild_id IS NULL
     // - guild-wide entity mutes: guild_id=guildId AND channel_id IS NULL
     // - channel-specific entity mutes: channel_id=channelId AND guild_id=guildId
     const relevantMutes = allMutes.filter(m => {
+      // Global all-bots kill-switch (sentinel)
+      if (m.scope_type === "guild" && m.scope_id === GLOBAL_KILL_SCOPE_ID &&
+          m.channel_id === null && m.guild_id === null) return true;
       // Channel kill-switch
       if (m.scope_type === "channel" && m.scope_id === channelId) return true;
-      // Guild kill-switch (stored with both null)
+      // Guild kill-switch (stored with both null, real guild ID as scope_id)
       if (m.scope_type === "guild" && m.scope_id === guildId &&
           m.channel_id === null && m.guild_id === null) return true;
       // Entity/owner mutes: apply if location matches
@@ -234,7 +238,9 @@ async function handleInfoStatus(ctx: CommandContext) {
       lines.push(`**Mutes** (${relevantMutes.length} active):`);
       for (const m of relevantMutes) {
         let targetLabel: string;
-        if (m.scope_type === "channel") {
+        if (m.scope_type === "guild" && m.scope_id === GLOBAL_KILL_SCOPE_ID) {
+          targetLabel = `All bots — everywhere (global kill-switch)`;
+        } else if (m.scope_type === "channel") {
           targetLabel = `kill-switch on <#${m.scope_id}>`;
         } else if (m.scope_type === "guild") {
           targetLabel = `server kill-switch`;
