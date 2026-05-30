@@ -724,6 +724,62 @@ async function handleAutocomplete(bot: Bot, interaction: Interaction) {
       if (!isUserAllowed(permissions, userId, username, entity.owned_by, userRoles)) return false;
       return true;
     }).slice(0, 25);
+  } else if (commandName === "mute" || commandName === "unmute") {
+    // mute/unmute: show "🔇 All bots" sentinel at top, then entities the user can edit
+    const ALL_BOTS_SENTINEL = "__all_bots__";
+    const allResults = searchEntities(query, 100);
+    const entitiesWithFacts = getEntitiesWithFacts(allResults.map(e => e.id));
+
+    const filteredEntities = allResults.filter(entity => {
+      if (entity.owned_by === userId) return true;
+      const entityWithFacts = entitiesWithFacts.get(entity.id);
+      if (!entityWithFacts) return false;
+      const facts = entityWithFacts.facts.map(f => f.content);
+      const permissions = parsePermissionDirectives(facts, getPermissionDefaults(entity.id));
+      if (isUserBlacklisted(permissions, userId, username, entity.owned_by, userRoles)) return false;
+      if (permissions.editList === "@everyone") return true;
+      if (permissions.editList?.some(u => matchesUserEntry(u, userId, username, userRoles))) return true;
+      return false;
+    }).slice(0, 24); // Reserve one slot for All bots
+
+    // Prepend All bots sentinel if query matches
+    const allBotsLabel = "🔇 All bots";
+    const filteredResults: typeof allResults = filteredEntities;
+    if (allBotsLabel.toLowerCase().includes(query.toLowerCase()) || query === "") {
+      results = [
+        { id: -2, name: allBotsLabel, nickname: null, owned_by: null } as typeof allResults[number],
+        ...filteredResults,
+      ].slice(0, 25);
+    } else {
+      results = filteredResults;
+    }
+
+    const muteDisplayNames = new Map<number, string>();
+    for (const e of results) {
+      if (e.id < 0) continue;
+      muteDisplayNames.set(e.id, formatEntityName(e));
+    }
+    const muteNameCounts = new Map<string, number>();
+    for (const [, dn] of muteDisplayNames) {
+      muteNameCounts.set(dn, (muteNameCounts.get(dn) ?? 0) + 1);
+    }
+
+    const muteChoices = results.map(e => {
+      if (e.id === -2) return { name: allBotsLabel, value: ALL_BOTS_SENTINEL };
+      const dn = muteDisplayNames.get(e.id)!;
+      const label = muteNameCounts.get(dn)! > 1 ? `${dn} (#${e.id})` : dn;
+      return { name: label, value: e.id.toString() };
+    });
+
+    try {
+      await bot.helpers.sendInteractionResponse(interaction.id, interaction.token, {
+        type: InteractionResponseTypes.ApplicationCommandAutocompleteResult,
+        data: { choices: muteChoices },
+      });
+    } catch (err) {
+      warn("Autocomplete response failed (interaction may have expired)", { err });
+    }
+    return;
   } else if (commandName === "sendas") {
     // /sendas: filter to entities where user has BOTH edit AND use permission.
     // Also include "@system" as a special suggestion.

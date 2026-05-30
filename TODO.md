@@ -1,5 +1,26 @@
 # TODO
 
+## `/admin mute create` global scope mislabels the record (2026-05-30)
+
+In `src/bot/commands/cmd-admin.ts`, the `global` branch of `/admin mute create` stores
+`scope_type="owner", scope_id="global"` — but `filterMutedEntities` never checks
+`scope_type="owner"` with `scope_id="global"`. The check for the owner kill-switch is
+`isMuted("owner", entity.owned_by, channelId, guildId)` where `entity.owned_by` is the
+actual Discord user ID. So the "global" mute row never fires. This needs review:
+either use `scope_type="guild"` with a real guild ID (per-server) or introduce a
+dedicated global kill-switch path and update `filterMutedEntities` accordingly.
+
+## all-bots-everywhere via `/mute` is current-server-only (2026-05-30)
+
+`/mute entity:"🔇 All bots" scope:everywhere` stores `scope_type="guild", scope_id=<guildId>`
+with `channel_id=NULL, guild_id=NULL`. `filterMutedEntities` checks the guild kill-switch
+as `isMuted("guild", guildId, null, null)` — where `guildId` is the *actual* guild ID.
+A single record can only match one guild's ID, so there is no way in the current schema
+to have one row that fires for all guilds. The "everywhere" scope for all-bots therefore
+only silences the *current* server. If true cross-server global kill-switch is needed,
+`filterMutedEntities` would need a dedicated global sentinel query (e.g. a separate
+`global_mutes` check or a special `scope_id="*"` branch).
+
 ## Reply-to-webhook ping preference unobservable (2026-05-26)
 
 Discord never populates `mentionedUserIds` for replies to webhook messages, regardless of whether the user toggled the reply-ping on or off. This means the bot cannot distinguish "reply with ping" from "reply without ping" when the target message was sent via a webhook (which all bot responses are). The bot therefore always responds to direct replies to its own messages. If a user wants to quote the bot to talk to someone else without triggering a response, they should avoid using Discord's reply feature and instead paste the relevant text manually.

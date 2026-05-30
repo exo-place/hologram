@@ -58,9 +58,15 @@ describe("parseDuration", () => {
     expect(result).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
   });
 
-  test("unknown string returns null", () => {
-    expect(parseDuration("2h")).toBeNull();
+  test("valid duration strings now accepted (delegates to shared parseDuration)", () => {
+    // '2h' was previously rejected by the old fixed-choices implementation,
+    // but now parseDuration delegates to the shared module which accepts any valid duration.
+    expect(parseDuration("2h")).not.toBeNull();
+  });
+
+  test("unparseable strings return null", () => {
     expect(parseDuration("foobar")).toBeNull();
+    expect(parseDuration("5 months")).toBeNull();
   });
 });
 

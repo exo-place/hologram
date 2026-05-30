@@ -13,6 +13,7 @@ import {
 import { setDiscordConfig } from "../../db/discord";
 import { getEntityByName } from "../../db/entities";
 import { debug } from "../../logger";
+import { parseDuration as parseSharedDuration } from "../duration";
 
 // =============================================================================
 // Permission helpers
@@ -38,20 +39,15 @@ async function denyPerm(ctx: CommandContext, perm: string): Promise<void> {
 // Duration parsing
 // =============================================================================
 
-const DURATION_PATTERNS: Record<string, number> = {
-  "10m": 10 * 60 * 1000,
-  "1h":  60 * 60 * 1000,
-  "1d":  24 * 60 * 60 * 1000,
-};
-
-/** Parse a duration string to an expires_at timestamp (SQLite CURRENT_TIMESTAMP format) or null for "forever". */
+/**
+ * Parse a duration string to an expires_at timestamp (SQLite CURRENT_TIMESTAMP format) or null for "forever".
+ * Delegates to the shared parseDuration in src/bot/duration.ts.
+ * The /admin mute command uses fixed choices ("10m"|"1h"|"1d"|"forever") which all parse correctly.
+ */
 export function parseDuration(s: string): string | null {
-  if (s === "forever" || !s) return null;
-  const ms = DURATION_PATTERNS[s];
-  if (!ms) return null;
-  const d = new Date(Date.now() + ms);
-  // SQLite CURRENT_TIMESTAMP format: "YYYY-MM-DD HH:MM:SS"
-  return d.toISOString().replace("T", " ").slice(0, 19);
+  const result = parseSharedDuration(s);
+  if (!result.ok) return null;
+  return result.expiresAt;
 }
 
 // =============================================================================

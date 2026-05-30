@@ -228,6 +228,8 @@ Permission lists are stored as JSON arrays in entity config columns. Role IDs us
 | `/debug context [entity] [query]` | Show message context for entity |
 | `/debug rag [entity] [query]` | Show embedding status + RAG retrieval results |
 | `/trigger <entity> [verb]` | Manually trigger entity response; verb requires persona and sets `interaction_type` |
+| `/mute <entity> <duration> [scope]` | Mute an entity or all bots (kill-switch) for a duration (`30s`, `1h30m`, `forever`, etc.) in this channel (default), server, or everywhere. Requires Moderate Members or entity edit access (everywhere requires edit; all-bots-everywhere requires Administrator). Autocomplete offers "🔇 All bots" as a sentinel. |
+| `/unmute <entity> [scope]` | Remove an active mute for an entity or kill-switch at the given scope. Same permission requirements as `/mute`. |
 | `/forget` | Exclude messages before now from context |
 | `/help [topic]` | Show help entity content. All help entities (`help` and `help:*`) have owner-only `$view` so they're hidden from `/view` autocomplete and only reachable via `/help` (which bypasses view-perm checks). The `topic` option has its own autocomplete sourced from `HELP_TOPICS`. |
 

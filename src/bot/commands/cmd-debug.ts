@@ -22,6 +22,8 @@ import {
   getRecentSystemNotes,
   getMessages,
 } from "../../db/discord";
+import { listActiveMutes } from "../../db/moderation";
+import { discordRelative } from "../duration";
 import { createBaseContext, compileContextExpr } from "../../logic/expr";
 import { DEFAULT_RAG_CONTEXT_EXPR } from "../../ai/context";
 import { buildEvaluatedEntity } from "../../debug/evaluation";
@@ -195,6 +197,53 @@ async function handleInfoStatus(ctx: CommandContext) {
     }
     if (noteCount > 3) {
       lines.push(`  _(${noteCount - 3} more)_`);
+    }
+  }
+
+  // Show active mutes applying to this channel/guild
+  {
+    const allMutes = listActiveMutes({});
+    const guildId = ctx.guildId;
+    const channelId = ctx.channelId;
+
+    // Filter to mutes that cover this channel:
+    // - channel kill-switch: scope_type=channel, scope_id=channelId
+    // - guild kill-switch: scope_type=guild, scope_id=guildId, channel_id IS NULL, guild_id IS NULL
+    // - global entity mutes: channel_id IS NULL AND guild_id IS NULL
+    // - guild-wide entity mutes: guild_id=guildId AND channel_id IS NULL
+    // - channel-specific entity mutes: channel_id=channelId AND guild_id=guildId
+    const relevantMutes = allMutes.filter(m => {
+      // Channel kill-switch
+      if (m.scope_type === "channel" && m.scope_id === channelId) return true;
+      // Guild kill-switch (stored with both null)
+      if (m.scope_type === "guild" && m.scope_id === guildId &&
+          m.channel_id === null && m.guild_id === null) return true;
+      // Entity/owner mutes: apply if location matches
+      if (m.scope_type === "entity" || m.scope_type === "owner") {
+        // Global mute
+        if (m.channel_id === null && m.guild_id === null) return true;
+        // Guild-wide mute
+        if (m.channel_id === null && guildId && m.guild_id === guildId) return true;
+        // Channel-specific mute
+        if (m.channel_id === channelId && guildId && m.guild_id === guildId) return true;
+      }
+      return false;
+    });
+
+    if (relevantMutes.length > 0) {
+      lines.push(`**Mutes** (${relevantMutes.length} active):`);
+      for (const m of relevantMutes) {
+        let targetLabel: string;
+        if (m.scope_type === "channel") {
+          targetLabel = `kill-switch on <#${m.scope_id}>`;
+        } else if (m.scope_type === "guild") {
+          targetLabel = `server kill-switch`;
+        } else {
+          targetLabel = `${m.scope_type} \`${m.scope_id}\``;
+        }
+        const expiry = m.expires_at ? discordRelative(m.expires_at) : "permanent";
+        lines.push(`  • ${targetLabel} — ${expiry}`);
+      }
     }
   }
 
