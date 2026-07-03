@@ -29,6 +29,7 @@ import { checkRateLimits, shouldWarnRateLimit, type TriggerType } from "./rate-l
 import { filterMutedEntities } from "./mute-filter";
 import { recordEntityEvent } from "../db/moderation";
 import { canOwnerReadChannel, type ChannelCheckBot } from "./commands/cmd-permissions";
+import { installRestTimeout } from "./rest-timeout";
 
 const token = process.env.DISCORD_TOKEN;
 if (!token) {
@@ -198,6 +199,12 @@ export const bot = createBot({
     },
   },
 });
+
+// Bound every Discord REST fetch with an abort timeout. Without this, a single
+// black-holed connection wedges Discordeno's serial route queue forever and all
+// message-path REST calls (deputy check, channel/guild metadata) hang until the
+// channel-queue timeout kills the task. See src/bot/rest-timeout.ts.
+installRestTimeout(bot.rest);
 
 // Initialize webhook module with bot instance
 setBot(bot);
@@ -711,6 +718,10 @@ bot.events.messageCreate = async (message) => {
 
   if (deputyFiltered.length === 0) return;
 
+  // If the channel-queue timeout aborted this task while we awaited the deputy
+  // REST checks, stop here — the slot is gone and any response would be orphaned.
+  if (signal.aborted) return;
+
   // Filter muted entities before fact evaluation (avoids wasted LLM/memory work)
   const muteResult = filterMutedEntities(deputyFiltered, channelId, guildId ?? null);
   const channelEntities = muteResult.active;
@@ -742,6 +753,10 @@ bot.events.messageCreate = async (message) => {
   const guildMeta = guildId
     ? await getGuildMetadata(guildId)
     : { id: "", name: "", description: "", nsfw_level: "default" };
+
+  // Same guard after the metadata REST awaits — don't evaluate facts or respond
+  // on behalf of a task whose queue slot has already been reclaimed.
+  if (signal.aborted) return;
 
   for (const entity of channelEntities) {
     // Cancel any pending retry for this entity

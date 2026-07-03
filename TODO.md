@@ -149,6 +149,11 @@ Findings from parallel consistency + gaps + adversarial audit across entire code
 ### Dependencies
 
 - **@discordeno/bot** pinned to `22.0.1-next.ff7c51d` - stable v21 has a bug where webhook query params (`wait` + `thread_id`) aren't joined with `&`, breaking thread posts. Fixed in next/beta but not released to stable yet.
+- **@discordeno/bot unpinned `-next` risk** — the installed build (`22.0.1-next.758e75f` per node_modules) drifts from the pin above, and `-next` builds can regress without notice. Its REST manager `fetch`es with no timeout/AbortSignal, which wedged the serial route queues (2026-07 incident: mention/random-reply dead while `/trigger` worked). Mitigated by `src/bot/rest-timeout.ts` (`installRestTimeout` patches `createRequestBody` to attach `AbortSignal.timeout`). Re-verify the patch's hook point (`createRequestBody` → `new Request(url, payload)` → `fetch`) whenever the discordeno version changes; move to a stable release when v22 ships.
+
+### Operations
+
+- **`LOG_LEVEL=debug` in production logs RP content verbatim** — the systemd unit sets `Environment=LOG_LEVEL=debug`, so full message content (including NSFW roleplay) lands in the journal via `debug("Message", ...)` and LLM response logs. Either drop to `info` in production or truncate/redact content fields in debug logs.
 
 ### Test Coverage
 
