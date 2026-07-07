@@ -1,13 +1,23 @@
 import { describe, test, expect } from "bun:test";
-import type { CreateRequestBodyOptions, RequestBody, RequestMethods, RestManager } from "@discordeno/bot";
+import type { CreateRequestBodyOptions, MakeRequestOptions, Queue, RequestBody, RequestMethods, RestManager } from "@discordeno/bot";
 import { installRestTimeout, type TimedRequestBody } from "./rest-timeout";
+
+type RestLike = Pick<RestManager, "createRequestBody" | "makeRequest" | "simplifyUrl" | "queues" | "token">;
 
 /**
  * Minimal stand-in for Discordeno's rest manager: `createRequestBody` mirrors
- * the real implementation's return shape ({ headers, body?, method }).
+ * the real implementation's return shape ({ headers, body?, method });
+ * `makeRequest` behavior is injectable per test.
  */
-function makeFakeRest(): Pick<RestManager, "createRequestBody"> {
+function makeFakeRest(
+  makeRequestImpl?: (method: RequestMethods, url: string, options?: MakeRequestOptions) => Promise<unknown>,
+): RestLike {
   return {
+    token: "testtoken",
+    queues: new Map<string, Queue>(),
+    simplifyUrl(url: string, _method: RequestMethods): string {
+      return url;
+    },
     createRequestBody(method: RequestMethods, options?: CreateRequestBodyOptions): RequestBody {
       let body: string | FormData | undefined;
       if (options?.files !== undefined) {
@@ -17,10 +27,13 @@ function makeFakeRest(): Pick<RestManager, "createRequestBody"> {
       }
       return { headers: {}, method, body };
     },
+    makeRequest<T = unknown>(method: RequestMethods, url: string, options?: MakeRequestOptions): Promise<T> {
+      return (makeRequestImpl?.(method, url, options) ?? Promise.resolve(undefined)) as Promise<T>;
+    },
   };
 }
 
-describe("installRestTimeout", () => {
+describe("installRestTimeout — layer 1 (fetch abort signal)", () => {
   test("attaches an AbortSignal that fires after timeoutMs", async () => {
     const rest = makeFakeRest();
     installRestTimeout(rest, { timeoutMs: 50 });
@@ -69,11 +82,9 @@ describe("installRestTimeout", () => {
   });
 
   test("a hung fetch rejects within the timeout and a serial queue drains past it", async () => {
-    // Simulates Discordeno's failure mode: the server accepts the connection
-    // but never responds (black-holed request). Without a signal this fetch
-    // pends forever and, because the route queue awaits each request in
-    // series, wedges every later request. With the patch it must reject
-    // within the timeout so the next request in the loop proceeds.
+    // Simulates failure mode 1: the server accepts the connection but never
+    // responds. Without a signal this fetch pends forever and, because the
+    // route queue awaits each request in series, wedges every later request.
     const server = Bun.serve({
       port: 0,
       fetch(req) {
@@ -111,5 +122,56 @@ describe("installRestTimeout", () => {
     } finally {
       server.stop(true);
     }
+  });
+});
+
+describe("installRestTimeout — layer 2 (outer makeRequest bound)", () => {
+  test("a makeRequest that never settles rejects within the outer timeout", async () => {
+    // Simulates failure mode 2: the queue loop is stalled, so the request
+    // promise never settles and no fetch (hence no abort signal) ever exists.
+    const rest = makeFakeRest(() => new Promise(() => {}));
+    installRestTimeout(rest, { outerTimeoutMs: 50 });
+
+    const started = Date.now();
+    await expect(rest.makeRequest("GET", "/channels/123")).rejects.toThrow(
+      /outer timeout after 50ms: GET \/channels\/123/,
+    );
+    expect(Date.now() - started).toBeLessThan(2000);
+  });
+
+  test("a makeRequest that settles under the bound passes its value through untouched", async () => {
+    const rest = makeFakeRest(async () => {
+      await Bun.sleep(20);
+      return { id: "42" };
+    });
+    installRestTimeout(rest, { outerTimeoutMs: 200 });
+
+    const result = await rest.makeRequest<{ id: string }>("GET", "/channels/42");
+    expect(result).toEqual({ id: "42" });
+  });
+
+  test("an inner rejection under the bound propagates unchanged (fail-open path)", async () => {
+    const boom = new Error("[999] Unknown error");
+    const rest = makeFakeRest(() => Promise.reject(boom));
+    installRestTimeout(rest, { outerTimeoutMs: 200 });
+
+    await expect(rest.makeRequest("GET", "/guilds/1/members/2")).rejects.toBe(boom);
+  });
+
+  test("outer timeout drops the stalled route queue so the next request gets a fresh one", async () => {
+    const rest = makeFakeRest(() => new Promise(() => {}));
+    installRestTimeout(rest, { outerTimeoutMs: 40 });
+
+    // Pre-populate the queue map the way manager.js processRequest keys it.
+    const stalledKey = `Bot ${rest.token}${rest.simplifyUrl("/guilds/1/members/2", "GET")}`;
+    const otherKey = `Bot ${rest.token}/channels/999`;
+    rest.queues.set(stalledKey, {} as Queue);
+    rest.queues.set(otherKey, {} as Queue);
+
+    await expect(rest.makeRequest("GET", "/guilds/1/members/2")).rejects.toThrow(/outer timeout/);
+
+    // The stalled route's queue entry was removed; unrelated queues untouched.
+    expect(rest.queues.has(stalledKey)).toBe(false);
+    expect(rest.queues.has(otherKey)).toBe(true);
   });
 });
