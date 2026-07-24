@@ -1,4 +1,5 @@
 import { defineConfig } from 'vitepress'
+import { withMermaid } from 'vitepress-plugin-mermaid'
 import path from 'node:path'
 import type MarkdownIt from '@types/markdown-it'
 
@@ -18,8 +19,8 @@ function vPreInlineCode(md: MarkdownIt) {
   })
 }
 
-export default defineConfig({
-  title: 'Hologram',
+export default withMermaid(defineConfig({
+  title: 'hologram',
   description: 'Discord bot for collaborative worldbuilding and roleplay',
   head: [
     ['link', { rel: 'icon', href: '/hologram/favicon.ico', sizes: 'any' }],
@@ -27,7 +28,7 @@ export default defineConfig({
     ['link', { rel: 'icon', type: 'image/png', href: '/hologram/icon.png' }],
   ],
   base: '/hologram/',
-  srcExclude: ['archive/**'],
+  srcExclude: ['archive/**', '**/CLAUDE.md'],
 
   markdown: {
     config: vPreInlineCode,
@@ -63,6 +64,7 @@ export default defineConfig({
       { text: 'Guide', link: '/guide/getting-started' },
       { text: 'Reference', link: '/reference/commands' },
       { text: 'Playground', link: '/playground/facts' },
+      { text: 'exo', link: 'https://docs.exo.place/' },
     ],
 
     sidebar: [
@@ -121,4 +123,4 @@ export default defineConfig({
       message: 'Released under the MIT License.',
     }
   }
-})
+}))
